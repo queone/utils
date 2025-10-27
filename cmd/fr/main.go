@@ -97,8 +97,8 @@ func highlightLine(line, from string) string {
 func main() {
 	// -------------------- argument handling --------------------
 	//
-	//   prog FROM TO          -> show‑only mode
-	//   prog FROM TO -f       -> replace‑and‑write mode
+	//   fr FROM TO          -> show‑only mode
+	//   fr FROM TO -f       -> replace‑and‑write mode
 	//
 	if len(os.Args) != 3 && len(os.Args) != 4 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <FROM> <TO> [-f]\n", filepath.Base(os.Args[0]))
