@@ -31,16 +31,16 @@ for UTIL_DIR in ./cmd/*; do
 
         # Get version for each utility from its main.go
         ProgramVersion=$(grep -o 'program_version.*"[^"]*"' "cmd/${UTIL}/main.go" | cut -d'"' -f2 || echo "unknown_version")
-        printf "\n==> Building and installing ${Gre}${UTIL} ${ProgramVersion}${Rst}\n"
+        printf "\n==> Building and installing ${Gre}${UTIL} v${ProgramVersion}${Rst}\n"
         
-        # Build the utility
+        # Build this utility
         (
             set -x
             go build -o "${BINDIR}/${UTIL}${EXT}" -ldflags "-s -w" "$UTIL_DIR"
         )
         
         # Print build size and details
-        printf "${Gre}$(ls -l ${BINDIR}/${UTIL}${EXT} | awk '{print sprintf("%'"'"'d", $5), $6, $7, $8, $9}')${Rst}\n"
+        printf "    ${Gre}$(ls -l ${BINDIR}/${UTIL}${EXT} | awk '{printf "%'"'"'10d    %s %2s %5s     %s", $5, $6, $7, $8, $9}')${Rst}\n"
     fi
 done
 
