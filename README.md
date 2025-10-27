@@ -2,6 +2,7 @@
 A collection of small CLI utilities written in Go.
 
 - [`days`](cmd/days/README.md): A CLI calendar days calculator.
+- [`decolor`](cmd/decolor/README.md): A utility that removes shell color escape codes from input stream or given file.
 - [`fr`](cmd/fr/README.md): A simple find/replace utility.
 - [`pgen`](cmd/pgen/README.md): A simple generator of memorable passwords.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
