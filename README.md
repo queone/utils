@@ -6,6 +6,7 @@ A collection of small CLI utilities written in Go.
 - [`fr`](cmd/fr/README.md): A simple find/replace utility.
 - [`jy`](cmd/jy/README.md): A lightweight JSON and YAML converter utility.
 - [`pgen`](cmd/pgen/README.md): A simple generator of memorable passwords.
+- [`rn`](cmd/rn/README.md): A bulk file re-namer.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
 
 ## Why?
