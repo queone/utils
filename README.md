@@ -1,10 +1,11 @@
 # utils
-This is a collection of CLI utilities written in Go and usable on any OS that supports Go.
+Collection of CLI utilities written in Go.
 
-- The [`cmd/fr`](cmd/fr/README.md) utility: A simple find/replace utility.
+- [`fr`](cmd/fr/README.md): A simple find/replace utility.
+- [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
 
 ## Why?
-The Go language and its tool chain are an ideal way to maintain a commonly used set of CLI utilities because they can be quickly compiled to run on Windows, macOS, or Linux, thus providing a unified and portable solution to your scripting needs. With this setup, Go essentially turns into a package manager for these utilities.
+The Go language and its tool chain are an ideal way to maintain a commonly used set of CLI utilities because they can be quickly compiled and installed on Windows, macOS, or Linux that has Go installed. This provides a unified and portable solution to many a scripting needs. With this setup, Go essentially turns into a package manager for these utilities.
 
 ## Getting Started
 To get started with these utilities:
@@ -12,7 +13,3 @@ To get started with these utilities:
 - Change into the repository directory: `cd utils`
 - Build and **install** all the utilities: `./build`
 - Try playing with each of the utilities 
-
-## Releases
-See [releases](releases.md) for the changelogs.
-
