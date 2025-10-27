@@ -26,7 +26,7 @@ func printUsage() {
 	n := utl.Whi2(program_name)
 	v := program_version
 	usageHeader := fmt.Sprintf("%s v%s\n"+
-		"Memorable password generator - github.com/git719/pgen\n"+
+		"Memorable password generator - https://github.com/queone/utils/blob/main/cmd/pgen/README.md\n"+
 		"%s\n"+
 		"  %s [option]\n\n"+
 		"%s\n"+
