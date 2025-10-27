@@ -5,6 +5,8 @@ go 1.25.3
 require (
 	github.com/bitfield/script v0.24.1
 	github.com/queone/utl v1.4.0
+	github.com/sethvargo/go-diceware v0.5.0
+	golang.org/x/text v0.30.0
 )
 
 require (
