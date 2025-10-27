@@ -4,6 +4,7 @@ go 1.25.3
 
 require (
 	github.com/bitfield/script v0.24.1
+	github.com/fatih/color v1.10.0
 	github.com/goccy/go-yaml v1.11.0
 	github.com/gookit/color v1.5.2
 	github.com/mattn/go-isatty v0.0.19
@@ -14,7 +15,6 @@ require (
 )
 
 require (
-	github.com/fatih/color v1.10.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/itchyny/gojq v0.12.13 // indirect
 	github.com/itchyny/timefmt-go v0.1.5 // indirect
