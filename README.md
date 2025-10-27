@@ -6,7 +6,7 @@ A collection of small CLI utilities written in Go.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
 
 ## Why?
-The Go language and its tool chain are an ideal way to maintain a commonly used set of CLI utilities because they can be quickly compiled and installed on Windows, macOS, or Linux that has Go installed. This provides a unified and portable solution to many a scripting needs. With this setup, Go essentially turns into a package manager for these utilities.
+The Go language and its tool chain are an ideal way to maintain a commonly used set of CLI utilities because they can be quickly compiled and installed whether the OS is Windows, macOS, or Linux. This provides a unified and portable solution to many a scripting needs. With this setup, Go essentially turns into a package manager for these utilities.
 
 ## Getting Started
 To compile the entire collection, you obviously need to have GoLang installed and properly setup in your system, with `$GOPATH` set up correctly (typically at `$HOME/go`). Also setup `$GOPATH/bin/` in your `$PATH`, since that is where all executable binaries will be placed.
