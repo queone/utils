@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# build
+
+set -euo pipefail  # Fail immediately on any error
+Gre='\e[1;32m' Red='\e[1;31m' Mag='\e[1;35m' Yel='\e[1;33m' Blu='\e[1;34m' Rst='\e[0m'
+
+Prg=$(head -1 go.mod | awk -F'/' '{print $NF}' | awk '{print $NF}')
+case "$OSTYPE" in
+    "linux-gnu"* ) printf "==> Linux\n" && BINDIR=$GOPATH/bin && EXT="" ;;
+    "darwin"* )    printf "==> macOS\n" && BINDIR=$GOPATH/bin && EXT="" ;;
+    "msys"* )      printf "==> Windows with GitBASH\n" && BINDIR=$GOPATH/bin && EXT=".exe" ;;
+    * )            printf "==> Unknown OS '$OSTYPE'. Aborting.\n" && exit 1 ;;
+esac
+
+# Initial steps: update go.mod, format, run tests, install tools, analyze code
+printf "==> Update go.mod to reflect actual dependencies\ngo mod tidy\n"
+go mod tidy
+printf "\n==> Format Go code according to standard rules\ngo fmt ./...\n"
+go fmt ./...
+printf "\n==> Run tests for all packages in the repository\ngo test ./...\n"
+go test ./...
+printf "\n==> Install static analysis tool for Go\ngo install honnef.co/go/tools/cmd/staticcheck@latest\n"
+go install honnef.co/go/tools/cmd/staticcheck@latest
+printf "\n==> Analyze Go code for potential issues\nstaticcheck ./...\n"
+staticcheck ./...
+
+# Loop over all directories in cmd/ and build each utility
+for UTIL_DIR in ./cmd/*; do
+    if [ -d "$UTIL_DIR" ]; then
+        UTIL=$(basename "$UTIL_DIR")  # Get the directory name (i.e., utility name)
+
+        # Get version for each utility from its main.go
+        ProgramVersion=$(grep -o 'program_version.*"[^"]*"' "cmd/${UTIL}/main.go" | cut -d'"' -f2 || echo "unknown_version")
+        printf "\n==> Building and installing ${Gre}${UTIL} ${ProgramVersion}${Rst}\n"
+        
+        # Build the utility
+        (
+            set -x
+            go build -o "${BINDIR}/${UTIL}${EXT}" -ldflags "-s -w" "$UTIL_DIR"
+        )
+        
+        # Print build size and details
+        printf "${Gre}$(ls -l ${BINDIR}/${UTIL}${EXT} | awk '{print sprintf("%'"'"'d", $5), $6, $7, $8, $9}')${Rst}\n"
+    fi
+done
+
+# Handle the repo versioning and git tagging
+# Fetch the latest tag and increment the version for the repo
+CurrentTag=$(git tag | sort -V | tail -1)
+IFS='.' read -r Major Minor Patch <<< "${CurrentTag#v}"
+NextTag="v$Major.$Minor.$((Patch+1))"
+
+# Output instructions for creating the new tag
+printf "\n==> To release as ${Gre}$NextTag${Rst}, adjust comment and run below one-liner:\n"
+printf "\n    TAG=${Gre}$NextTag${Rst} && git add . && git commit -m \"${Gre}<insert comment>${Rst}\" && git tag \$TAG && git push origin \$TAG && git push\n\n"
+
+exit 0
