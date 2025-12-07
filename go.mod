@@ -10,6 +10,7 @@ require (
 	github.com/mattn/go-isatty v0.0.19
 	github.com/queone/utl v1.4.0
 	github.com/sethvargo/go-diceware v0.5.0
+	github.com/vaughan0/go-ini v0.0.0-20130923145212-a98ad7ee00ec
 	golang.org/x/text v0.30.0
 	gopkg.in/yaml.v3 v3.0.1
 )
