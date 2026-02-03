@@ -1,0 +1,85 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strings"
+	"unicode"
+)
+
+const (
+	program_name    = "rncap"
+	program_version = "2.0.0"
+)
+
+func init() {
+	_ = program_name
+	_ = program_version
+}
+
+func main() {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Capitalize every file in CWD? Y/N ")
+	resp, _ := reader.ReadString('\n')
+	resp = strings.TrimSpace(resp)
+
+	if resp != "Y" && resp != "y" {
+		fmt.Println("\nAborted.")
+		os.Exit(1)
+	}
+	fmt.Println()
+
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		fail(err)
+	}
+
+	for _, e := range entries {
+		oldName := e.Name()
+
+		newName := titleCase(oldName)
+		if newName == oldName {
+			continue
+		}
+
+		if _, err := os.Stat(newName); err == nil {
+			fmt.Fprintf(os.Stderr, "skipped (exists): %s\n", newName)
+			continue
+		}
+
+		if err := os.Rename(oldName, newName); err != nil {
+			fmt.Fprintf(os.Stderr, "rename failed: %s -> %s (%v)\n", oldName, newName, err)
+			continue
+		}
+
+		fmt.Printf("'%s' -> '%s'\n", oldName, newName)
+	}
+
+	fmt.Println()
+}
+
+func titleCase(s string) string {
+	var out []rune
+	capNext := true
+
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if capNext {
+				out = append(out, unicode.ToTitle(r))
+				capNext = false
+			} else {
+				out = append(out, unicode.ToLower(r))
+			}
+		} else {
+			out = append(out, r)
+			capNext = true
+		}
+	}
+	return string(out)
+}
+
+func fail(err error) {
+	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	os.Exit(1)
+}
