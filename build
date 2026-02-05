@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # build
-
 set -euo pipefail  # Fail immediately on any error
 Gre='\e[1;32m' Red='\e[1;31m' Mag='\e[1;35m' Yel='\e[1;33m' Blu='\e[1;34m' Rst='\e[0m'
+
+# Parse arguments - if provided, only build specified utilities
+BUILD_TARGETS=("$@")
 
 Prg=$(head -1 go.mod | awk -F'/' '{print $NF}' | awk '{print $NF}')
 case "$OSTYPE" in
@@ -24,25 +26,61 @@ go install honnef.co/go/tools/cmd/staticcheck@latest
 printf "\n==> Analyze Go code for potential issues\nstaticcheck ./...\n"
 staticcheck ./...
 
+# Function to check if a utility should be built
+should_build() {
+    local util=$1
+    # If no targets specified, build all
+    if [ ${#BUILD_TARGETS[@]} -eq 0 ]; then
+        return 0
+    fi
+    # Check if utility is in the target list
+    for target in "${BUILD_TARGETS[@]}"; do
+        if [ "$target" = "$util" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Display build mode
+if [ ${#BUILD_TARGETS[@]} -eq 0 ]; then
+    printf "\n==> Building ${Gre}all utilities${Rst}\n"
+else
+    printf "\n==> Building ${Gre}specific utilities: ${BUILD_TARGETS[*]}${Rst}\n"
+fi
+
 # Loop over all directories in cmd/ and build each utility
+BUILT_COUNT=0
 for UTIL_DIR in ./cmd/*; do
     if [ -d "$UTIL_DIR" ]; then
         UTIL=$(basename "$UTIL_DIR")  # Get the directory name (i.e., utility name)
-
+        
+        # Skip if not in build targets (when targets are specified)
+        if ! should_build "$UTIL"; then
+            continue
+        fi
+        
         # Get version for each utility from its main.go
         ProgramVersion=$(grep -o 'program_version.*"[^"]*"' "cmd/${UTIL}/main.go" | cut -d'"' -f2 || echo "unknown_version")
         printf "\n==> Building and installing ${Gre}${UTIL} v${ProgramVersion}${Rst}\n"
-        
         # Build this utility
         (
             set -x
             go build -o "${BINDIR}/${UTIL}${EXT}" -ldflags "-s -w" "$UTIL_DIR"
         )
-        
         # Print build size and details
         printf "    ${Gre}$(ls -l ${BINDIR}/${UTIL}${EXT} | awk '{printf "%'"'"'10d    %s %2s %5s     %s", $5, $6, $7, $8, $9}')${Rst}\n"
+        BUILT_COUNT=$((BUILT_COUNT + 1))
     fi
 done
+
+# Summary
+if [ $BUILT_COUNT -eq 0 ]; then
+    printf "\n${Yel}Warning: No utilities were built.${Rst}\n"
+    if [ ${#BUILD_TARGETS[@]} -gt 0 ]; then
+        printf "Check that the specified utilities exist in ./cmd/\n"
+    fi
+fi
 
 # Handle the repo versioning and git tagging
 # Fetch the latest tag and increment the version for the repo
