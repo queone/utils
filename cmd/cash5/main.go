@@ -15,7 +15,7 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.0.1"
+	program_version = "1.1.0"
 )
 
 func runDailyWithRand(r *rand.Rand) error {
@@ -146,7 +146,7 @@ func generateTop3Recommendations(draws []Draw) []recommendation {
 		}
 	}
 
-	// Build historical combinations for maximum distance
+	// Build historical combinations for maximum distance (do this once)
 	var historicalSets [][]int
 	for i := range uniqueDraws {
 		nums, err := extractPrimaryFive(&uniqueDraws[i])
@@ -166,14 +166,14 @@ func generateTop3Recommendations(draws []Draw) []recommendation {
 		recs = append(recs, recommendation{freqCombo, "(Most frequent all-time)"})
 	}
 
-	// 2. Maximum Distance Strategy (simulated annealing - run multiple times and pick best)
+	// 2. Maximum Distance Strategy (simulated annealing - run 3 times with fewer iterations)
 	if len(historicalSets) > 0 {
 		var bestResult annealingResult
 		bestResult.bestScore = 0
 
-		// Run annealing 5 times and pick the best
-		for run := 0; run < 5; run++ {
-			result := simulatedAnnealingSearch(historicalSets, 2000, 100.0, 0.95)
+		// Run annealing 3 times with 1000 iterations each (faster than 5x2000)
+		for run := 0; run < 3; run++ {
+			result := simulatedAnnealingSearch(historicalSets, 1000, 100.0, 0.95)
 			if result.bestScore > bestResult.bestScore {
 				bestResult = result
 			}

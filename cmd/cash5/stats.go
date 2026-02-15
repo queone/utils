@@ -2,11 +2,15 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"sort"
 	"time"
 
 	"github.com/queone/utl"
 )
+
+// Global RNG for statistics - seeded once at package init
+var statsRNG = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func displayStatistics(draws []Draw) error {
 	if len(draws) == 0 {
@@ -886,31 +890,28 @@ func calculateEV(jackpot float64, totalCombos int, ticketCost float64) float64 {
 }
 
 // hammingDistance calculates the number of different elements between two sets
+// hammingDistance calculates the number of different elements between two sorted sets
+// Optimized for small sorted arrays (5 elements each)
 func hammingDistance(a, b []int) int {
-	aSet := make(map[int]bool)
-	for _, num := range a {
-		aSet[num] = true
-	}
+	// Count matching elements
+	matches := 0
+	i, j := 0, 0
 
-	different := 0
-	for _, num := range b {
-		if !aSet[num] {
-			different++
+	for i < len(a) && j < len(b) {
+		if a[i] == b[j] {
+			matches++
+			i++
+			j++
+		} else if a[i] < b[j] {
+			i++
+		} else {
+			j++
 		}
 	}
 
-	// Also count elements in a not in b
-	bSet := make(map[int]bool)
-	for _, num := range b {
-		bSet[num] = true
-	}
-	for _, num := range a {
-		if !bSet[num] {
-			different++
-		}
-	}
-
-	return different / 2 // Divide by 2 since we counted both directions
+	// Hamming distance = total elements - 2*matches
+	// (each match means both sets have it, so subtract twice)
+	return len(a) + len(b) - 2*matches
 }
 
 // minDistanceToHistorical finds minimum distance from combo to any historical set
@@ -996,8 +997,7 @@ func generateRandomCombo() []int {
 
 	for i := 0; i < 5; i++ {
 		for {
-			// Simple pseudo-random using time
-			n := (int(time.Now().UnixNano()) % 45) + 1
+			n := statsRNG.Intn(45) + 1
 			if !used[n] {
 				nums[i] = n
 				used[n] = true
@@ -1078,7 +1078,7 @@ func perturb(combo []int) []int {
 	copy(neighbor, combo)
 
 	// Pick random position to mutate
-	pos := int(time.Now().UnixNano()) % 5
+	pos := statsRNG.Intn(5)
 
 	// Find new number not in combo
 	used := make(map[int]bool)
@@ -1087,7 +1087,7 @@ func perturb(combo []int) []int {
 	}
 
 	for {
-		newNum := (int(time.Now().UnixNano()) % 45) + 1
+		newNum := statsRNG.Intn(45) + 1
 		if !used[newNum] {
 			neighbor[pos] = newNum
 			break
@@ -1114,9 +1114,7 @@ func exp(x float64) float64 {
 
 // randomFloat returns a pseudo-random float between 0 and 1
 func randomFloat() float64 {
-	// Use nanosecond time for randomness
-	ns := time.Now().UnixNano()
-	return float64(ns%10000) / 10000.0
+	return statsRNG.Float64()
 }
 
 // pow calculates x^n
