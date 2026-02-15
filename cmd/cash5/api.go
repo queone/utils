@@ -110,6 +110,11 @@ func fetchDrawsByDateRange(from, to time.Time, existing []Draw, saveCallback fun
 			}
 		}
 
+		// If we got fewer draws than pageSize, there's no more data - stop paging
+		if len(draws) < pageSize {
+			break
+		}
+
 		// For initial fetch with large page size, if we got close to a full year, stop
 		// This avoids trying to fetch page 1 which causes 500 errors
 		if page == 0 && len(draws) >= 350 {
@@ -158,14 +163,6 @@ func fetchAllDrawsIncremental(existing []Draw, saveCallback func([]Draw) error) 
 }
 
 // fetchPage fetches a single page (default size=1) for the latest draw
-func fetchPage(page int) ([]Draw, error) {
-	const defaultSize = 1
-	from := time.Now().AddDate(-10, 0, 0)
-	to := time.Now().AddDate(0, 0, 1)
-
-	return fetchPageWithSize(page, defaultSize, from.UnixMilli(), to.UnixMilli())
-}
-
 // saveDrawsCallback persists draws to $HOME/.config/cash5/draws.json
 func saveDrawsCallback(draws []Draw) error {
 	path := fmt.Sprintf("%s/.config/cash5/draws.json", os.Getenv("HOME"))

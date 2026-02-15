@@ -15,7 +15,7 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.0.0"
+	program_version = "1.0.1"
 )
 
 func runDailyWithRand(r *rand.Rand) error {
@@ -51,42 +51,30 @@ func runDailyWithRand(r *rand.Rand) error {
 		fmt.Println()
 	}
 
-	// Try to fetch latest draw and append if new (skip if we have today's data already)
-	var needsLatestFetch bool
+	// Fetch all missing recent draws up to yesterday
 	if len(existing) > 0 {
 		sort.Slice(existing, func(i, j int) bool { return existing[i].DrawTime < existing[j].DrawTime })
 		newest := time.UnixMilli(existing[len(existing)-1].DrawTime)
 		today := time.Now().Truncate(24 * time.Hour)
 		yesterday := today.AddDate(0, 0, -1)
 
-		// Only fetch if newest draw is older than yesterday
+		// If newest draw is before yesterday, we're missing some recent draws
 		if newest.Before(yesterday) {
-			needsLatestFetch = true
-		}
-	} else {
-		needsLatestFetch = true
-	}
+			fmt.Printf("Missing recent draws (newest: %s, need up to: %s). Fetching...\n",
+				newest.Format("2006-01-02"), yesterday.Format("2006-01-02"))
 
-	if needsLatestFetch {
-		latest, err := fetchPage(0)
-		if err == nil && len(latest) > 0 {
-			newDraw := latest[0]
+			// Fetch from day after newest to today
+			dateFrom := newest.AddDate(0, 0, 1)
+			dateTo := time.Now()
 
-			var maxTime int64
-			for _, d := range existing {
-				if d.DrawTime > maxTime {
-					maxTime = d.DrawTime
-				}
-			}
-
-			if newDraw.DrawTime > maxTime {
-				existing = append(existing, newDraw)
-				if err := saveDraws(existing); err != nil {
-					return err
-				}
+			recentDraws, err := fetchDrawsByDateRange(dateFrom, dateTo, existing, saveDrawsCallback)
+			if err == nil {
+				existing = recentDraws
+				fmt.Printf("Fetched recent draws. Total in database: %d\n\n", len(existing))
+			} else {
+				fmt.Printf("Warning: failed to fetch recent draws: %v\n", err)
 			}
 		}
-		// Silently ignore errors from latest fetch - it's not critical
 	}
 
 	// Display last 10 draws
@@ -494,7 +482,6 @@ func debugDrawByDate(draws []Draw, dateStr string) error {
 	return nil
 }
 
-// main() at the bottom
 func main() {
 	runCLI()
 }

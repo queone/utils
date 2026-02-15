@@ -39,20 +39,3 @@ func loadDraws() ([]Draw, error) {
 	err = json.NewDecoder(file).Decode(&draws)
 	return draws, err
 }
-
-func saveDraws(draws []Draw) error {
-	path, err := configPath()
-	if err != nil {
-		return err
-	}
-
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	enc := json.NewEncoder(file)
-	enc.SetIndent("", "  ")
-	return enc.Encode(draws)
-}
