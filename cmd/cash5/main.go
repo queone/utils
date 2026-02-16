@@ -15,7 +15,7 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.1.0"
+	program_version = "1.1.1"
 )
 
 func runDailyWithRand(r *rand.Rand) error {
@@ -322,6 +322,22 @@ func runCLI() {
 	}
 }
 
+func printTimestamp() {
+	now := time.Now()
+	ampm := "a"
+	if now.Hour() >= 12 {
+		ampm = "p"
+	}
+	fmt.Printf("%d-%s-%02d %s %s%s\n",
+		now.Year(),
+		strings.ToLower(now.Format("Jan")),
+		now.Day(),
+		now.Format("Mon"),
+		now.Format("03:04"),
+		ampm,
+	)
+}
+
 func displayAllDraws(draws []Draw) error {
 	if len(draws) == 0 {
 		fmt.Println("No draws found")
@@ -344,6 +360,7 @@ func displayAllDraws(draws []Draw) error {
 	}
 
 	// Print header
+	printTimestamp()
 	fmt.Printf("%-12s  %-20s  %15s\n", "DATE", "WINNING NUMBERS", "5/5 PAYOUT")
 
 	for _, d := range uniqueDraws {
@@ -393,6 +410,7 @@ func displayLastNDraws(draws []Draw, n int) error {
 	lastNDraws := uniqueDraws[startIdx:]
 
 	// Print header
+	printTimestamp()
 	fmt.Printf("%-12s  %-20s  %15s\n", "DATE", "WINNING NUMBERS", "5/5 PAYOUT")
 
 	for _, d := range lastNDraws {
