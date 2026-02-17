@@ -12,6 +12,70 @@ import (
 // Global RNG for statistics - seeded once at package init
 var statsRNG = rand.New(rand.NewSource(time.Now().UnixNano()))
 
+// Shared annealing parameters so -s and default mode produce consistent results
+const (
+	annealingIterations = 5000
+	annealingInitTemp   = 100.0
+	annealingCoolRate   = 0.995
+	annealingRuns       = 5
+)
+
+// bestAnnealingSearch runs simulated annealing multiple times and returns the best result.
+// Both -s and default mode call this with identical parameters.
+func bestAnnealingSearch(historical [][]int) annealingResult {
+	var best annealingResult
+	best.bestScore = 0
+	for run := 0; run < annealingRuns; run++ {
+		result := simulatedAnnealingSearch(historical, annealingIterations, annealingInitTemp, annealingCoolRate)
+		if result.bestScore > best.bestScore {
+			best = result
+		}
+	}
+	return best
+}
+
+// findMaxDistanceBruteForce enumerates all C(45,5) = 1,221,759 combinations
+// and returns the one(s) with the highest minimum Hamming distance to any historical draw.
+// Early-exit pruning makes this fast once a good candidate is found.
+func findMaxDistanceBruteForce(historical [][]int) ([]int, int, int) {
+	bestScore := 0
+	var bestCombo []int
+	totalCandidates := 0 // how many combos tied at bestScore
+
+	for a := 1; a <= 41; a++ {
+		for b := a + 1; b <= 42; b++ {
+			for c := b + 1; c <= 43; c++ {
+				for d := c + 1; d <= 44; d++ {
+					for e := d + 1; e <= 45; e++ {
+						combo := []int{a, b, c, d, e}
+						minDist := 5
+
+						for _, hist := range historical {
+							dist := hammingDistance(combo, hist)
+							if dist < minDist {
+								minDist = dist
+								if minDist <= bestScore {
+									break // can't beat current best, prune
+								}
+							}
+						}
+
+						if minDist > bestScore {
+							bestScore = minDist
+							bestCombo = []int{a, b, c, d, e}
+							totalCandidates = 1
+						} else if minDist == bestScore {
+							totalCandidates++
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return bestCombo, bestScore, totalCandidates
+}
+
 func displayStatistics(draws []Draw) error {
 	if len(draws) == 0 {
 		fmt.Println("No draws found")
@@ -523,9 +587,9 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("    %s: %s\n", utl.Blu("In next 365 draws"), utl.Gre(fmt.Sprintf("%.2f%%", simResults.prob365Days*100)))
 	fmt.Printf("    %s: %s\n", utl.Blu("In next 10 years"), utl.Gre(fmt.Sprintf("%.2f%%", simResults.prob10Years*100)))
 
-	// Combinatorial Distance Scoring
-	fmt.Printf("\n%s:\n", utl.Blu("Combinatorial Distance Scoring"))
-	fmt.Printf("  %s\n", utl.Gra("[Computing... this may take a moment]"))
+	// Combinatorial Distance Scoring - Brute Force
+	fmt.Printf("\n%s:\n", utl.Blu("Combinatorial Distance Scoring (Brute Force)"))
+	fmt.Printf("  %s\n", utl.Gra("[Enumerating all 1,221,759 combinations...]"))
 
 	// Calculate all historical combinations
 	var historicalSets [][]int
@@ -537,76 +601,66 @@ func displayStatistics(draws []Draw) error {
 		}
 	}
 
-	// Find the combination with maximum distance from all historical draws
-	bestCombo, bestScore := findMaxDistanceCombo(historicalSets, 1000)
+	startTime := time.Now()
+	bruteCombo, bruteScore, bruteTied := findMaxDistanceBruteForce(historicalSets)
+	bruteElapsed := time.Since(startTime)
 
-	// Also show distance stats for random combinations
-	distanceStats := calculateDistanceStats(historicalSets, 10000)
+	fmt.Printf("  %s: %s\n", utl.Blu("Method"), utl.Gra("Exhaustive enumeration of all C(45,5) combinations"))
+	fmt.Printf("  %s: %s\n", utl.Blu("Historical draws analyzed"), utl.Gre(len(historicalSets)))
+	fmt.Printf("  %s: %s\n", utl.Blu("Elapsed time"), utl.Gre(bruteElapsed.Round(time.Millisecond)))
 
-	fmt.Printf("  %s: %s\n", utl.Blu("Distance Metric"), utl.Gra("Hamming distance (non-matching numbers)"))
-	fmt.Printf("  %s: %s\n\n", utl.Blu("Historical combinations analyzed"), utl.Gre(len(historicalSets)))
-
-	fmt.Printf("  %s:\n", utl.Blu("Random Combination Distance Statistics (10,000 samples)"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Average min distance"), utl.Gre(fmt.Sprintf("%.2f numbers different", distanceStats.avgMinDist)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Average mean distance"), utl.Gre(fmt.Sprintf("%.2f numbers different", distanceStats.avgMeanDist)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Best min distance found"), utl.Gre(fmt.Sprintf("%.0f numbers different", distanceStats.bestMinDist)))
-
-	fmt.Printf("\n  %s:\n", utl.Blu("Maximum Distance Combination Found"))
+	fmt.Printf("\n  %s:\n", utl.Blu("Global Maximum Distance Combination"))
 	fmt.Printf("    %s: %s\n", utl.Blu("Numbers"), utl.Gre(fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
-		bestCombo[0], bestCombo[1], bestCombo[2], bestCombo[3], bestCombo[4])))
-	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%.0f numbers different", bestScore)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Interpretation"), utl.Gra(fmt.Sprintf("At least %.0f/5 numbers differ from every historical draw", bestScore)))
+		bruteCombo[0], bruteCombo[1], bruteCombo[2], bruteCombo[3], bruteCombo[4])))
+	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%d numbers different", bruteScore)))
+	fmt.Printf("    %s: %s\n", utl.Blu("Tied combinations"), utl.Gre(fmt.Sprintf("%s combos with same score", formatNumber(bruteTied))))
+	fmt.Printf("    %s: %s\n", utl.Blu("Interpretation"), utl.Gra(fmt.Sprintf("At least %d/5 numbers differ from every historical draw", bruteScore)))
 
 	// Show some example distances
 	fmt.Printf("\n  %s:\n", utl.Blu("Distance Examples (from max-distance combo)"))
 	for i := 0; i < 3 && i < len(historicalSets); i++ {
-		dist := hammingDistance(bestCombo, historicalSets[len(historicalSets)-1-i])
+		dist := hammingDistance(bruteCombo, historicalSets[len(historicalSets)-1-i])
 		drawDate := time.UnixMilli(uniqueDraws[len(uniqueDraws)-1-i].DrawTime).Format("2006-01-02")
 		fmt.Printf("    %s %s %s: %s\n", utl.Blu("vs"), utl.Gre(drawDate), utl.Blu("draw"), utl.Gre(fmt.Sprintf("%d/5 numbers different", dist)))
 	}
 
-	// Simulated Annealing Search
+	// Simulated Annealing Search (using shared parameters)
 	fmt.Printf("\n%s:\n", utl.Blu("Simulated Annealing Search"))
-	fmt.Printf("  %s\n", utl.Gra("[Optimizing... running 5,000 iterations]"))
+	fmt.Printf("  %s\n", utl.Gra(fmt.Sprintf("[Optimizing... %d runs × %s iterations]", annealingRuns, formatNumber(annealingIterations))))
 	fmt.Printf("  %s: %s\n", utl.Blu("Objective"), utl.Gra("Maximize minimum distance to historical draws"))
 	fmt.Printf("  %s: %s\n\n", utl.Blu("Algorithm"), utl.Gra("Simulated annealing with adaptive cooling"))
 
-	// Run simulated annealing
-	annealResult := simulatedAnnealingSearch(historicalSets, 5000, 100.0, 0.95)
+	// Run simulated annealing using shared function
+	annealResult := bestAnnealingSearch(historicalSets)
 
 	fmt.Printf("  %s:\n", utl.Blu("Search Parameters"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Iterations"), utl.Gre("5,000"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Initial temperature"), utl.Gre("100.0"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Cooling rate"), utl.Gre("0.95"))
+	fmt.Printf("    %s: %s\n", utl.Blu("Iterations"), utl.Gre(formatNumber(annealingIterations)))
+	fmt.Printf("    %s: %s\n", utl.Blu("Runs"), utl.Gre(annealingRuns))
+	fmt.Printf("    %s: %s\n", utl.Blu("Initial temperature"), utl.Gre(fmt.Sprintf("%.1f", annealingInitTemp)))
+	fmt.Printf("    %s: %s\n", utl.Blu("Cooling rate"), utl.Gre(fmt.Sprintf("%.3f", annealingCoolRate)))
 	fmt.Printf("    %s: %s\n", utl.Blu("Perturbation strategy"), utl.Gra("Single number mutation"))
 
 	fmt.Printf("\n  %s:\n", utl.Blu("Optimization Results"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Starting score"), utl.Gre(fmt.Sprintf("%.2f", annealResult.initialScore)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Final score"), utl.Gre(fmt.Sprintf("%.2f", annealResult.finalScore)))
 	fmt.Printf("    %s: %s\n", utl.Blu("Best score found"), utl.Gre(fmt.Sprintf("%.2f", annealResult.bestScore)))
-	fmt.Printf("    %s: %s  %s\n", utl.Blu("Improvement"), utl.Gre(fmt.Sprintf("+%.2f", annealResult.bestScore-annealResult.initialScore)),
-		utl.Gra(fmt.Sprintf("(%.1f%%)", ((annealResult.bestScore-annealResult.initialScore)/annealResult.initialScore)*100)))
 	fmt.Printf("    %s: %s  %s\n", utl.Blu("Accepted moves"),
 		utl.Gre(fmt.Sprintf("%d/%d", annealResult.acceptedMoves, annealResult.totalMoves)),
 		utl.Gra(fmt.Sprintf("(%.1f%%)", (float64(annealResult.acceptedMoves)/float64(annealResult.totalMoves))*100)))
 
-	fmt.Printf("\n  %s:\n", utl.Blu("Optimal Combination Found"))
+	fmt.Printf("\n  %s:\n", utl.Blu("Annealing Combination Found"))
 	fmt.Printf("    %s: %s\n", utl.Blu("Numbers"), utl.Gre(fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 		annealResult.bestCombo[0], annealResult.bestCombo[1],
 		annealResult.bestCombo[2], annealResult.bestCombo[3], annealResult.bestCombo[4])))
 	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%.0f numbers different", annealResult.bestScore)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Global maximum"), utl.Gra("Likely (annealing converged)"))
 
 	// Compare methods
 	fmt.Printf("\n  %s:\n", utl.Blu("Method Comparison"))
-	fmt.Printf("    %s: %s  %s\n", utl.Blu("Random search best"), utl.Gre(fmt.Sprintf("%.0f", bestScore)), utl.Gra("(from 1,000 samples)"))
-	fmt.Printf("    %s: %s  %s\n", utl.Blu("Annealing best"), utl.Gre(fmt.Sprintf("%.0f", annealResult.bestScore)), utl.Gra("(from 5,000 iterations)"))
-	if annealResult.bestScore > bestScore {
-		fmt.Printf("    %s: %s  %s\n", utl.Blu("Winner"), utl.Gre("Simulated annealing"), utl.Gra(fmt.Sprintf("(+%.0f)", annealResult.bestScore-bestScore)))
-	} else if annealResult.bestScore < bestScore {
-		fmt.Printf("    %s: %s  %s\n", utl.Blu("Winner"), utl.Gre("Random search"), utl.Gra(fmt.Sprintf("(+%.0f)", bestScore-annealResult.bestScore)))
+	fmt.Printf("    %s: %s  %s\n", utl.Blu("Brute force (global optimum)"), utl.Gre(fmt.Sprintf("%d", bruteScore)), utl.Gra(fmt.Sprintf("(%s combos)", formatNumber(totalCombinations))))
+	fmt.Printf("    %s: %s  %s\n", utl.Blu("Simulated annealing"), utl.Gre(fmt.Sprintf("%.0f", annealResult.bestScore)), utl.Gra(fmt.Sprintf("(%d runs × %s iters)", annealingRuns, formatNumber(annealingIterations))))
+	if annealResult.bestScore >= float64(bruteScore) {
+		fmt.Printf("    %s: %s\n", utl.Blu("Annealing found optimum?"), utl.Gre("✓ Yes"))
 	} else {
-		fmt.Printf("    %s: %s\n", utl.Blu("Winner"), utl.Gra("Tie (both found same score)"))
+		fmt.Printf("    %s: %s  %s\n", utl.Blu("Annealing found optimum?"), utl.Gra("✗ No"),
+			utl.Gra(fmt.Sprintf("(off by %.0f)", float64(bruteScore)-annealResult.bestScore)))
 	}
 
 	return nil
@@ -711,6 +765,19 @@ type simulationResults struct {
 	prob10Years float64
 }
 
+type evSimulationResults struct {
+	singleTicketEV float64
+	plays100EV     float64
+	plays1000EV    float64
+}
+
+// Retain unused functions/types for future use
+var (
+	_ = runEVSimulation
+	_ = calculateEV
+	_ evSimulationResults
+)
+
 // runRepeatSimulation performs Monte Carlo simulation to estimate probability
 // of drawing a previously seen combination
 func runRepeatSimulation(numHistorical, totalCombos, iterations int) simulationResults {
@@ -736,19 +803,6 @@ func runRepeatSimulation(numHistorical, totalCombos, iterations int) simulationR
 	results.prob10Years = 1.0 - pow(1.0-p, draws10y)
 
 	return results
-}
-
-// Retain unused functions/types for future use
-var (
-	_ = runEVSimulation
-	_ = calculateEV
-	_ evSimulationResults
-)
-
-type evSimulationResults struct {
-	singleTicketEV float64
-	plays100EV     float64
-	plays1000EV    float64
 }
 
 // runEVSimulation calculates expected value through Monte Carlo simulation
@@ -778,7 +832,6 @@ func calculateEV(jackpot float64, totalCombos int, ticketCost float64) float64 {
 	return (winProb * jackpot) - ticketCost
 }
 
-// hammingDistance calculates the number of different elements between two sets
 // hammingDistance calculates the number of different elements between two sorted sets
 // Optimized for small sorted arrays (5 elements each)
 func hammingDistance(a, b []int) int {
@@ -818,85 +871,6 @@ func minDistanceToHistorical(combo []int, historical [][]int) float64 {
 	}
 
 	return float64(minDist)
-}
-
-type distanceStatistics struct {
-	avgMinDist  float64
-	avgMeanDist float64
-	bestMinDist float64
-}
-
-// calculateDistanceStats generates random combinations and calculates distance statistics
-func calculateDistanceStats(historical [][]int, samples int) distanceStatistics {
-	var sumMinDist float64
-	var sumMeanDist float64
-	var bestMinDist float64
-
-	for i := 0; i < samples; i++ {
-		// Generate random combination
-		combo := generateRandomCombo()
-
-		// Calculate min distance to historical
-		minDist := minDistanceToHistorical(combo, historical)
-		sumMinDist += minDist
-
-		if minDist > bestMinDist {
-			bestMinDist = minDist
-		}
-
-		// Calculate mean distance to all historical
-		var totalDist float64
-		for _, hist := range historical {
-			totalDist += float64(hammingDistance(combo, hist))
-		}
-		meanDist := totalDist / float64(len(historical))
-		sumMeanDist += meanDist
-	}
-
-	return distanceStatistics{
-		avgMinDist:  sumMinDist / float64(samples),
-		avgMeanDist: sumMeanDist / float64(samples),
-		bestMinDist: bestMinDist,
-	}
-}
-
-// findMaxDistanceCombo searches for combination with maximum minimum distance to historical
-func findMaxDistanceCombo(historical [][]int, iterations int) ([]int, float64) {
-	var bestCombo []int
-	var bestScore float64
-
-	for i := 0; i < iterations; i++ {
-		combo := generateRandomCombo()
-		score := minDistanceToHistorical(combo, historical)
-
-		if score > bestScore {
-			bestScore = score
-			bestCombo = make([]int, len(combo))
-			copy(bestCombo, combo)
-		}
-	}
-
-	return bestCombo, bestScore
-}
-
-// generateRandomCombo generates a random 5-number combination (1-45)
-func generateRandomCombo() []int {
-	nums := make([]int, 5)
-	used := make(map[int]bool)
-
-	for i := 0; i < 5; i++ {
-		for {
-			n := statsRNG.Intn(45) + 1
-			if !used[n] {
-				nums[i] = n
-				used[n] = true
-				break
-			}
-		}
-	}
-
-	sort.Ints(nums)
-	return nums
 }
 
 type annealingResult struct {
@@ -985,6 +959,26 @@ func perturb(combo []int) []int {
 
 	sort.Ints(neighbor)
 	return neighbor
+}
+
+// generateRandomCombo generates a random 5-number combination (1-45)
+func generateRandomCombo() []int {
+	nums := make([]int, 5)
+	used := make(map[int]bool)
+
+	for i := 0; i < 5; i++ {
+		for {
+			n := statsRNG.Intn(45) + 1
+			if !used[n] {
+				nums[i] = n
+				used[n] = true
+				break
+			}
+		}
+	}
+
+	sort.Ints(nums)
+	return nums
 }
 
 // exp calculates e^x using Taylor series approximation

@@ -15,7 +15,7 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.3.0"
+	program_version = "1.4.0"
 )
 
 // narrativeDate formats a time as "2026-feb-17" for summary/narrative lines
@@ -160,13 +160,15 @@ func runDailyWithRand(r *rand.Rand) error {
 
 	// Closest matches to LWN (3+ matching numbers)
 	type closeMatch struct {
-		date    string
-		nums    []int
-		matches int
+		drawTime int64
+		date     string
+		nums     []int
+		matches  int
 	}
 	var closeMatches []closeMatch
 	for _, d := range uniqueDraws {
-		dDate := narrativeDate(time.UnixMilli(d.DrawTime))
+		dt := d.DrawTime
+		dDate := narrativeDate(time.UnixMilli(dt))
 		if dDate == lwnDate {
 			continue
 		}
@@ -177,16 +179,16 @@ func runDailyWithRand(r *rand.Rand) error {
 		sort.Ints(nums)
 		mc := countMatches(lwn, nums)
 		if mc >= 3 {
-			closeMatches = append(closeMatches, closeMatch{dDate, nums, mc})
+			closeMatches = append(closeMatches, closeMatch{dt, dDate, nums, mc})
 		}
 	}
 
-	// Sort by match count desc, then date desc
+	// Sort by match count desc, then by drawTime desc (most recent first within same match count)
 	sort.Slice(closeMatches, func(i, j int) bool {
 		if closeMatches[i].matches != closeMatches[j].matches {
 			return closeMatches[i].matches > closeMatches[j].matches
 		}
-		return closeMatches[i].date > closeMatches[j].date
+		return closeMatches[i].drawTime > closeMatches[j].drawTime
 	})
 
 	fmt.Printf("%s:\n", utl.Blu("CLOSEST 5 PREVIOUS WINNING MATCHES"))
@@ -207,7 +209,7 @@ func runDailyWithRand(r *rand.Rand) error {
 	}
 
 	// Generate intelligent recommendations
-	recommendations := generateRecommendations(existing)
+	recommendations := generateRecommendations(uniqueDraws)
 
 	fmt.Printf("%s:\n", utl.Blu("RECOMMENDATION"))
 	for _, rec := range recommendations {
@@ -225,17 +227,7 @@ type recommendation struct {
 }
 
 // generateRecommendations creates 5 intelligent recommendations based on statistical analysis
-func generateRecommendations(draws []Draw) []recommendation {
-	// Deduplicate
-	seen := make(map[string]bool)
-	uniqueDraws := []Draw{}
-	for _, d := range draws {
-		if !seen[d.ID] {
-			seen[d.ID] = true
-			uniqueDraws = append(uniqueDraws, d)
-		}
-	}
-
+func generateRecommendations(uniqueDraws []Draw) []recommendation {
 	// Build frequency maps
 	overallFreq := make(map[int]int)
 	firstNumFreq := make(map[int]int)
@@ -269,7 +261,7 @@ func generateRecommendations(draws []Draw) []recommendation {
 		}
 	}
 
-	// Build historical combinations for maximum distance (do this once)
+	// Build historical combinations for distance analysis
 	var historicalSets [][]int
 	for i := range uniqueDraws {
 		nums, err := extractPrimaryFive(&uniqueDraws[i])
@@ -289,20 +281,10 @@ func generateRecommendations(draws []Draw) []recommendation {
 		recs = append(recs, recommendation{freqCombo, "Most frequent all-time"})
 	}
 
-	// 2. Maximum Distance Strategy (simulated annealing - run 3 times with fewer iterations)
+	// 2. Maximum Distance Strategy (brute force - deterministic global optimum)
 	if len(historicalSets) > 0 {
-		var bestResult annealingResult
-		bestResult.bestScore = 0
-
-		// Run annealing 3 times with 1000 iterations each (faster than 5x2000)
-		for run := 0; run < 3; run++ {
-			result := simulatedAnnealingSearch(historicalSets, 1000, 100.0, 0.95)
-			if result.bestScore > bestResult.bestScore {
-				bestResult = result
-			}
-		}
-
-		recs = append(recs, recommendation{bestResult.bestCombo, "Maximum distance"})
+		bruteCombo, _, _ := findMaxDistanceBruteForce(historicalSets)
+		recs = append(recs, recommendation{bruteCombo, "Maximum distance (brute force)"})
 	}
 
 	// 3. Position-Based Strategy (most common in each position)
@@ -324,19 +306,10 @@ func generateRecommendations(draws []Draw) []recommendation {
 		recs = append(recs, recommendation{hotCombo, "Hot numbers last 30 days"})
 	}
 
-	// 5. Optimal Combination (heavy simulated annealing - 5 runs of 2000 iterations)
+	// 5. Simulated annealing (using shared parameters, same as -s)
 	if len(historicalSets) > 0 {
-		var optimalResult annealingResult
-		optimalResult.bestScore = 0
-
-		for run := 0; run < 5; run++ {
-			result := simulatedAnnealingSearch(historicalSets, 2000, 100.0, 0.95)
-			if result.bestScore > optimalResult.bestScore {
-				optimalResult = result
-			}
-		}
-
-		recs = append(recs, recommendation{optimalResult.bestCombo, "Optimal combination"})
+		annealResult := bestAnnealingSearch(historicalSets)
+		recs = append(recs, recommendation{annealResult.bestCombo, "Simulated annealing"})
 	}
 
 	return recs
