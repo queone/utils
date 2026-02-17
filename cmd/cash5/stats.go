@@ -25,7 +25,7 @@ const (
 func bestAnnealingSearch(historical [][]int) annealingResult {
 	var best annealingResult
 	best.bestScore = 0
-	for run := 0; run < annealingRuns; run++ {
+	for range annealingRuns {
 		result := simulatedAnnealingSearch(historical, annealingIterations, annealingInitTemp, annealingCoolRate)
 		if result.bestScore > best.bestScore {
 			best = result
@@ -895,7 +895,7 @@ func simulatedAnnealingSearch(historical [][]int, iterations int, initialTemp, c
 	temperature := initialTemp
 	acceptedMoves := 0
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		// Generate neighbor by mutating one number
 		neighbor := perturb(current)
 		neighborScore := minDistanceToHistorical(neighbor, historical)
@@ -966,7 +966,7 @@ func generateRandomCombo() []int {
 	nums := make([]int, 5)
 	used := make(map[int]bool)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		for {
 			n := statsRNG.Intn(45) + 1
 			if !used[n] {
@@ -1003,7 +1003,7 @@ func randomFloat() float64 {
 // pow calculates x^n
 func pow(x float64, n int) float64 {
 	result := 1.0
-	for i := 0; i < n; i++ {
+	for range n {
 		result *= x
 	}
 	return result

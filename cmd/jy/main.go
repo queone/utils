@@ -72,7 +72,7 @@ func hasPipedInput() bool {
 func printOut(rawBytes []byte, option string) {
 	// Check if raw bytes are either a JSON or YAML object
 	// JSON must be checked first because it is a subset of the YAML standard
-	var rawObject interface{}
+	var rawObject any
 	_ = json.Unmarshal(rawBytes, &rawObject) // Is it JSON?
 	if rawObject == nil {
 		// Is it YAML?

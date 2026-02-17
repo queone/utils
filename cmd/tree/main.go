@@ -116,10 +116,7 @@ func printTree(dir string, showFullPath bool) {
 		}
 
 		line := e.prefix + mark + coloredName
-		spacing := (maxLen + 4) - e.runeLength
-		if spacing < 1 {
-			spacing = 1
-		}
+		spacing := max((maxLen+4)-e.runeLength, 1)
 
 		if e.isDir {
 			fmt.Println(line)

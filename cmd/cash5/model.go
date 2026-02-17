@@ -17,7 +17,7 @@ type Draw struct {
 	Results          []Result    `json:"results"`
 	PrizeTiers       []PrizeTier `json:"prizeTiers,omitempty"`
 	Prizes           []Prize     `json:"prizes,omitempty"`
-	WinningNumbers   interface{} `json:"winningNumbers,omitempty"`
+	WinningNumbers   any         `json:"winningNumbers,omitempty"`
 }
 
 // UnmarshalJSON custom unmarshaler to filter out empty prize tiers

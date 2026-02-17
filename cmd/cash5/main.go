@@ -195,10 +195,7 @@ func runDailyWithRand(r *rand.Rand) error {
 	if len(closeMatches) == 0 {
 		fmt.Printf("  %s\n", utl.Gra("No previous draws with 3+ matching numbers"))
 	} else {
-		limit := len(closeMatches)
-		if limit > 5 {
-			limit = 5
-		}
+		limit := min(len(closeMatches), 5)
 		for _, cm := range closeMatches[:limit] {
 			numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 				cm.nums[0], cm.nums[1], cm.nums[2], cm.nums[3], cm.nums[4])

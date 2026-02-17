@@ -64,9 +64,9 @@ func main() {
 	for {
 		line, err := reader.ReadString('\n')
 		if len(line) > 0 {
-			if strings.HasSuffix(line, "\r\n") {
+			if before, ok := strings.CutSuffix(line, "\r\n"); ok {
 				// Show the CRLF explicitly in blue
-				fmt.Print(strings.TrimSuffix(line, "\r\n"))
+				fmt.Print(before)
 				fmt.Print(blue + "\\r\\n" + reset)
 				fmt.Print("\n")
 			} else {

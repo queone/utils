@@ -15,7 +15,7 @@ func extractPrimaryFive(d *Draw) ([]int, error) {
 
 	numbers := make([]int, 0, 5)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		var n int
 		_, err := fmt.Sscanf(raw[i], "%d", &n)
 		if err != nil {
