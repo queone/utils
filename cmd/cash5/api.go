@@ -162,6 +162,43 @@ func fetchAllDrawsIncremental(existing []Draw, saveCallback func([]Draw) error) 
 	return allDraws, err
 }
 
+// fetchCurrentJackpot fetches the most recent draw (any status) to get the current jackpot
+func fetchCurrentJackpot() (int64, error) {
+	url := fmt.Sprintf("%s?game-names=Cash+5&size=1&page=0", baseURL)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Referer", "https://www.njlottery.com/en-us/drawgames/jerseycash.html")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	var apiResp APIResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return 0, err
+	}
+
+	if len(apiResp.Draws) > 0 {
+		return apiResp.Draws[0].EstimatedJackpot, nil
+	}
+
+	return 0, fmt.Errorf("no draws found")
+}
+
 // fetchPage fetches a single page (default size=1) for the latest draw
 // saveDrawsCallback persists draws to $HOME/.config/cash5/draws.json
 func saveDrawsCallback(draws []Draw) error {

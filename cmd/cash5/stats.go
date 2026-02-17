@@ -523,124 +523,6 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("    %s: %s\n", utl.Blu("In next 365 draws"), utl.Gre(fmt.Sprintf("%.2f%%", simResults.prob365Days*100)))
 	fmt.Printf("    %s: %s\n", utl.Blu("In next 10 years"), utl.Gre(fmt.Sprintf("%.2f%%", simResults.prob10Years*100)))
 
-	// Monte Carlo EV simulation
-	fmt.Printf("\n%s:\n", utl.Blu("Monte Carlo Expected Value Simulation"))
-
-	// Calculate average jackpot and win rate from historical data
-	var totalJackpot int64
-	var jackpotCount int
-	for i := range uniqueDraws {
-		if uniqueDraws[i].EstimatedJackpot > 0 {
-			totalJackpot += uniqueDraws[i].EstimatedJackpot
-			jackpotCount++
-		}
-	}
-
-	avgJackpot := float64(totalJackpot) / float64(jackpotCount) / 100.0 // Convert to dollars
-	winRate := float64(winnersCount) / float64(len(uniqueDraws))
-
-	// Run EV simulations
-	evResults := runEVSimulation(avgJackpot, winRate, totalCombinations, 100000)
-
-	fmt.Printf("  %s: %s\n", utl.Blu("Average jackpot"), utl.Gre(formatCurrency(int64(avgJackpot))))
-	fmt.Printf("  %s: %s\n", utl.Blu("Historical win rate"), utl.Gre(fmt.Sprintf("%.4f%% per draw", winRate*100)))
-	fmt.Printf("  %s: %s\n", utl.Blu("Ticket cost"), utl.Gre("$1.00"))
-	fmt.Printf("\n  %s:\n", utl.Blu("Expected Value Analysis (100,000 simulations)"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Single ticket EV"), utl.Gre(fmt.Sprintf("$%.2f", evResults.singleTicketEV)))
-	fmt.Printf("    %s: %s\n", utl.Blu("100 plays EV"), utl.Gre(fmt.Sprintf("$%.2f", evResults.plays100EV)))
-	fmt.Printf("    %s: %s\n", utl.Blu("1,000 plays EV"), utl.Gre(fmt.Sprintf("$%.2f", evResults.plays1000EV)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Win probability"), utl.Gre(fmt.Sprintf("1 in %s", formatNumber(totalCombinations))))
-	fmt.Printf("\n  %s:\n", utl.Blu("Interpretation"))
-	if evResults.singleTicketEV > 0 {
-		fmt.Printf("    %s\n", utl.Gra(fmt.Sprintf("Positive EV! On average, you gain $%.2f per ticket", evResults.singleTicketEV)))
-	} else if evResults.singleTicketEV > -0.50 {
-		fmt.Printf("    %s\n", utl.Gra(fmt.Sprintf("Near break-even. Average loss: $%.2f per ticket", -evResults.singleTicketEV)))
-	} else {
-		fmt.Printf("    %s\n", utl.Gra(fmt.Sprintf("Negative EV. Average loss: $%.2f per ticket", -evResults.singleTicketEV)))
-		fmt.Printf("    %s\n", utl.Gra(fmt.Sprintf("For every $1 spent, expect to lose $%.2f", -evResults.singleTicketEV)))
-	}
-
-	// Expected Value and Payout Modeling
-	fmt.Printf("\n%s:\n", utl.Blu("Expected Value & Payout Modeling"))
-
-	// Calculate jackpot distribution statistics
-	var jackpots []int64
-	for i := range uniqueDraws {
-		if uniqueDraws[i].EstimatedJackpot > 0 {
-			jackpots = append(jackpots, uniqueDraws[i].EstimatedJackpot)
-		}
-	}
-	sort.Slice(jackpots, func(i, j int) bool { return jackpots[i] < jackpots[j] })
-
-	minJackpot := float64(jackpots[0]) / 100.0
-	maxJackpot := float64(jackpots[len(jackpots)-1]) / 100.0
-	medianJackpot := float64(jackpots[len(jackpots)/2]) / 100.0
-
-	// Calculate percentiles
-	p25 := float64(jackpots[len(jackpots)/4]) / 100.0
-	p75 := float64(jackpots[len(jackpots)*3/4]) / 100.0
-
-	fmt.Printf("  %s:\n", utl.Blu("Jackpot Distribution"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Minimum"), utl.Gre(formatCurrency(int64(minJackpot))))
-	fmt.Printf("    %s: %s\n", utl.Blu("25th percentile"), utl.Gre(formatCurrency(int64(p25))))
-	fmt.Printf("    %s: %s\n", utl.Blu("Median"), utl.Gre(formatCurrency(int64(medianJackpot))))
-	fmt.Printf("    %s: %s\n", utl.Blu("75th percentile"), utl.Gre(formatCurrency(int64(p75))))
-	fmt.Printf("    %s: %s\n", utl.Blu("Maximum"), utl.Gre(formatCurrency(int64(maxJackpot))))
-	fmt.Printf("    %s: %s\n", utl.Blu("Average"), utl.Gre(formatCurrency(int64(avgJackpot))))
-
-	// Calculate EV at different jackpot levels
-	fmt.Printf("\n  %s:\n", utl.Blu("Expected Value at Different Jackpot Levels"))
-
-	jackpotLevels := []int64{150000, 300000, 500000, 750000, 1000000}
-	for _, jp := range jackpotLevels {
-		ev := calculateEV(float64(jp), totalCombinations, 1.0)
-		if ev > 0 {
-			fmt.Printf("    %s %s: %s  %s\n", utl.Blu("At"), utl.Gre(formatCurrency(jp)), utl.Gre(fmt.Sprintf("$%.2f", ev)), utl.Gra("✓ Positive EV!"))
-		} else {
-			fmt.Printf("    %s %s: %s\n", utl.Blu("At"), utl.Gre(formatCurrency(jp)), utl.Gre(fmt.Sprintf("$%.2f", ev)))
-		}
-	}
-
-	// Break-even jackpot calculation
-	breakEvenJackpot := float64(totalCombinations) * 1.0 // ticket cost
-	fmt.Printf("\n  %s:\n", utl.Blu("Break-even Analysis"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Break-even jackpot"), utl.Gre(formatCurrency(int64(breakEvenJackpot))))
-	fmt.Printf("    %s: %s\n", utl.Blu("Current avg jackpot"), utl.Gre(formatCurrency(int64(avgJackpot))))
-
-	if avgJackpot > breakEvenJackpot {
-		fmt.Printf("    %s: %s\n", utl.Blu("Status"), utl.Gre("Positive EV on average!"))
-	} else {
-		shortfall := breakEvenJackpot - avgJackpot
-		fmt.Printf("    %s: %s %s\n", utl.Blu("Shortfall"), utl.Gre(formatCurrency(int64(shortfall))), utl.Gra(fmt.Sprintf("(%.1f%%)", (shortfall/breakEvenJackpot)*100)))
-	}
-
-	// Actual payout analysis from winners
-	if winnersCount > 0 {
-		var payouts []int64
-		for i := range uniqueDraws {
-			payout := getPayout(&uniqueDraws[i])
-			if payout > 0 {
-				payouts = append(payouts, payout)
-			}
-		}
-
-		if len(payouts) > 0 {
-			sort.Slice(payouts, func(i, j int) bool { return payouts[i] < payouts[j] })
-
-			var totalPayouts int64
-			for _, p := range payouts {
-				totalPayouts += p
-			}
-			avgPayout := float64(totalPayouts) / float64(len(payouts)) / 100.0
-
-			fmt.Printf("\n  %s:\n", utl.Blu("Actual Winning Payout Analysis"))
-			fmt.Printf("    %s: %s\n", utl.Blu("Number of wins"), utl.Gre(len(payouts)))
-			fmt.Printf("    %s: %s\n", utl.Blu("Average payout"), utl.Gre(formatCurrency(int64(avgPayout))))
-			fmt.Printf("    %s: %s\n", utl.Blu("Smallest payout"), utl.Gre(formatCurrency(payouts[0]/100)))
-			fmt.Printf("    %s: %s\n", utl.Blu("Largest payout"), utl.Gre(formatCurrency(payouts[len(payouts)-1]/100)))
-		}
-	}
-
 	// Combinatorial Distance Scoring
 	fmt.Printf("\n%s:\n", utl.Blu("Combinatorial Distance Scoring"))
 	fmt.Printf("  %s\n", utl.Gra("[Computing... this may take a moment]"))
@@ -829,12 +711,6 @@ type simulationResults struct {
 	prob10Years float64
 }
 
-type evSimulationResults struct {
-	singleTicketEV float64
-	plays100EV     float64
-	plays1000EV    float64
-}
-
 // runRepeatSimulation performs Monte Carlo simulation to estimate probability
 // of drawing a previously seen combination
 func runRepeatSimulation(numHistorical, totalCombos, iterations int) simulationResults {
@@ -860,6 +736,19 @@ func runRepeatSimulation(numHistorical, totalCombos, iterations int) simulationR
 	results.prob10Years = 1.0 - pow(1.0-p, draws10y)
 
 	return results
+}
+
+// Retain unused functions/types for future use
+var (
+	_ = runEVSimulation
+	_ = calculateEV
+	_ evSimulationResults
+)
+
+type evSimulationResults struct {
+	singleTicketEV float64
+	plays100EV     float64
+	plays1000EV    float64
 }
 
 // runEVSimulation calculates expected value through Monte Carlo simulation

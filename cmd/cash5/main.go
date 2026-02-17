@@ -15,8 +15,13 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.1.1"
+	program_version = "1.3.0"
 )
+
+// narrativeDate formats a time as "2026-feb-17" for summary/narrative lines
+func narrativeDate(t time.Time) string {
+	return fmt.Sprintf("%d-%s-%02d", t.Year(), strings.ToLower(t.Format("Jan")), t.Day())
+}
 
 func runDailyWithRand(r *rand.Rand) error {
 	existing, err := loadDraws()
@@ -37,7 +42,7 @@ func runDailyWithRand(r *rand.Rand) error {
 
 		if newest.Before(weekAgo) {
 			fmt.Printf("Data is outdated (newest draw: %s). Fetching recent data...\n",
-				newest.Format("2006-01-02"))
+				narrativeDate(newest))
 			needsFetch = true
 		}
 	}
@@ -61,7 +66,7 @@ func runDailyWithRand(r *rand.Rand) error {
 		// If newest draw is before yesterday, we're missing some recent draws
 		if newest.Before(yesterday) {
 			fmt.Printf("Missing recent draws (newest: %s, need up to: %s). Fetching...\n",
-				newest.Format("2006-01-02"), yesterday.Format("2006-01-02"))
+				narrativeDate(newest), narrativeDate(yesterday))
 
 			// Fetch from day after newest to today
 			dateFrom := newest.AddDate(0, 0, 1)
@@ -82,11 +87,129 @@ func runDailyWithRand(r *rand.Rand) error {
 		return err
 	}
 
-	// Generate intelligent recommendations
-	fmt.Printf("\n%s\n", utl.Gra("Please wait while calculating suggestions..."))
-	recommendations := generateTop3Recommendations(existing)
+	// Deduplicate and sort for analysis
+	sort.Slice(existing, func(i, j int) bool { return existing[i].DrawTime < existing[j].DrawTime })
+	seen := make(map[string]bool)
+	var uniqueDraws []Draw
+	for _, d := range existing {
+		if !seen[d.ID] {
+			seen[d.ID] = true
+			uniqueDraws = append(uniqueDraws, d)
+		}
+	}
 
-	fmt.Printf("\n%s:\n", utl.Blu("RECOMMENDED SETS"))
+	if len(uniqueDraws) == 0 {
+		return fmt.Errorf("no draws available")
+	}
+
+	// Build combo -> dates map for repeat checking (narrative format)
+	comboHistory := make(map[string][]string)
+	for _, d := range uniqueDraws {
+		nums, err := extractPrimaryFive(&d)
+		if err != nil {
+			continue
+		}
+		sort.Ints(nums)
+		key := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d", nums[0], nums[1], nums[2], nums[3], nums[4])
+		date := narrativeDate(time.UnixMilli(d.DrawTime))
+		comboHistory[key] = append(comboHistory[key], date)
+	}
+
+	// Get last winning numbers (LWN)
+	lastDraw := uniqueDraws[len(uniqueDraws)-1]
+	lwn, err := extractPrimaryFive(&lastDraw)
+	if err != nil {
+		return fmt.Errorf("failed to extract last winning numbers: %w", err)
+	}
+	sort.Ints(lwn)
+	lwnKey := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d", lwn[0], lwn[1], lwn[2], lwn[3], lwn[4])
+	lwnDate := narrativeDate(time.UnixMilli(lastDraw.DrawTime))
+
+	// Current Jackpot
+	jackpot, err := fetchCurrentJackpot()
+	if err == nil && jackpot > 0 {
+		fmt.Printf("%s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jackpot/100)))
+	} else if len(uniqueDraws) > 0 {
+		// Fall back to latest draw's estimated jackpot
+		jp := uniqueDraws[len(uniqueDraws)-1].EstimatedJackpot
+		if jp > 0 {
+			fmt.Printf("%s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jp/100)))
+		}
+	}
+
+	// LWN repeat check
+	fmt.Printf("%s: %s", utl.Blu("LAST WINNING NUMBERS"), utl.Gre(lwnKey))
+	lwnDates := comboHistory[lwnKey]
+	if len(lwnDates) > 1 {
+		// Filter out the last draw date itself to find prior occurrences
+		var priorDates []string
+		for _, d := range lwnDates {
+			if d != lwnDate {
+				priorDates = append(priorDates, d)
+			}
+		}
+		if len(priorDates) > 0 {
+			fmt.Printf("  %s", utl.Blu("REPEATED: "+strings.Join(priorDates, ", ")))
+		} else {
+			fmt.Printf("  %s", utl.Gra("Never repeated"))
+		}
+	} else {
+		fmt.Printf("  %s", utl.Gra("Never repeated"))
+	}
+	fmt.Println()
+
+	// Closest matches to LWN (3+ matching numbers)
+	type closeMatch struct {
+		date    string
+		nums    []int
+		matches int
+	}
+	var closeMatches []closeMatch
+	for _, d := range uniqueDraws {
+		dDate := narrativeDate(time.UnixMilli(d.DrawTime))
+		if dDate == lwnDate {
+			continue
+		}
+		nums, err := extractPrimaryFive(&d)
+		if err != nil {
+			continue
+		}
+		sort.Ints(nums)
+		mc := countMatches(lwn, nums)
+		if mc >= 3 {
+			closeMatches = append(closeMatches, closeMatch{dDate, nums, mc})
+		}
+	}
+
+	// Sort by match count desc, then date desc
+	sort.Slice(closeMatches, func(i, j int) bool {
+		if closeMatches[i].matches != closeMatches[j].matches {
+			return closeMatches[i].matches > closeMatches[j].matches
+		}
+		return closeMatches[i].date > closeMatches[j].date
+	})
+
+	fmt.Printf("%s:\n", utl.Blu("CLOSEST 5 PREVIOUS WINNING MATCHES"))
+	if len(closeMatches) == 0 {
+		fmt.Printf("  %s\n", utl.Gra("No previous draws with 3+ matching numbers"))
+	} else {
+		limit := len(closeMatches)
+		if limit > 5 {
+			limit = 5
+		}
+		for _, cm := range closeMatches[:limit] {
+			numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
+				cm.nums[0], cm.nums[1], cm.nums[2], cm.nums[3], cm.nums[4])
+			fmt.Printf("  %s  %s  %s\n",
+				utl.Gre(numStr), utl.Gre(cm.date),
+				utl.Gra(fmt.Sprintf("(%d/5 match)", cm.matches)))
+		}
+	}
+
+	// Generate intelligent recommendations
+	recommendations := generateRecommendations(existing)
+
+	fmt.Printf("%s:\n", utl.Blu("RECOMMENDATION"))
 	for _, rec := range recommendations {
 		numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 			rec.numbers[0], rec.numbers[1], rec.numbers[2], rec.numbers[3], rec.numbers[4])
@@ -101,8 +224,8 @@ type recommendation struct {
 	strategy string
 }
 
-// generateTop3Recommendations creates intelligent recommendations based on statistical analysis
-func generateTop3Recommendations(draws []Draw) []recommendation {
+// generateRecommendations creates 5 intelligent recommendations based on statistical analysis
+func generateRecommendations(draws []Draw) []recommendation {
 	// Deduplicate
 	seen := make(map[string]bool)
 	uniqueDraws := []Draw{}
@@ -163,7 +286,7 @@ func generateTop3Recommendations(draws []Draw) []recommendation {
 	if len(topOverall) >= 5 {
 		freqCombo := []int{topOverall[0].num, topOverall[1].num, topOverall[2].num, topOverall[3].num, topOverall[4].num}
 		sort.Ints(freqCombo)
-		recs = append(recs, recommendation{freqCombo, "(Most frequent all-time)"})
+		recs = append(recs, recommendation{freqCombo, "Most frequent all-time"})
 	}
 
 	// 2. Maximum Distance Strategy (simulated annealing - run 3 times with fewer iterations)
@@ -179,7 +302,7 @@ func generateTop3Recommendations(draws []Draw) []recommendation {
 			}
 		}
 
-		recs = append(recs, recommendation{bestResult.bestCombo, "(Maximum distance)"})
+		recs = append(recs, recommendation{bestResult.bestCombo, "Maximum distance"})
 	}
 
 	// 3. Position-Based Strategy (most common in each position)
@@ -191,14 +314,29 @@ func generateTop3Recommendations(draws []Draw) []recommendation {
 
 	positionCombo := []int{mostCommonFirst.num, mostCommonSecond.num, mostCommonMiddle.num, mostCommonFourth.num, mostCommonLast.num}
 	sort.Ints(positionCombo)
-	recs = append(recs, recommendation{positionCombo, "(Most common by position)"})
+	recs = append(recs, recommendation{positionCombo, "Most common by position"})
 
 	// 4. Hot Numbers Strategy (most frequent in last 30 days)
 	topHot := findTopN(freq30, 10)
 	if len(topHot) >= 5 {
 		hotCombo := []int{topHot[0].num, topHot[1].num, topHot[2].num, topHot[3].num, topHot[4].num}
 		sort.Ints(hotCombo)
-		recs = append(recs, recommendation{hotCombo, "(Hot numbers last 30 days)"})
+		recs = append(recs, recommendation{hotCombo, "Hot numbers last 30 days"})
+	}
+
+	// 5. Optimal Combination (heavy simulated annealing - 5 runs of 2000 iterations)
+	if len(historicalSets) > 0 {
+		var optimalResult annealingResult
+		optimalResult.bestScore = 0
+
+		for run := 0; run < 5; run++ {
+			result := simulatedAnnealingSearch(historicalSets, 2000, 100.0, 0.95)
+			if result.bestScore > optimalResult.bestScore {
+				optimalResult = result
+			}
+		}
+
+		recs = append(recs, recommendation{optimalResult.bestCombo, "Optimal combination"})
 	}
 
 	return recs
@@ -228,7 +366,7 @@ func runCLI() {
 				fmt.Println("  -d DATE        Show raw JSON for draws on DATE (format: 2026-02-06)")
 				fmt.Println("\nRunning without switches will:")
 				fmt.Println("  1. Display the last 10 draws")
-				fmt.Println("  2. Recommend 4 sets of number based on statistics")
+				fmt.Println("  2. Recommend 5 sets of numbers based on statistics")
 				return
 			}
 

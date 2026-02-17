@@ -27,6 +27,24 @@ func extractPrimaryFive(d *Draw) ([]int, error) {
 	return numbers, nil
 }
 
+// countMatches counts how many numbers two sorted slices have in common
+func countMatches(a, b []int) int {
+	matches := 0
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		if a[i] == b[j] {
+			matches++
+			i++
+			j++
+		} else if a[i] < b[j] {
+			i++
+		} else {
+			j++
+		}
+	}
+	return matches
+}
+
 // getPayout returns the actual 5/5 payout amount in cents, or 0 if no winner
 func getPayout(currentDraw *Draw) int64 {
 	// First check if ActualPayout is set (manual winner data)
