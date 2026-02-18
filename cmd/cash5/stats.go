@@ -35,7 +35,8 @@ func bestAnnealingSearch(historical [][]int) annealingResult {
 }
 
 // findMaxDistanceBruteForce enumerates all C(45,5) = 1,221,759 combinations
-// and returns the one(s) with the highest minimum Hamming distance to any historical draw.
+// and returns the one(s) with the highest minimum distance to any historical draw.
+// Distance = number of candidate's picks NOT in the historical draw (0-5).
 // Early-exit pruning makes this fast once a good candidate is found.
 func findMaxDistanceBruteForce(historical [][]int) ([]int, int, int) {
 	bestScore := 0
@@ -51,7 +52,7 @@ func findMaxDistanceBruteForce(historical [][]int) ([]int, int, int) {
 						minDist := 5
 
 						for _, hist := range historical {
-							dist := hammingDistance(combo, hist)
+							dist := setDistance(combo, hist)
 							if dist < minDist {
 								minDist = dist
 								if minDist <= bestScore {
@@ -301,6 +302,20 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("  %s: %s  %s\n", utl.Blu("Third position"), utl.Gre(fmt.Sprintf("%02d", mostCommonMiddle.num)), utl.Gra(fmt.Sprintf("(appeared %d times)", mostCommonMiddle.count)))
 	fmt.Printf("  %s: %s  %s\n", utl.Blu("Fourth position"), utl.Gre(fmt.Sprintf("%02d", mostCommonFourth.num)), utl.Gra(fmt.Sprintf("(appeared %d times)", mostCommonFourth.count)))
 	fmt.Printf("  %s: %s  %s\n", utl.Blu("Fifth position"), utl.Gre(fmt.Sprintf("%02d", mostCommonLast.num)), utl.Gra(fmt.Sprintf("(appeared %d times)", mostCommonLast.count)))
+
+	// Least common numbers by position
+	leastCommonFirst := findLeastCommon(firstNumFreq)
+	leastCommonSecond := findLeastCommon(pos2Freq)
+	leastCommonMiddle := findLeastCommon(middleNumFreq)
+	leastCommonFourth := findLeastCommon(pos4Freq)
+	leastCommonLast := findLeastCommon(lastNumFreq)
+
+	fmt.Printf("\n%s:\n", utl.Blu("Least Common by Position"))
+	fmt.Printf("  %s: %s  %s\n", utl.Blu("First position"), utl.Gre(fmt.Sprintf("%02d", leastCommonFirst.num)), utl.Gra(fmt.Sprintf("(appeared %d times)", leastCommonFirst.count)))
+	fmt.Printf("  %s: %s  %s\n", utl.Blu("Second position"), utl.Gre(fmt.Sprintf("%02d", leastCommonSecond.num)), utl.Gra(fmt.Sprintf("(appeared %d times)", leastCommonSecond.count)))
+	fmt.Printf("  %s: %s  %s\n", utl.Blu("Third position"), utl.Gre(fmt.Sprintf("%02d", leastCommonMiddle.num)), utl.Gra(fmt.Sprintf("(appeared %d times)", leastCommonMiddle.count)))
+	fmt.Printf("  %s: %s  %s\n", utl.Blu("Fourth position"), utl.Gre(fmt.Sprintf("%02d", leastCommonFourth.num)), utl.Gra(fmt.Sprintf("(appeared %d times)", leastCommonFourth.count)))
+	fmt.Printf("  %s: %s  %s\n", utl.Blu("Fifth position"), utl.Gre(fmt.Sprintf("%02d", leastCommonLast.num)), utl.Gra(fmt.Sprintf("(appeared %d times)", leastCommonLast.count)))
 
 	// Most frequently drawn overall
 	topOverall := findTopN(overallFreq, 5)
@@ -612,16 +627,16 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("\n  %s:\n", utl.Blu("Global Maximum Distance Combination"))
 	fmt.Printf("    %s: %s\n", utl.Blu("Numbers"), utl.Gre(fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 		bruteCombo[0], bruteCombo[1], bruteCombo[2], bruteCombo[3], bruteCombo[4])))
-	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%d numbers different", bruteScore)))
+	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%d/5 numbers differ", bruteScore)))
 	fmt.Printf("    %s: %s\n", utl.Blu("Tied combinations"), utl.Gre(fmt.Sprintf("%s combos with same score", formatNumber(bruteTied))))
 	fmt.Printf("    %s: %s\n", utl.Blu("Interpretation"), utl.Gra(fmt.Sprintf("At least %d/5 numbers differ from every historical draw", bruteScore)))
 
 	// Show some example distances
 	fmt.Printf("\n  %s:\n", utl.Blu("Distance Examples (from max-distance combo)"))
 	for i := 0; i < 3 && i < len(historicalSets); i++ {
-		dist := hammingDistance(bruteCombo, historicalSets[len(historicalSets)-1-i])
+		dist := setDistance(bruteCombo, historicalSets[len(historicalSets)-1-i])
 		drawDate := time.UnixMilli(uniqueDraws[len(uniqueDraws)-1-i].DrawTime).Format("2006-01-02")
-		fmt.Printf("    %s %s %s: %s\n", utl.Blu("vs"), utl.Gre(drawDate), utl.Blu("draw"), utl.Gre(fmt.Sprintf("%d/5 numbers different", dist)))
+		fmt.Printf("    %s %s %s: %s\n", utl.Blu("vs"), utl.Gre(drawDate), utl.Blu("draw"), utl.Gre(fmt.Sprintf("%d/5 numbers differ", dist)))
 	}
 
 	// Simulated Annealing Search (using shared parameters)
@@ -650,12 +665,12 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("    %s: %s\n", utl.Blu("Numbers"), utl.Gre(fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 		annealResult.bestCombo[0], annealResult.bestCombo[1],
 		annealResult.bestCombo[2], annealResult.bestCombo[3], annealResult.bestCombo[4])))
-	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%.0f numbers different", annealResult.bestScore)))
+	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%.0f/5 numbers differ", annealResult.bestScore)))
 
 	// Compare methods
 	fmt.Printf("\n  %s:\n", utl.Blu("Method Comparison"))
-	fmt.Printf("    %s: %s  %s\n", utl.Blu("Brute force (global optimum)"), utl.Gre(fmt.Sprintf("%d", bruteScore)), utl.Gra(fmt.Sprintf("(%s combos)", formatNumber(totalCombinations))))
-	fmt.Printf("    %s: %s  %s\n", utl.Blu("Simulated annealing"), utl.Gre(fmt.Sprintf("%.0f", annealResult.bestScore)), utl.Gra(fmt.Sprintf("(%d runs × %s iters)", annealingRuns, formatNumber(annealingIterations))))
+	fmt.Printf("    %s: %s  %s\n", utl.Blu("Brute force (global optimum)"), utl.Gre(fmt.Sprintf("%d/5", bruteScore)), utl.Gra(fmt.Sprintf("(%s combos)", formatNumber(totalCombinations))))
+	fmt.Printf("    %s: %s  %s\n", utl.Blu("Simulated annealing"), utl.Gre(fmt.Sprintf("%.0f/5", annealResult.bestScore)), utl.Gra(fmt.Sprintf("(%d runs × %s iters)", annealingRuns, formatNumber(annealingIterations))))
 	if annealResult.bestScore >= float64(bruteScore) {
 		fmt.Printf("    %s: %s\n", utl.Blu("Annealing found optimum?"), utl.Gre("✓ Yes"))
 	} else {
@@ -680,6 +695,17 @@ func findMostCommon(freq map[int]int) numCount {
 	var result numCount
 	for num, count := range freq {
 		if count > result.count {
+			result.num = num
+			result.count = count
+		}
+	}
+	return result
+}
+
+func findLeastCommon(freq map[int]int) numCount {
+	result := numCount{count: int(^uint(0) >> 1)} // max int
+	for num, count := range freq {
+		if count < result.count {
 			result.num = num
 			result.count = count
 		}
@@ -832,13 +858,11 @@ func calculateEV(jackpot float64, totalCombos int, ticketCost float64) float64 {
 	return (winProb * jackpot) - ticketCost
 }
 
-// hammingDistance calculates the number of different elements between two sorted sets
-// Optimized for small sorted arrays (5 elements each)
-func hammingDistance(a, b []int) int {
-	// Count matching elements
+// setDistance returns how many of a's elements are NOT in b (0-5 for 5-element sets).
+// Both a and b must be sorted.
+func setDistance(a, b []int) int {
 	matches := 0
 	i, j := 0, 0
-
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
 			matches++
@@ -850,13 +874,11 @@ func hammingDistance(a, b []int) int {
 			j++
 		}
 	}
-
-	// Hamming distance = total elements - 2*matches
-	// (each match means both sets have it, so subtract twice)
-	return len(a) + len(b) - 2*matches
+	return len(a) - matches
 }
 
-// minDistanceToHistorical finds minimum distance from combo to any historical set
+// minDistanceToHistorical finds minimum distance from combo to any historical set.
+// Distance = number of candidate's picks NOT in the historical draw (0-5).
 func minDistanceToHistorical(combo []int, historical [][]int) float64 {
 	if len(historical) == 0 {
 		return 5.0
@@ -864,7 +886,7 @@ func minDistanceToHistorical(combo []int, historical [][]int) float64 {
 
 	minDist := 5
 	for _, hist := range historical {
-		dist := hammingDistance(combo, hist)
+		dist := setDistance(combo, hist)
 		if dist < minDist {
 			minDist = dist
 		}

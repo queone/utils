@@ -15,7 +15,7 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.4.0"
+	program_version = "1.5.0"
 )
 
 // narrativeDate formats a time as "2026-feb-17" for summary/narrative lines
@@ -258,7 +258,7 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 		}
 	}
 
-	// Build historical combinations for distance analysis
+	// Build historical combinations for annealing
 	var historicalSets [][]int
 	for i := range uniqueDraws {
 		nums, err := extractPrimaryFive(&uniqueDraws[i])
@@ -270,21 +270,18 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 
 	var recs []recommendation
 
-	// 1. Most Frequent Overall Strategy
-	topOverall := findTopN(overallFreq, 10)
-	if len(topOverall) >= 5 {
-		freqCombo := []int{topOverall[0].num, topOverall[1].num, topOverall[2].num, topOverall[3].num, topOverall[4].num}
-		sort.Ints(freqCombo)
-		recs = append(recs, recommendation{freqCombo, "Most frequent all-time"})
-	}
+	// 1. Least Common by Position
+	leastCommonFirst := findLeastCommon(firstNumFreq)
+	leastCommonSecond := findLeastCommon(pos2Freq)
+	leastCommonMiddle := findLeastCommon(middleNumFreq)
+	leastCommonFourth := findLeastCommon(pos4Freq)
+	leastCommonLast := findLeastCommon(lastNumFreq)
 
-	// 2. Maximum Distance Strategy (brute force - deterministic global optimum)
-	if len(historicalSets) > 0 {
-		bruteCombo, _, _ := findMaxDistanceBruteForce(historicalSets)
-		recs = append(recs, recommendation{bruteCombo, "Maximum distance (brute force)"})
-	}
+	leastPositionCombo := []int{leastCommonFirst.num, leastCommonSecond.num, leastCommonMiddle.num, leastCommonFourth.num, leastCommonLast.num}
+	sort.Ints(leastPositionCombo)
+	recs = append(recs, recommendation{leastPositionCombo, "Least common by position"})
 
-	// 3. Position-Based Strategy (most common in each position)
+	// 2. Most Common by Position
 	mostCommonFirst := findMostCommon(firstNumFreq)
 	mostCommonSecond := findMostCommon(pos2Freq)
 	mostCommonMiddle := findMostCommon(middleNumFreq)
@@ -295,7 +292,15 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 	sort.Ints(positionCombo)
 	recs = append(recs, recommendation{positionCombo, "Most common by position"})
 
-	// 4. Hot Numbers Strategy (most frequent in last 30 days)
+	// 3. Most Frequent Overall
+	topOverall := findTopN(overallFreq, 10)
+	if len(topOverall) >= 5 {
+		freqCombo := []int{topOverall[0].num, topOverall[1].num, topOverall[2].num, topOverall[3].num, topOverall[4].num}
+		sort.Ints(freqCombo)
+		recs = append(recs, recommendation{freqCombo, "Most frequent all-time"})
+	}
+
+	// 4. Hot Numbers (most frequent in last 30 days)
 	topHot := findTopN(freq30, 10)
 	if len(topHot) >= 5 {
 		hotCombo := []int{topHot[0].num, topHot[1].num, topHot[2].num, topHot[3].num, topHot[4].num}
@@ -336,7 +341,8 @@ func runCLI() {
 				fmt.Println("  -d DATE        Show raw JSON for draws on DATE (format: 2026-02-06)")
 				fmt.Println("\nRunning without switches will:")
 				fmt.Println("  1. Display the last 10 draws")
-				fmt.Println("  2. Recommend 5 sets of numbers based on statistics")
+				fmt.Println("  2. Show current jackpot, last winning numbers, and closest matches")
+				fmt.Println("  3. Recommend 5 sets of numbers based on statistics")
 				return
 			}
 
