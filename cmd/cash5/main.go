@@ -15,7 +15,7 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.5.0"
+	program_version = "1.5.2"
 )
 
 // narrativeDate formats a time as "2026-feb-17" for summary/narrative lines
@@ -128,17 +128,17 @@ func runDailyWithRand(r *rand.Rand) error {
 	// Current Jackpot
 	jackpot, err := fetchCurrentJackpot()
 	if err == nil && jackpot > 0 {
-		fmt.Printf("%s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jackpot/100)))
+		fmt.Printf("  %s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jackpot/100)))
 	} else if len(uniqueDraws) > 0 {
 		// Fall back to latest draw's estimated jackpot
 		jp := uniqueDraws[len(uniqueDraws)-1].EstimatedJackpot
 		if jp > 0 {
-			fmt.Printf("%s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jp/100)))
+			fmt.Printf("  %s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jp/100)))
 		}
 	}
 
 	// LWN repeat check
-	fmt.Printf("%s: %s", utl.Blu("LAST WINNING NUMBERS"), utl.Gre(lwnKey))
+	fmt.Printf("  %s: %s", utl.Blu("LAST WINNING NUMBERS"), utl.Gre(lwnKey))
 	lwnDates := comboHistory[lwnKey]
 	if len(lwnDates) > 1 {
 		// Filter out the last draw date itself to find prior occurrences
@@ -191,7 +191,7 @@ func runDailyWithRand(r *rand.Rand) error {
 		return closeMatches[i].drawTime > closeMatches[j].drawTime
 	})
 
-	fmt.Printf("%s:\n", utl.Blu("CLOSEST 5 PREVIOUS WINNING MATCHES"))
+	fmt.Printf("  %s:\n", utl.Blu("CLOSEST 5 PREVIOUS WINNING MATCHES"))
 	if len(closeMatches) == 0 {
 		fmt.Printf("  %s\n", utl.Gra("No previous draws with 3+ matching numbers"))
 	} else {
@@ -199,7 +199,7 @@ func runDailyWithRand(r *rand.Rand) error {
 		for _, cm := range closeMatches[:limit] {
 			numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 				cm.nums[0], cm.nums[1], cm.nums[2], cm.nums[3], cm.nums[4])
-			fmt.Printf("  %s  %s  %s\n",
+			fmt.Printf("    %s  %s  %s\n",
 				utl.Gre(numStr), utl.Gre(cm.date),
 				utl.Gra(fmt.Sprintf("(%d/5 match)", cm.matches)))
 		}
@@ -208,11 +208,11 @@ func runDailyWithRand(r *rand.Rand) error {
 	// Generate intelligent recommendations
 	recommendations := generateRecommendations(uniqueDraws)
 
-	fmt.Printf("%s:\n", utl.Blu("RECOMMENDATION"))
+	fmt.Printf("  %s:\n", utl.Blu("RECOMMENDATION"))
 	for _, rec := range recommendations {
 		numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 			rec.numbers[0], rec.numbers[1], rec.numbers[2], rec.numbers[3], rec.numbers[4])
-		fmt.Printf("  %s  %s\n", utl.Gre(numStr), utl.Gra(rec.strategy))
+		fmt.Printf("    %s  %s\n", utl.Gre(numStr), utl.Gra(rec.strategy))
 	}
 
 	return nil
@@ -300,18 +300,18 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 		recs = append(recs, recommendation{freqCombo, "Most frequent all-time"})
 	}
 
-	// 4. Hot Numbers (most frequent in last 30 days)
+	// 4. Simulated annealing (using shared parameters, same as -s)
+	if len(historicalSets) > 0 {
+		annealResult := bestAnnealingSearch(historicalSets)
+		recs = append(recs, recommendation{annealResult.bestCombo, "Simulated annealing"})
+	}
+
+	// 5. Hot Numbers (most frequent in last 30 days)
 	topHot := findTopN(freq30, 10)
 	if len(topHot) >= 5 {
 		hotCombo := []int{topHot[0].num, topHot[1].num, topHot[2].num, topHot[3].num, topHot[4].num}
 		sort.Ints(hotCombo)
 		recs = append(recs, recommendation{hotCombo, "Hot numbers last 30 days"})
-	}
-
-	// 5. Simulated annealing (using shared parameters, same as -s)
-	if len(historicalSets) > 0 {
-		annealResult := bestAnnealingSearch(historicalSets)
-		recs = append(recs, recommendation{annealResult.bestCombo, "Simulated annealing"})
 	}
 
 	return recs
@@ -489,7 +489,7 @@ func displayAllDraws(draws []Draw) error {
 		// Pass full uniqueDraws array so we can find the next draw
 		payout := formatWinner(uniqueDraws, &d)
 
-		fmt.Printf("%-12s  %-20s  %15s\n", drawDate, numStr, payout)
+		fmt.Printf("  %-12s  %-20s  %15s\n", drawDate, numStr, payout)
 	}
 
 	return nil
@@ -525,7 +525,7 @@ func displayLastNDraws(draws []Draw, n int) error {
 
 	// Print header
 	printTimestamp()
-	fmt.Printf("%-12s  %-20s  %15s\n", "DATE", "WINNING NUMBERS", "5/5 PAYOUT")
+	fmt.Printf("  %-12s  %-20s  %15s\n", "DATE", "WINNING NUMBERS", "5/5 PAYOUT")
 
 	for _, d := range lastNDraws {
 		nums, err := extractPrimaryFive(&d)
@@ -539,7 +539,7 @@ func displayLastNDraws(draws []Draw, n int) error {
 		// Pass full uniqueDraws array so we can find the next draw
 		payout := formatWinner(uniqueDraws, &d)
 
-		fmt.Printf("%-12s  %-20s  %15s\n", drawDate, numStr, payout)
+		fmt.Printf("  %-12s  %-20s  %15s\n", drawDate, numStr, payout)
 	}
 
 	return nil
