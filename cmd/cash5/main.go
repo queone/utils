@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.5.2"
+	program_version = "1.6.0"
 )
 
 // narrativeDate formats a time as "2026-feb-17" for summary/narrative lines
@@ -270,18 +271,7 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 
 	var recs []recommendation
 
-	// 1. Least Common by Position
-	leastCommonFirst := findLeastCommon(firstNumFreq)
-	leastCommonSecond := findLeastCommon(pos2Freq)
-	leastCommonMiddle := findLeastCommon(middleNumFreq)
-	leastCommonFourth := findLeastCommon(pos4Freq)
-	leastCommonLast := findLeastCommon(lastNumFreq)
-
-	leastPositionCombo := []int{leastCommonFirst.num, leastCommonSecond.num, leastCommonMiddle.num, leastCommonFourth.num, leastCommonLast.num}
-	sort.Ints(leastPositionCombo)
-	recs = append(recs, recommendation{leastPositionCombo, "Least common by position"})
-
-	// 2. Most Common by Position
+	// 1. Most Common by Position
 	mostCommonFirst := findMostCommon(firstNumFreq)
 	mostCommonSecond := findMostCommon(pos2Freq)
 	mostCommonMiddle := findMostCommon(middleNumFreq)
@@ -292,7 +282,7 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 	sort.Ints(positionCombo)
 	recs = append(recs, recommendation{positionCombo, "Most common by position"})
 
-	// 3. Most Frequent Overall
+	// 2. Most Frequent Overall
 	topOverall := findTopN(overallFreq, 10)
 	if len(topOverall) >= 5 {
 		freqCombo := []int{topOverall[0].num, topOverall[1].num, topOverall[2].num, topOverall[3].num, topOverall[4].num}
@@ -300,13 +290,7 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 		recs = append(recs, recommendation{freqCombo, "Most frequent all-time"})
 	}
 
-	// 4. Simulated annealing (using shared parameters, same as -s)
-	if len(historicalSets) > 0 {
-		annealResult := bestAnnealingSearch(historicalSets)
-		recs = append(recs, recommendation{annealResult.bestCombo, "Simulated annealing"})
-	}
-
-	// 5. Hot Numbers (most frequent in last 30 days)
+	// 3. Hot Numbers (most frequent in last 30 days)
 	topHot := findTopN(freq30, 10)
 	if len(topHot) >= 5 {
 		hotCombo := []int{topHot[0].num, topHot[1].num, topHot[2].num, topHot[3].num, topHot[4].num}
@@ -314,10 +298,75 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 		recs = append(recs, recommendation{hotCombo, "Hot numbers last 30 days"})
 	}
 
+	// 4. Least Common by Position
+	leastCommonFirst := findLeastCommon(firstNumFreq)
+	leastCommonSecond := findLeastCommon(pos2Freq)
+	leastCommonMiddle := findLeastCommon(middleNumFreq)
+	leastCommonFourth := findLeastCommon(pos4Freq)
+	leastCommonLast := findLeastCommon(lastNumFreq)
+
+	leastPositionCombo := []int{leastCommonFirst.num, leastCommonSecond.num, leastCommonMiddle.num, leastCommonFourth.num, leastCommonLast.num}
+	sort.Ints(leastPositionCombo)
+	recs = append(recs, recommendation{leastPositionCombo, "Least common by position"})
+
+	// 5. Simulated annealing (using shared parameters, same as -s)
+	if len(historicalSets) > 0 {
+		annealResult := bestAnnealingSearch(historicalSets)
+		recs = append(recs, recommendation{annealResult.bestCombo, "Simulated annealing"})
+	}
+
 	return recs
 }
 
+func printUsage() {
+	n := utl.Whi2(program_name)
+	v := program_version
+	usage := fmt.Sprintf("%s v%s\n"+
+		"NJ Cash 5 daily numbers recommender\n"+
+		"\n"+
+		"%s\n"+
+		"  %s [options]\n"+
+		"\n"+
+		"%s\n"+
+		"  -f             Fetch new draws since last run (within last year)\n"+
+		"  -a             Display all previous drawings\n"+
+		"  -s             Show statistics about historical data\n"+
+		"  -o [N]         Show odds table for 1 to N combos played (default: 30)\n"+
+		"  -d DATE        Show raw JSON for draws on DATE (format: 2026-02-06)\n"+
+		"  -v             Show this help message and exit\n"+
+		"\n"+
+		"%s\n"+
+		"  1. Display the last 10 draws\n"+
+		"  2. Show current jackpot, last winning numbers, and closest matches\n"+
+		"  3. Recommend 5 sets of numbers based on statistics\n"+
+		"\n"+
+		"%s\n"+
+		"  %s\n"+
+		"  %s -f\n"+
+		"  %s -s\n"+
+		"  %s -o 100\n"+
+		"  %s -o\n",
+		n, v, utl.Whi2("Usage"), n, utl.Whi2("Options"),
+		utl.Whi2("Running without switches will"), utl.Whi2("Examples"),
+		n, n, n, n, n)
+	fmt.Print(usage)
+}
+
 func runCLI() {
+	// Handle -o before cobra — cobra can't do optional-value flags properly
+	for i, arg := range os.Args[1:] {
+		if arg == "-o" {
+			n := 30 // default
+			if i+1 < len(os.Args[1:]) {
+				if val, err := strconv.Atoi(os.Args[i+2]); err == nil && val > 0 {
+					n = val
+				}
+			}
+			displayOddsTable(n)
+			return
+		}
+	}
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	var fetchAll bool
@@ -331,18 +380,7 @@ func runCLI() {
 		Short: "NJ Cash 5 daily numbers recommender",
 		Run: func(cmd *cobra.Command, args []string) {
 			if showVersion {
-				fmt.Printf("%s v%s\n", program_name, program_version)
-				fmt.Println("NJ Cash 5 daily numbers recommender.")
-				fmt.Println("\nUsage:")
-				fmt.Println("  -f             Fetch new draws since last run (within last year)")
-				fmt.Println("  -a             Display all previous drawings")
-				fmt.Println("  -s             Show statistics about historical data")
-				fmt.Println("  -v             Show program version and usage")
-				fmt.Println("  -d DATE        Show raw JSON for draws on DATE (format: 2026-02-06)")
-				fmt.Println("\nRunning without switches will:")
-				fmt.Println("  1. Display the last 10 draws")
-				fmt.Println("  2. Show current jackpot, last winning numbers, and closest matches")
-				fmt.Println("  3. Recommend 5 sets of numbers based on statistics")
+				printUsage()
 				return
 			}
 
@@ -612,6 +650,84 @@ func debugDrawByDate(draws []Draw, dateStr string) error {
 	}
 
 	return nil
+}
+
+// displayOddsTable prints an odds table for 1 to maxCombos combos played
+func displayOddsTable(maxCombos int) {
+	const totalCombos = 1221759 // C(45,5)
+	const ticketCost = 2
+
+	// Try to get current jackpot for EV calculation
+	var jackpotDollars int64
+	jp, err := fetchCurrentJackpot()
+	if err == nil && jp > 0 {
+		jackpotDollars = jp / 100
+	} else {
+		// Fall back to latest draw's estimated jackpot
+		draws, err := loadDraws()
+		if err == nil && len(draws) > 0 {
+			sort.Slice(draws, func(i, j int) bool { return draws[i].DrawTime < draws[j].DrawTime })
+			est := draws[len(draws)-1].EstimatedJackpot
+			if est > 0 {
+				jackpotDollars = est / 100
+			}
+		}
+	}
+
+	fmt.Printf("NJ Cash 5 Odds Table. Total possible combinations: %s (C(45,5))\n",
+		formatNumber(totalCombos))
+
+	if jackpotDollars > 0 {
+		fmt.Printf("Current jackpot: %s\n", formatCurrency(jackpotDollars))
+	}
+
+	if maxCombos > totalCombos {
+		maxCombos = totalCombos
+	}
+
+	if jackpotDollars > 0 {
+		fmt.Printf("%-9s  %5s    %-16s  %-14s  %6s\n", "COMBOS", "COST", "ODDS", "PROBABILITY", "EV")
+	} else {
+		fmt.Printf("%-9s  %5s    %-16s  %s\n", "COMBOS", "COST", "ODDS", "PROBABILITY")
+	}
+
+	for n := 1; n <= maxCombos; n++ {
+		cost := n * ticketCost
+		oneInX := (totalCombos + n - 1) / n // ceiling division
+		prob := float64(n) / float64(totalCombos)
+
+		if jackpotDollars > 0 {
+			ev := prob*float64(jackpotDollars) - float64(cost)
+			fmt.Printf("%6d     %5s    1 in %-11s  %-14s  %6s\n",
+				n,
+				formatCurrency(int64(cost)),
+				formatNumber(oneInX),
+				formatProbability(prob*100),
+				formatEV(ev))
+		} else {
+			fmt.Printf("%6d     %5s    1 in %-11s  %s%%\n",
+				n,
+				formatCurrency(int64(cost)),
+				formatNumber(oneInX),
+				formatProbability(prob*100))
+		}
+	}
+}
+
+// formatEV formats expected value with a sign prefix
+func formatEV(ev float64) string {
+	if ev >= 0 {
+		return fmt.Sprintf("+$%.2f", ev)
+	}
+	return fmt.Sprintf("-$%.2f", -ev)
+}
+
+// formatProbability formats a percentage with enough decimal places to be meaningful
+func formatProbability(pct float64) string {
+	if pct >= 1.0 {
+		return fmt.Sprintf("%.4f%%", pct)
+	}
+	return fmt.Sprintf("%.6f%%", pct)
 }
 
 func main() {
