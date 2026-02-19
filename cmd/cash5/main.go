@@ -16,7 +16,8 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.6.0"
+	program_version = "1.6.1"
+	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit."
 )
 
 // narrativeDate formats a time as "2026-feb-17" for summary/narrative lines
@@ -216,6 +217,8 @@ func runDailyWithRand(r *rand.Rand) error {
 		fmt.Printf("    %s  %s\n", utl.Gre(numStr), utl.Gra(rec.strategy))
 	}
 
+	fmt.Printf("\n  %s\n", utl.Red(lottery_warning))
+
 	return nil
 }
 
@@ -349,6 +352,7 @@ func printUsage() {
 		n, v, utl.Whi2("Usage"), n, utl.Whi2("Options"),
 		utl.Whi2("Running without switches will"), utl.Whi2("Examples"),
 		n, n, n, n, n)
+	usage += "\n" + utl.Red(lottery_warning) + "\n"
 	fmt.Print(usage)
 }
 
