@@ -16,8 +16,8 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.6.1"
-	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit."
+	program_version = "1.6.2"
+	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit 😀"
 )
 
 // narrativeDate formats a time as "2026-feb-17" for summary/narrative lines
