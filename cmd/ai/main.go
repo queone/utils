@@ -17,10 +17,16 @@ import (
 
 const (
 	program_name    = "ai"
-	program_version = "1.0.2"
-	ollamaHost      = "http://localhost:11434"
+	program_version = "1.0.3"
 	defaultModel    = "mistral-nemo"
 )
+
+var ollamaHost = func() string {
+	if host := os.Getenv("OLLAMA_HOST"); host != "" {
+		return "http://" + host + ":11434"
+	}
+	return "http://localhost:11434"
+}()
 
 type OllamaChatRequest struct {
 	Model    string        `json:"model"`
