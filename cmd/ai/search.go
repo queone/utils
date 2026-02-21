@@ -173,6 +173,32 @@ func extractLink(href string) string {
 	return q.Get("uddg")
 }
 
+// doRequestWithRetry executes an HTTP request, retrying on 202 responses.
+// DuckDuckGo occasionally returns 202 (throttling/async) — a brief pause and
+// retry is usually sufficient to get a real 200 back.
+func doRequestWithRetry(client *http.Client, req *http.Request, opt *ClientOption, maxRetries int) (*http.Response, error) {
+	backoff := 500 * time.Millisecond
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Clone the request so it can be retried (body is nil for GET so this is safe)
+		clone := req.Clone(req.Context())
+		resp, err := client.Do(clone)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusOK {
+			return resp, nil
+		}
+		resp.Body.Close()
+		if resp.StatusCode == 202 && attempt < maxRetries {
+			time.Sleep(backoff)
+			backoff *= 2
+			continue
+		}
+		return nil, fmt.Errorf("failed to get a 200 response, status code: %d", resp.StatusCode)
+	}
+	return nil, fmt.Errorf("max retries exceeded")
+}
+
 func SearchWithOption(param *SearchParam, opt *ClientOption, maxResults int) (*[]SearchResult, error) {
 	allResults := []SearchResult{}
 	pageSize := 10
@@ -181,10 +207,13 @@ func SearchWithOption(param *SearchParam, opt *ClientOption, maxResults int) (*[
 		pagesNeeded = 3 // Default to 3 pages if no limit specified
 	}
 
+	client := &http.Client{
+		Timeout: opt.Timeout,
+	}
+
 	for page := 0; page < pagesNeeded; page++ {
 		offset := page * pageSize
 
-		// Create a modified SearchParam with offset
 		paramWithOffset := &SearchParam{Query: param.Query}
 
 		u, err := paramWithOffset.buildURL()
@@ -192,7 +221,6 @@ func SearchWithOption(param *SearchParam, opt *ClientOption, maxResults int) (*[
 			return nil, err
 		}
 
-		// Set the offset parameter
 		q := u.Query()
 		q.Set("s", fmt.Sprintf("%d", offset))
 		u.RawQuery = q.Encode()
@@ -207,19 +235,11 @@ func SearchWithOption(param *SearchParam, opt *ClientOption, maxResults int) (*[
 		req.Header.Add("Cookie", "kl=wt-wt")
 		req.Header.Add("Content-Type", "x-www-form-urlencoded")
 
-		client := &http.Client{
-			Timeout: opt.Timeout,
-		}
-
-		resp, err := client.Do(req)
+		resp, err := doRequestWithRetry(client, req, opt, 3)
 		if err != nil {
 			return nil, err
 		}
 		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			return nil, fmt.Errorf("failed to get a 200 response, status code: %d", resp.StatusCode)
-		}
 
 		pageResults, err := parse(resp.Body)
 		if err != nil {

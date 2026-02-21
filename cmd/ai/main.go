@@ -17,7 +17,7 @@ import (
 
 const (
 	program_name    = "ai"
-	program_version = "1.0.1"
+	program_version = "1.0.2"
 	ollamaHost      = "http://localhost:11434"
 	defaultModel    = "mistral-nemo"
 )
@@ -113,40 +113,10 @@ func formatBytes(b int64) string {
 
 func runAI(model string, query string, useWeb bool, debug bool, maxResults int, searchResults []WebSearchResult) error {
 	userMessage := query
-	if useWeb {
-		// Use pre-fetched results or search if not provided
-		var results []WebSearchResult
-		var err error
-		if searchResults != nil {
-			results = searchResults
-		} else {
-			results, err = searchWeb(query, maxResults)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s\n", utl.Red("[web search error: "+err.Error()+"]"))
-			}
-		}
-
-		if debug && searchResults == nil {
-			// Only show debug output on first search (when results weren't pre-fetched)
-			fmt.Fprintf(os.Stderr, "\n%s\n", utl.Blu("=== WEB SEARCH DEBUG ==="))
-			fmt.Fprintf(os.Stderr, "Found %d results\n", len(results))
-			if len(results) > 0 {
-				for i, r := range results {
-					fmt.Fprintf(os.Stderr, "\n[%d] %s\n", i+1, r.Title)
-					fmt.Fprintf(os.Stderr, "    URL: %s\n", r.URL)
-					fmt.Fprintf(os.Stderr, "    Snippet (%d chars): %s\n", len(r.Content), r.Content)
-				}
-			}
-			fmt.Fprintf(os.Stderr, "%s\n\n", utl.Blu("=== END DEBUG ==="))
-		}
-
-		if len(results) > 0 {
-			context := formatSearchContext(results)
-			userMessage = fmt.Sprintf("Use this web search context to answer the question:\n\n%s\n\nQuestion: %s", context, query)
-			fmt.Fprintf(os.Stderr, "%s\n", utl.Gra("[web search context loaded]"))
-		} else if !debug && err == nil {
-			fmt.Fprintf(os.Stderr, "%s\n", utl.Gra("[no web search results]"))
-		}
+	if useWeb && len(searchResults) > 0 {
+		context := formatSearchContext(searchResults)
+		userMessage = fmt.Sprintf("Use this web search context to answer the question:\n\n%s\n\nQuestion: %s", context, query)
+		fmt.Fprintf(os.Stderr, "%s\n", utl.Gra("[web search context loaded]"))
 	}
 
 	request := OllamaChatRequest{
@@ -207,9 +177,9 @@ func runAI(model string, query string, useWeb bool, debug bool, maxResults int, 
 	}
 
 	fmt.Println()
-	if totalDuration > 0 {
+	if debug && totalDuration > 0 {
 		secs := float64(totalDuration) / 1e9
-		fmt.Fprintf(os.Stderr, "%s\n", utl.Gre(fmt.Sprintf("total duration:       %.9fs", secs)))
+		fmt.Fprintf(os.Stderr, "%s\n", utl.Gra(fmt.Sprintf("total duration:       %.9fs", secs)))
 	}
 
 	return nil
@@ -331,27 +301,26 @@ func runCLI() {
 				var err error
 				searchResults, err = searchWeb(query, maxResults)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "%s\n", utl.Red("[web search error: "+err.Error()+"]"))
+					fmt.Fprintf(os.Stderr, "%s\n", utl.Gra("[web search error: "+err.Error()+"]"))
+					searchResults = []WebSearchResult{} // non-nil so runAI won't retry
 				}
 
-				if debug {
-					fmt.Fprintf(os.Stderr, "\n%s\n", utl.Blu("=== WEB SEARCH DEBUG ==="))
+				if debug && len(searchResults) > 0 {
+					fmt.Fprintf(os.Stderr, "\n%s\n", utl.Gra("=== WEB SEARCH DEBUG ==="))
 					fmt.Fprintf(os.Stderr, "Found %d results\n", len(searchResults))
-					if len(searchResults) > 0 {
-						for i, r := range searchResults {
-							fmt.Fprintf(os.Stderr, "\n[%d] %s\n", i+1, r.Title)
-							fmt.Fprintf(os.Stderr, "    URL: %s\n", r.URL)
-							fmt.Fprintf(os.Stderr, "    Snippet (%d chars): %s\n", len(r.Content), r.Content)
-						}
+					for i, r := range searchResults {
+						fmt.Fprintf(os.Stderr, "\n[%d] %s\n", i+1, r.Title)
+						fmt.Fprintf(os.Stderr, "    URL: %s\n", r.URL)
+						fmt.Fprintf(os.Stderr, "    Snippet (%d chars): %s\n", len(r.Content), r.Content)
 					}
-					fmt.Fprintf(os.Stderr, "%s\n\n", utl.Blu("=== END DEBUG ==="))
+					fmt.Fprintf(os.Stderr, "%s\n\n", utl.Gra("=== END DEBUG ==="))
 				}
 			}
 
 			// Run across all models if -a flag set
 			if allModels {
 				for _, m := range models {
-					fmt.Fprintf(os.Stderr, "%s\n", utl.Gre("==== MODEL "+m.Name+" ===="))
+					fmt.Fprintf(os.Stderr, "%s\n", utl.Gra("==== MODEL "+m.Name+" ===="))
 					if err := runAI(m.Name, query, useWeb, false, maxResults, searchResults); err != nil {
 						fmt.Fprintf(os.Stderr, "error with %s: %v\n", m.Name, err)
 					}
@@ -374,7 +343,7 @@ func runCLI() {
 				}
 			}
 
-			if err := runAI(selectedModel, query, useWeb, debug, maxResults, nil); err != nil {
+			if err := runAI(selectedModel, query, useWeb, debug, maxResults, searchResults); err != nil {
 				log.Fatal(err)
 			}
 		},
