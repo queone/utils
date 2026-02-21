@@ -17,7 +17,7 @@ import (
 
 const (
 	program_name    = "ai"
-	program_version = "1.0.0"
+	program_version = "1.0.1"
 	ollamaHost      = "http://localhost:11434"
 	defaultModel    = "mistral-nemo"
 )
@@ -34,8 +34,9 @@ type ChatMessage struct {
 }
 
 type OllamaChatResponse struct {
-	Message ChatMessage `json:"message"`
-	Done    bool        `json:"done"`
+	Message       ChatMessage `json:"message"`
+	Done          bool        `json:"done"`
+	TotalDuration int64       `json:"total_duration"`
 }
 
 type WebSearchResult struct {
@@ -180,6 +181,7 @@ func runAI(model string, query string, useWeb bool, debug bool, maxResults int, 
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
+	var totalDuration int64
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {
@@ -194,6 +196,10 @@ func runAI(model string, query string, useWeb bool, debug bool, maxResults int, 
 		if chatResp.Message.Content != "" {
 			fmt.Print(chatResp.Message.Content)
 		}
+
+		if chatResp.Done && chatResp.TotalDuration > 0 {
+			totalDuration = chatResp.TotalDuration
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -201,6 +207,11 @@ func runAI(model string, query string, useWeb bool, debug bool, maxResults int, 
 	}
 
 	fmt.Println()
+	if totalDuration > 0 {
+		secs := float64(totalDuration) / 1e9
+		fmt.Fprintf(os.Stderr, "%s\n", utl.Gre(fmt.Sprintf("total duration:       %.9fs", secs)))
+	}
+
 	return nil
 }
 
@@ -266,7 +277,7 @@ func printUsage() {
 		"  -w, --web              Enable web search before answering\n"+
 		"  -a, --all-models       Run query across all available models\n"+
 		"  -d, --debug            Show web search results before feeding to model\n"+
-		"  -r, --results N        Max web search results to use (0 = all, default: 0)\n"+
+		"  -r, --results N        Max web search results to use (0 = all, default: 10)\n"+
 		"  -v, --version          Show this help message and exit\n"+
 		"\n"+
 		"%s\n"+
@@ -340,7 +351,7 @@ func runCLI() {
 			// Run across all models if -a flag set
 			if allModels {
 				for _, m := range models {
-					fmt.Printf("==== MODEL %s ====\n", m.Name)
+					fmt.Fprintf(os.Stderr, "%s\n", utl.Gre("==== MODEL "+m.Name+" ===="))
 					if err := runAI(m.Name, query, useWeb, false, maxResults, searchResults); err != nil {
 						fmt.Fprintf(os.Stderr, "error with %s: %v\n", m.Name, err)
 					}
@@ -373,7 +384,7 @@ func runCLI() {
 	root.Flags().BoolVarP(&useWeb, "web", "w", false, "Enable web search before answering")
 	root.Flags().BoolVarP(&allModels, "all-models", "a", false, "Run query across all available models")
 	root.Flags().BoolVarP(&debug, "debug", "d", false, "Show web search results before feeding to model")
-	root.Flags().IntVarP(&maxResults, "results", "r", 0, "Max web search results to use (0 = all)")
+	root.Flags().IntVarP(&maxResults, "results", "r", 10, "Max web search results to use (0 = all)")
 	root.Flags().BoolVarP(&showVersion, "version", "v", false, "Show version and usage")
 
 	// Disable default help
