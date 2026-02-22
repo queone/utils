@@ -2,15 +2,12 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"time"
 
 	"github.com/queone/utl"
 )
-
-// Global RNG for statistics - seeded once at package init
-var statsRNG = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // Shared annealing parameters so -s and default mode produce consistent results
 const (
@@ -576,7 +573,6 @@ func displayStatistics(draws []Draw) error {
 	// Monte Carlo simulation for repeat probability
 	fmt.Printf("\n%s:\n", utl.Blu("Monte Carlo Repeat Probability Simulation"))
 
-	// Get all historical combinations
 	historicalCombos := make(map[string]bool)
 	for i := range uniqueDraws {
 		nums, err := extractPrimaryFive(&uniqueDraws[i])
@@ -590,7 +586,6 @@ func displayStatistics(draws []Draw) error {
 	numHistorical := len(historicalCombos)
 	totalCombinations := 1221759 // C(45,5)
 
-	// Run simulations for different time horizons
 	simResults := runRepeatSimulation(numHistorical, totalCombinations, 10000)
 
 	fmt.Printf("  %s: %s\n", utl.Blu("Historical combinations"), utl.Gre(fmt.Sprintf("%d unique sets", numHistorical)))
@@ -606,7 +601,6 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("\n%s:\n", utl.Blu("Combinatorial Distance Scoring (Brute Force)"))
 	fmt.Printf("  %s\n", utl.Gra("[Enumerating all 1,221,759 combinations...]"))
 
-	// Calculate all historical combinations
 	var historicalSets [][]int
 	for i := range uniqueDraws {
 		nums, err := extractPrimaryFive(&uniqueDraws[i])
@@ -631,7 +625,6 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("    %s: %s\n", utl.Blu("Tied combinations"), utl.Gre(fmt.Sprintf("%s combos with same score", formatNumber(bruteTied))))
 	fmt.Printf("    %s: %s\n", utl.Blu("Interpretation"), utl.Gra(fmt.Sprintf("At least %d/5 numbers differ from every historical draw", bruteScore)))
 
-	// Show some example distances
 	fmt.Printf("\n  %s:\n", utl.Blu("Distance Examples (from max-distance combo)"))
 	for i := 0; i < 3 && i < len(historicalSets); i++ {
 		dist := setDistance(bruteCombo, historicalSets[len(historicalSets)-1-i])
@@ -645,7 +638,6 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("  %s: %s\n", utl.Blu("Objective"), utl.Gra("Maximize minimum distance to historical draws"))
 	fmt.Printf("  %s: %s\n\n", utl.Blu("Algorithm"), utl.Gra("Simulated annealing with adaptive cooling"))
 
-	// Run simulated annealing using shared function
 	annealResult := bestAnnealingSearch(historicalSets)
 
 	fmt.Printf("  %s:\n", utl.Blu("Search Parameters"))
@@ -667,7 +659,6 @@ func displayStatistics(draws []Draw) error {
 		annealResult.bestCombo[2], annealResult.bestCombo[3], annealResult.bestCombo[4])))
 	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%.0f/5 numbers differ", annealResult.bestScore)))
 
-	// Compare methods
 	fmt.Printf("\n  %s:\n", utl.Blu("Method Comparison"))
 	fmt.Printf("    %s: %s  %s\n", utl.Blu("Brute force (global optimum)"), utl.Gre(fmt.Sprintf("%d/5", bruteScore)), utl.Gra(fmt.Sprintf("(%s combos)", formatNumber(totalCombinations))))
 	fmt.Printf("    %s: %s  %s\n", utl.Blu("Simulated annealing"), utl.Gre(fmt.Sprintf("%.0f/5", annealResult.bestScore)), utl.Gra(fmt.Sprintf("(%d runs × %s iters)", annealingRuns, formatNumber(annealingIterations))))
@@ -764,23 +755,17 @@ func findTopNPairs(freq map[string]int, n int) []pairCount {
 	return results
 }
 
-// calculateChiSquared performs chi-squared test for uniformity
+// calculateChiSquared performs chi-squared test for uniformity.
 // freq: map of number -> count
 // totalDraws: total number of balls drawn (num_drawings * 5)
 func calculateChiSquared(freq map[int]int, totalDraws int) float64 {
-	// Expected frequency for each number (1-45)
-	// In a uniform distribution, each number should appear equally
 	expected := float64(totalDraws) / 45.0
-
 	var chiSquared float64
-
-	// For each possible number (1-45)
 	for i := 1; i <= 45; i++ {
 		observed := float64(freq[i])
 		diff := observed - expected
 		chiSquared += (diff * diff) / expected
 	}
-
 	return chiSquared
 }
 
@@ -804,8 +789,7 @@ var (
 	_ evSimulationResults
 )
 
-// runRepeatSimulation performs Monte Carlo simulation to estimate probability
-// of drawing a previously seen combination
+// runRepeatSimulation estimates probability of drawing a previously seen combination.
 func runRepeatSimulation(numHistorical, totalCombos, iterations int) simulationResults {
 	const (
 		draws30  = 30
@@ -814,48 +798,31 @@ func runRepeatSimulation(numHistorical, totalCombos, iterations int) simulationR
 		draws10y = 3650
 	)
 
-	var results simulationResults
-
-	// Calculate probability using formula: 1 - (1 - p)^n
-	// where p = numHistorical/totalCombos
-	// and n = number of draws
-
 	p := float64(numHistorical) / float64(totalCombos)
 
-	// Probability of at least one repeat in n draws
-	results.prob30Days = 1.0 - pow(1.0-p, draws30)
-	results.prob90Days = 1.0 - pow(1.0-p, draws90)
-	results.prob365Days = 1.0 - pow(1.0-p, draws365)
-	results.prob10Years = 1.0 - pow(1.0-p, draws10y)
-
-	return results
-}
-
-// runEVSimulation calculates expected value through Monte Carlo simulation
-func runEVSimulation(avgJackpot, winRate float64, totalCombos, iterations int) evSimulationResults {
-	const ticketCost = 1.00
-
-	// Theoretical probability of winning (1 in totalCombos)
-	winProb := 1.0 / float64(totalCombos)
-
-	// Expected value = (probability of winning × jackpot) - ticket cost
-	singleEV := (winProb * avgJackpot) - ticketCost
-
-	// For multiple plays, EV scales linearly
-	ev100 := singleEV * 100
-	ev1000 := singleEV * 1000
-
-	return evSimulationResults{
-		singleTicketEV: singleEV,
-		plays100EV:     ev100,
-		plays1000EV:    ev1000,
+	return simulationResults{
+		prob30Days:  1.0 - pow(1.0-p, draws30),
+		prob90Days:  1.0 - pow(1.0-p, draws90),
+		prob365Days: 1.0 - pow(1.0-p, draws365),
+		prob10Years: 1.0 - pow(1.0-p, draws10y),
 	}
 }
 
-// calculateEV computes expected value for a given jackpot
-func calculateEV(jackpot float64, totalCombos int, ticketCost float64) float64 {
+// runEVSimulation calculates expected value through Monte Carlo simulation.
+func runEVSimulation(avgJackpot, winRate float64, totalCombos, iterations int) evSimulationResults {
+	const ticketCost = 1.00
 	winProb := 1.0 / float64(totalCombos)
-	return (winProb * jackpot) - ticketCost
+	singleEV := (winProb * avgJackpot) - ticketCost
+	return evSimulationResults{
+		singleTicketEV: singleEV,
+		plays100EV:     singleEV * 100,
+		plays1000EV:    singleEV * 1000,
+	}
+}
+
+// calculateEV computes expected value for a given jackpot.
+func calculateEV(jackpot float64, totalCombos int, ticketCost float64) float64 {
+	return (1.0/float64(totalCombos))*jackpot - ticketCost
 }
 
 // setDistance returns how many of a's elements are NOT in b (0-5 for 5-element sets).
@@ -878,20 +845,16 @@ func setDistance(a, b []int) int {
 }
 
 // minDistanceToHistorical finds minimum distance from combo to any historical set.
-// Distance = number of candidate's picks NOT in the historical draw (0-5).
 func minDistanceToHistorical(combo []int, historical [][]int) float64 {
 	if len(historical) == 0 {
 		return 5.0
 	}
-
 	minDist := 5
 	for _, hist := range historical {
-		dist := setDistance(combo, hist)
-		if dist < minDist {
+		if dist := setDistance(combo, hist); dist < minDist {
 			minDist = dist
 		}
 	}
-
 	return float64(minDist)
 }
 
@@ -904,9 +867,8 @@ type annealingResult struct {
 	totalMoves    int
 }
 
-// simulatedAnnealingSearch uses simulated annealing to find optimal combination
+// simulatedAnnealingSearch uses simulated annealing to find optimal combination.
 func simulatedAnnealingSearch(historical [][]int, iterations int, initialTemp, coolingRate float64) annealingResult {
-	// Start with random combination
 	current := generateRandomCombo()
 	currentScore := minDistanceToHistorical(current, historical)
 
@@ -918,32 +880,25 @@ func simulatedAnnealingSearch(historical [][]int, iterations int, initialTemp, c
 	acceptedMoves := 0
 
 	for range iterations {
-		// Generate neighbor by mutating one number
 		neighbor := perturb(current)
 		neighborScore := minDistanceToHistorical(neighbor, historical)
 
-		// Calculate acceptance probability
 		delta := neighborScore - currentScore
 		acceptProb := 1.0
 		if delta < 0 {
-			// Worse solution - accept with probability based on temperature
 			acceptProb = exp(delta / temperature)
 		}
 
-		// Decide whether to accept
-		if delta > 0 || randomFloat() < acceptProb {
+		if delta > 0 || rand.Float64() < acceptProb {
 			current = neighbor
 			currentScore = neighborScore
 			acceptedMoves++
-
-			// Update best if improved
 			if currentScore > bestScore {
 				copy(best, current)
 				bestScore = currentScore
 			}
 		}
 
-		// Cool down
 		temperature *= coolingRate
 	}
 
@@ -957,40 +912,33 @@ func simulatedAnnealingSearch(historical [][]int, iterations int, initialTemp, c
 	}
 }
 
-// perturb creates a neighbor by changing one random number
+// perturb creates a neighbour by changing one random number.
 func perturb(combo []int) []int {
 	neighbor := make([]int, len(combo))
 	copy(neighbor, combo)
-
-	// Pick random position to mutate
-	pos := statsRNG.Intn(5)
-
-	// Find new number not in combo
+	pos := rand.IntN(5)
 	used := make(map[int]bool)
 	for _, n := range neighbor {
 		used[n] = true
 	}
-
 	for {
-		newNum := statsRNG.Intn(45) + 1
+		newNum := rand.IntN(45) + 1
 		if !used[newNum] {
 			neighbor[pos] = newNum
 			break
 		}
 	}
-
 	sort.Ints(neighbor)
 	return neighbor
 }
 
-// generateRandomCombo generates a random 5-number combination (1-45)
+// generateRandomCombo generates a random 5-number combination (1-45).
 func generateRandomCombo() []int {
 	nums := make([]int, 5)
 	used := make(map[int]bool)
-
 	for i := range 5 {
 		for {
-			n := statsRNG.Intn(45) + 1
+			n := rand.IntN(45) + 1
 			if !used[n] {
 				nums[i] = n
 				used[n] = true
@@ -998,12 +946,11 @@ func generateRandomCombo() []int {
 			}
 		}
 	}
-
 	sort.Ints(nums)
 	return nums
 }
 
-// exp calculates e^x using Taylor series approximation
+// exp calculates e^x via Taylor series approximation.
 func exp(x float64) float64 {
 	if x < -10 {
 		return 0
@@ -1017,12 +964,7 @@ func exp(x float64) float64 {
 	return sum
 }
 
-// randomFloat returns a pseudo-random float between 0 and 1
-func randomFloat() float64 {
-	return statsRNG.Float64()
-}
-
-// pow calculates x^n
+// pow calculates x^n.
 func pow(x float64, n int) float64 {
 	result := 1.0
 	for range n {

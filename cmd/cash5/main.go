@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"sort"
 	"strconv"
@@ -16,7 +15,7 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.6.2"
+	program_version = "1.7.0"
 	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit 😀"
 )
 
@@ -25,24 +24,32 @@ func narrativeDate(t time.Time) string {
 	return fmt.Sprintf("%d-%s-%02d", t.Year(), strings.ToLower(t.Format("Jan")), t.Day())
 }
 
-func runDailyWithRand(r *rand.Rand) error {
+func runDailyWithRand() error {
 	existing, err := loadDraws()
 	if err != nil {
 		return err
 	}
 
+	// Check connectivity once, up front. All fetch decisions key off this.
+	online := checkInternet()
+	if !online {
+		fmt.Printf("%s\n", utl.Red("Internet is unreachable — showing cached data"))
+	}
+
 	// Auto-fetch if no data or data is too old (more than 7 days)
 	needsFetch := false
 	if len(existing) == 0 {
-		fmt.Println("Empty local draws.json file. Fetching last 365 drawings...")
-		needsFetch = true
+		if online {
+			fmt.Println("Empty local draws.json file. Fetching last 365 drawings...")
+			needsFetch = true
+		}
 	} else {
 		// Check if newest draw is more than 7 days old
 		sort.Slice(existing, func(i, j int) bool { return existing[i].DrawTime < existing[j].DrawTime })
 		newest := time.UnixMilli(existing[len(existing)-1].DrawTime)
 		weekAgo := time.Now().AddDate(0, 0, -7)
 
-		if newest.Before(weekAgo) {
+		if newest.Before(weekAgo) && online {
 			fmt.Printf("Data is outdated (newest draw: %s). Fetching recent data...\n",
 				narrativeDate(newest))
 			needsFetch = true
@@ -58,8 +65,8 @@ func runDailyWithRand(r *rand.Rand) error {
 		fmt.Println()
 	}
 
-	// Fetch all missing recent draws up to yesterday
-	if len(existing) > 0 {
+	// Fetch all missing recent draws up to yesterday (only when online)
+	if online && len(existing) > 0 {
 		sort.Slice(existing, func(i, j int) bool { return existing[i].DrawTime < existing[j].DrawTime })
 		newest := time.UnixMilli(existing[len(existing)-1].DrawTime)
 		today := time.Now().Truncate(24 * time.Hour)
@@ -70,7 +77,6 @@ func runDailyWithRand(r *rand.Rand) error {
 			fmt.Printf("Missing recent draws (newest: %s, need up to: %s). Fetching...\n",
 				narrativeDate(newest), narrativeDate(yesterday))
 
-			// Fetch from day after newest to today
 			dateFrom := newest.AddDate(0, 0, 1)
 			dateTo := time.Now()
 
@@ -78,6 +84,10 @@ func runDailyWithRand(r *rand.Rand) error {
 			if err == nil {
 				existing = recentDraws
 				fmt.Printf("Fetched recent draws. Total in database: %d\n\n", len(existing))
+			} else if is404Error(err) {
+				// Primary returned 404 — try backup sources transparently
+				fmt.Printf("%s\n", utl.Red(fmt.Sprintf("Primary source unavailable (%v) — trying backup...", err)))
+				existing = tryBackupFetchers(existing, dateFrom, dateTo)
 			} else {
 				fmt.Printf("Warning: failed to fetch recent draws: %v\n", err)
 			}
@@ -127,15 +137,23 @@ func runDailyWithRand(r *rand.Rand) error {
 	lwnKey := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d", lwn[0], lwn[1], lwn[2], lwn[3], lwn[4])
 	lwnDate := narrativeDate(time.UnixMilli(lastDraw.DrawTime))
 
-	// Current Jackpot
-	jackpot, err := fetchCurrentJackpot()
-	if err == nil && jackpot > 0 {
-		fmt.Printf("  %s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jackpot/100)))
+	// Current Jackpot (skip fetch if offline)
+	if online {
+		jackpot, err := fetchCurrentJackpot()
+		if err == nil && jackpot > 0 {
+			fmt.Printf("  %s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jackpot/100)))
+		} else if len(uniqueDraws) > 0 {
+			// Fall back to latest draw's estimated jackpot
+			jp := uniqueDraws[len(uniqueDraws)-1].EstimatedJackpot
+			if jp > 0 {
+				fmt.Printf("  %s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jp/100)))
+			}
+		}
 	} else if len(uniqueDraws) > 0 {
-		// Fall back to latest draw's estimated jackpot
 		jp := uniqueDraws[len(uniqueDraws)-1].EstimatedJackpot
 		if jp > 0 {
-			fmt.Printf("  %s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jp/100)))
+			fmt.Printf("  %s: %s %s\n", utl.Blu("CURRENT JACKPOT"),
+				utl.Gre(formatCurrency(jp/100)), utl.Gra("(cached)"))
 		}
 	}
 
@@ -371,8 +389,6 @@ func runCLI() {
 		}
 	}
 
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	var fetchAll bool
 	var showVersion bool
 	var showAll bool
@@ -454,7 +470,7 @@ func runCLI() {
 				return
 			}
 
-			if err := runDailyWithRand(r); err != nil {
+			if err := runDailyWithRand(); err != nil {
 				log.Fatal(err)
 			}
 		},
@@ -732,6 +748,58 @@ func formatProbability(pct float64) string {
 		return fmt.Sprintf("%.4f%%", pct)
 	}
 	return fmt.Sprintf("%.6f%%", pct)
+}
+
+// is404Error reports whether an error originated from an HTTP 404 response.
+func is404Error(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "404")
+}
+
+// tryBackupFetchers attempts each backup source in order, merges any draws found
+// into existing, saves, and returns the result. Prints status for each attempt.
+func tryBackupFetchers(existing []Draw, dateFrom, dateTo time.Time) []Draw {
+	for _, fetcher := range backupFetchers {
+		fmt.Printf("  Trying %s...\n", fetcher.Name())
+		draws, err := fetcher.FetchRecent(dateFrom, dateTo)
+		if err != nil {
+			fmt.Printf("  %s failed: %v\n", fetcher.Name(), err)
+			continue
+		}
+		if len(draws) == 0 {
+			fmt.Printf("  %s: no new draws found\n", fetcher.Name())
+			continue
+		}
+
+		// Merge: add draws not already in existing (match by date, since IDs differ
+		// between primary and backup sources)
+		existingDates := make(map[string]bool)
+		for _, d := range existing {
+			existingDates[time.UnixMilli(d.DrawTime).Format("2006-01-02")] = true
+		}
+		added := 0
+		for _, d := range draws {
+			dateKey := time.UnixMilli(d.DrawTime).Format("2006-01-02")
+			if !existingDates[dateKey] {
+				existing = append(existing, d)
+				added++
+			}
+		}
+
+		sort.Slice(existing, func(i, j int) bool { return existing[i].DrawTime < existing[j].DrawTime })
+
+		if added > 0 {
+			fmt.Printf("  %s: added %d draw(s) via backup\n", fetcher.Name(), added)
+			if err := saveDrawsCallback(existing); err != nil {
+				fmt.Printf("  Warning: failed to save after backup fetch: %v\n", err)
+			}
+		} else {
+			fmt.Printf("  %s: draws already in cache\n", fetcher.Name())
+		}
+		return existing
+	}
+
+	fmt.Printf("%s\n", utl.Red("All backup sources failed — showing cached data"))
+	return existing
 }
 
 func main() {
