@@ -20,7 +20,7 @@ const (
 
 const (
 	program_name    = "brew-update"
-	program_version = "1.3.4"
+	program_version = "1.3.5"
 )
 
 func init() {
@@ -94,9 +94,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Step 4: brew cleanup
-	if err := runCommand("brew cleanup", Green); err != nil {
-		fmt.Fprintf(os.Stderr, "%sError during brew cleanup: %v%s\n", Red, err, Reset)
+	// Step 4: brew cleanup -s
+	if err := runCommand("brew cleanup -s", Green); err != nil {
+		fmt.Fprintf(os.Stderr, "%sError during brew cleanup -s: %v%s\n", Red, err, Reset)
 		os.Exit(1)
 	}
 
