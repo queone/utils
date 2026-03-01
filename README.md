@@ -1,16 +1,32 @@
 # utils
 A collection of small CLI utilities written in Go.
 
+- [`bak`](cmd/bak/README.md): <description>.
+- [`brew-update`](cmd/brew-update/README.md): <description>.
+- [`cash5`](cmd/cash5/README.md): <description>.
+- [`certgen`](cmd/certgen/README.md): <description>.
+- [`certls`](cmd/certls/README.md): <description>.
 - [`days`](cmd/days/README.md): A CLI calendar days calculator.
 - [`decolor`](cmd/decolor/README.md): A utility that removes shell color escape codes from input stream or given file.
+- [`dl`](cmd/dl/README.md): <description>.
+- [`dos2unix`](cmd/dos2unix/README.md): <description>.
 - [`fr`](cmd/fr/README.md): A simple find/replace utility.
+- [`git-cloneall`](cmd/git-cloneall/README.md): <description>.
+- [`git-pullall`](cmd/git-pullall/README.md): <description>.
+- [`git-remotev`](cmd/git-remotev/README.md): <description>.
+- [`git-statall`](cmd/git-statall/README.md): <description>.
 - [`jy`](cmd/jy/README.md): A lightweight JSON and YAML converter utility.
 - [`pgen`](cmd/pgen/README.md): A simple generator of memorable passwords.
+- [`pman`](cmd/pman/README.md): <description>.
 - [`rn`](cmd/rn/README.md): A bulk file re-namer.
+- [`rncap`](cmd/rncap/README.md): <description>.
+- [`rnlower`](cmd/rnlower/README.md): <description>.
+- [`sms`](cmd/sms/README.md): <description>.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
+- [`web`](cmd/web/README.md): <description>.
 
 ## Why?
-The Go language and its tool chain are an ideal way to maintain a commonly used set of CLI utilities because they can be quickly compiled and installed whether the OS is Windows, macOS, or Linux. This provides a unified and portable solution to many a scripting needs. With this setup, Go essentially turns into a package manager for these utilities.
+Go's tool chain is the ideal way to maintain a set of commonly used CLI utilities. They can be quickly compiled and installed whether you're in Windows, macOS, or Linux. This provides a unified and portable solution to many a scripting needs. With this setup, Go turns into a quasi-package manager for these utilities.
 
 ## Getting Started
 To compile the entire collection, you obviously need to have GoLang installed and properly setup in your system, with `$GOPATH` set up correctly (typically at `$HOME/go`). Also setup `$GOPATH/bin/` in your `$PATH`, since that is where all executable binaries will be placed.
@@ -22,7 +38,7 @@ git clone https://github.com/queone/utils
 cd utils
 go mod init utils
 go mod tidy
-./build
+./build.sh
 ```
 
 For subsequent compilation just: 
@@ -30,10 +46,10 @@ For subsequent compilation just:
 ```bash
 cd utils
 git pull
-./build
+./build.sh
 ```
 
-To build in Windows you have to have a BASH shell such as [GitBASH](https://www.git-scm.com/download/win). To build from a regular Windows Command Prompt, you may have to tweak the `build` script a bit, to have it run the right `go build ...` command. 
+Note that you can compile individual utilities with `./build.sh rn,web`, etc.
 
-### TO-DO
-Allow building and installing **only** a sub-set, e.g. `./build jy,fr,tree` and so on
+To build in Windows you have to have a BASH shell such as [GitBASH](https://www.git-scm.com/download/win). To build from a regular Windows Command Prompt, you may have to tweak the `build.sh` script a bit, to have it run the right `go build ...` command. 
+
