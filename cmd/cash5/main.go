@@ -15,7 +15,7 @@ import (
 
 const (
 	program_name    = "cash5"
-	program_version = "1.7.0"
+	program_version = "0.9.2"
 	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit 😀"
 )
 
@@ -280,16 +280,6 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 		}
 	}
 
-	// Build historical combinations for annealing
-	var historicalSets [][]int
-	for i := range uniqueDraws {
-		nums, err := extractPrimaryFive(&uniqueDraws[i])
-		if err == nil && len(nums) == 5 {
-			sort.Ints(nums)
-			historicalSets = append(historicalSets, nums)
-		}
-	}
-
 	var recs []recommendation
 
 	// 1. Most Common by Position
@@ -303,12 +293,22 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 	sort.Ints(positionCombo)
 	recs = append(recs, recommendation{positionCombo, "Most common by position"})
 
-	// 2. Most Frequent Overall
-	topOverall := findTopN(overallFreq, 10)
-	if len(topOverall) >= 5 {
-		freqCombo := []int{topOverall[0].num, topOverall[1].num, topOverall[2].num, topOverall[3].num, topOverall[4].num}
+	// 2. Most Frequent Overall (expansion-normalized)
+	// Use robust pool expansion detection to normalize frequencies
+	pe := detectPoolExpansion(uniqueDraws, overallFreq)
+	normFreqInt := make(map[int]int)
+	for n, count := range overallFreq {
+		expected := expectedFreqForNumber(n, len(uniqueDraws), pe)
+		if expected > 0 {
+			// Ratio of observed/expected, scaled for integer ranking
+			normFreqInt[n] = int(float64(count) / expected * 1000000)
+		}
+	}
+	topNorm := findTopN(normFreqInt, 10)
+	if len(topNorm) >= 5 {
+		freqCombo := []int{topNorm[0].num, topNorm[1].num, topNorm[2].num, topNorm[3].num, topNorm[4].num}
 		sort.Ints(freqCombo)
-		recs = append(recs, recommendation{freqCombo, "Most frequent all-time"})
+		recs = append(recs, recommendation{freqCombo, "Most frequent (expansion-adjusted)"})
 	}
 
 	// 3. Hot Numbers (most frequent in last 30 days)
@@ -319,22 +319,29 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 		recs = append(recs, recommendation{hotCombo, "Hot numbers last 30 days"})
 	}
 
-	// 4. Least Common by Position
-	leastCommonFirst := findLeastCommon(firstNumFreq)
-	leastCommonSecond := findLeastCommon(pos2Freq)
-	leastCommonMiddle := findLeastCommon(middleNumFreq)
-	leastCommonFourth := findLeastCommon(pos4Freq)
-	leastCommonLast := findLeastCommon(lastNumFreq)
-
-	leastPositionCombo := []int{leastCommonFirst.num, leastCommonSecond.num, leastCommonMiddle.num, leastCommonFourth.num, leastCommonLast.num}
-	sort.Ints(leastPositionCombo)
-	recs = append(recs, recommendation{leastPositionCombo, "Least common by position"})
-
-	// 5. Simulated annealing (using shared parameters, same as -s)
-	if len(historicalSets) > 0 {
-		annealResult := bestAnnealingSearch(historicalSets)
-		recs = append(recs, recommendation{annealResult.bestCombo, "Simulated annealing"})
+	// 4. Least Common by Position (expansion-normalized)
+	normPos := [5]map[int]int{}
+	posFreqs := [5]map[int]int{firstNumFreq, pos2Freq, middleNumFreq, pos4Freq, lastNumFreq}
+	for p := range 5 {
+		normPos[p] = make(map[int]int)
+		for n, count := range posFreqs[p] {
+			expected := expectedFreqForNumber(n, len(uniqueDraws), pe)
+			if expected > 0 {
+				normPos[p][n] = int(float64(count) / expected * 1000000)
+			}
+		}
 	}
+	leastNorm := [5]numCount{}
+	for p := range 5 {
+		leastNorm[p] = findLeastCommon(normPos[p])
+	}
+	leastPositionCombo := []int{leastNorm[0].num, leastNorm[1].num, leastNorm[2].num, leastNorm[3].num, leastNorm[4].num}
+	sort.Ints(leastPositionCombo)
+	recs = append(recs, recommendation{leastPositionCombo, "Least common by position (expansion-adjusted)"})
+
+	// 5. Consecutive pair avoidance — the one statistically grounded signal
+	consecCombo := generateConsecAvoidCombo()
+	recs = append(recs, recommendation{consecCombo, "Consecutive pair avoidance"})
 
 	return recs
 }
@@ -352,9 +359,11 @@ func printUsage() {
 		"  -f             Fetch new draws since last run (within last year)\n"+
 		"  -a             Display all previous drawings\n"+
 		"  -s             Show statistics about historical data\n"+
+		"  -m             Show closest-match analysis for all drawings\n"+
 		"  -o [N]         Show odds table for 1 to N combos played (default: 30)\n"+
 		"  -d DATE        Show raw JSON for draws on DATE (format: 2026-02-06)\n"+
 		"  -v             Show this help message and exit\n"+
+		"  -h, -?         Show this help message and exit\n"+
 		"\n"+
 		"%s\n"+
 		"  1. Display the last 10 draws\n"+
@@ -375,6 +384,14 @@ func printUsage() {
 }
 
 func runCLI() {
+	// Handle -?, -h, --help before cobra — -? isn't a valid pflag character
+	for _, arg := range os.Args[1:] {
+		if arg == "-?" || arg == "-h" || arg == "--help" {
+			printUsage()
+			return
+		}
+	}
+
 	// Handle -o before cobra — cobra can't do optional-value flags properly
 	for i, arg := range os.Args[1:] {
 		if arg == "-o" {
@@ -393,6 +410,7 @@ func runCLI() {
 	var showVersion bool
 	var showAll bool
 	var showStats bool
+	var matchAnalysis bool
 	var debugDate string
 
 	root := &cobra.Command{
@@ -458,6 +476,18 @@ func runCLI() {
 				return
 			}
 
+			if matchAnalysis {
+				existingDraws, err := loadDraws()
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				if err := displayMatchAnalysis(existingDraws); err != nil {
+					log.Fatal(err)
+				}
+				return
+			}
+
 			if showStats {
 				existingDraws, err := loadDraws()
 				if err != nil {
@@ -479,6 +509,7 @@ func runCLI() {
 	root.Flags().BoolVarP(&fetchAll, "fetch-all", "f", false, "Fetch new draws since last run (within last year)")
 	root.Flags().BoolVarP(&showAll, "all", "a", false, "Display all previous drawings")
 	root.Flags().BoolVarP(&showStats, "stats", "s", false, "Show statistics about historical data")
+	root.Flags().BoolVarP(&matchAnalysis, "match-analysis", "m", false, "Show closest-match analysis for all historical drawings")
 	root.Flags().BoolVarP(&showVersion, "version", "v", false, "Show program version and usage")
 	root.Flags().StringVarP(&debugDate, "debug", "d", "", "Show raw JSON for draws on specified date")
 

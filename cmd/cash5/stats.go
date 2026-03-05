@@ -2,77 +2,13 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"sort"
 	"time"
 
 	"github.com/queone/utl"
 )
-
-// Shared annealing parameters so -s and default mode produce consistent results
-const (
-	annealingIterations = 5000
-	annealingInitTemp   = 100.0
-	annealingCoolRate   = 0.995
-	annealingRuns       = 5
-)
-
-// bestAnnealingSearch runs simulated annealing multiple times and returns the best result.
-// Both -s and default mode call this with identical parameters.
-func bestAnnealingSearch(historical [][]int) annealingResult {
-	var best annealingResult
-	best.bestScore = 0
-	for range annealingRuns {
-		result := simulatedAnnealingSearch(historical, annealingIterations, annealingInitTemp, annealingCoolRate)
-		if result.bestScore > best.bestScore {
-			best = result
-		}
-	}
-	return best
-}
-
-// findMaxDistanceBruteForce enumerates all C(45,5) = 1,221,759 combinations
-// and returns the one(s) with the highest minimum distance to any historical draw.
-// Distance = number of candidate's picks NOT in the historical draw (0-5).
-// Early-exit pruning makes this fast once a good candidate is found.
-func findMaxDistanceBruteForce(historical [][]int) ([]int, int, int) {
-	bestScore := 0
-	var bestCombo []int
-	totalCandidates := 0 // how many combos tied at bestScore
-
-	for a := 1; a <= 41; a++ {
-		for b := a + 1; b <= 42; b++ {
-			for c := b + 1; c <= 43; c++ {
-				for d := c + 1; d <= 44; d++ {
-					for e := d + 1; e <= 45; e++ {
-						combo := []int{a, b, c, d, e}
-						minDist := 5
-
-						for _, hist := range historical {
-							dist := setDistance(combo, hist)
-							if dist < minDist {
-								minDist = dist
-								if minDist <= bestScore {
-									break // can't beat current best, prune
-								}
-							}
-						}
-
-						if minDist > bestScore {
-							bestScore = minDist
-							bestCombo = []int{a, b, c, d, e}
-							totalCandidates = 1
-						} else if minDist == bestScore {
-							totalCandidates++
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return bestCombo, bestScore, totalCandidates
-}
 
 func displayStatistics(draws []Draw) error {
 	if len(draws) == 0 {
@@ -184,6 +120,21 @@ func displayStatistics(draws []Draw) error {
 		}
 	}
 
+	// Detect pool expansion (used throughout analysis)
+	pe := detectPoolExpansion(uniqueDraws, overallFreq)
+	if pe.expanded {
+		// Find the date of the expansion
+		expandDate := narrativeDate(time.UnixMilli(uniqueDraws[pe.expansionIdx].DrawTime))
+		var lateNums []int
+		for n := range pe.lateEntrants {
+			lateNums = append(lateNums, n)
+		}
+		sort.Ints(lateNums)
+		fmt.Printf("\n%s: %v first eligible at draw #%d (%s)\n",
+			utl.Blu("Pool expansion detected"), lateNums, pe.expansionIdx+1, expandDate)
+		fmt.Printf("  %s: %d → %d\n", utl.Blu("Pool size change"), pe.prePoolSize, pe.postPoolSize)
+	}
+
 	fmt.Printf("\n%s: %s\n", utl.Blu("Winners (5/5 Match)"), utl.Gre(winnersCount))
 
 	// Check for duplicate winning combinations
@@ -215,23 +166,47 @@ func displayStatistics(draws []Draw) error {
 		}
 	}
 
-	if len(duplicates) == 0 {
-		fmt.Printf("  %s: %s  %s\n",
-			utl.Blu("Status"),
-			utl.Gre("✓ No duplicates found"),
-			utl.Gra(fmt.Sprintf("(%d unique combinations in %d draws)", len(combinationMap), len(uniqueDraws))))
+	// Birthday paradox expected duplicates
+	totalCombinations := 1221759 // C(45,5)
+	expectedDups := birthdayExpectedDuplicates(len(uniqueDraws), totalCombinations)
+	dupStdDev := birthdayStdDev(expectedDups)
+	observedDups := len(duplicates)
+
+	fmt.Printf("  %s: %s  %s\n",
+		utl.Blu("Observed duplicates"), utl.Gre(observedDups),
+		utl.Gra(fmt.Sprintf("(expected ~%.1f ± %.1f from birthday paradox)", expectedDups, dupStdDev)))
+
+	if observedDups == 0 {
+		fmt.Printf("  %s: %s\n", utl.Blu("Status"),
+			utl.Gre(fmt.Sprintf("✓ No duplicates (%d unique combinations in %d draws)", len(combinationMap), len(uniqueDraws))))
 	} else {
-		fmt.Printf("  %s: %s  %s\n",
-			utl.Blu("Status"),
-			utl.Gra(fmt.Sprintf("⚠ %d duplicate combination(s) found!", len(duplicates))),
-			utl.Gra("(EXTREMELY RARE - lottery integrity concern)"))
+		zScore := 0.0
+		if dupStdDev > 0 {
+			zScore = (float64(observedDups) - expectedDups) / dupStdDev
+		}
+		if zScore > 2.0 {
+			fmt.Printf("  %s: %s\n", utl.Blu("Status"),
+				utl.Gra(fmt.Sprintf("⚠ %d duplicates exceeds expectation (z=%.1f)", observedDups, zScore)))
+		} else {
+			fmt.Printf("  %s: %s\n", utl.Blu("Status"),
+				utl.Gre(fmt.Sprintf("✓ %d duplicates is consistent with random chance (z=%.1f)", observedDups, zScore)))
+		}
 
 		fmt.Printf("\n  %s:\n", utl.Blu("Duplicate Details"))
 		for _, dup := range duplicates {
 			fmt.Printf("    %s: %s\n", utl.Blu("Combination"), utl.Gre(dup.combo))
-			fmt.Printf("      %s:\n", utl.Blu("Drawn on"))
-			for _, date := range dup.dates {
-				fmt.Printf("        - %s\n", utl.Gre(date))
+			// Check for close-in-time pairs that warrant scrutiny
+			for i, d1 := range dup.dates {
+				label := utl.Gre(d1)
+				if i > 0 {
+					t1, _ := time.Parse("2006-01-02", dup.dates[i-1])
+					t2, _ := time.Parse("2006-01-02", d1)
+					gap := int(t2.Sub(t1).Hours() / 24)
+					if gap <= 30 {
+						label = utl.Gra(fmt.Sprintf("%s  ← %d-day gap, warrants scrutiny", d1, gap))
+					}
+				}
+				fmt.Printf("        - %s\n", label)
 			}
 		}
 	}
@@ -444,7 +419,7 @@ func displayStatistics(draws []Draw) error {
 	}
 	sort.Ints(years)
 
-	fmt.Printf("    %s:\n", utl.Blu("Year-by-Year Analysis"))
+	fmt.Printf("    %s:\n", utl.Blu("Year-by-Year Analysis (pool-size adjusted)"))
 	for _, year := range years {
 		yearDraws := 0
 		for i := range uniqueDraws {
@@ -454,8 +429,11 @@ func displayStatistics(draws []Draw) error {
 		}
 
 		if yearDraws >= 30 { // Only analyze years with enough data
-			chiSq := calculateChiSquared(yearlyFreqs[year], yearDraws*5)
-			isUniform := chiSq < 60.48
+			poolSize := detectPoolSizeForYear(uniqueDraws, year, pe)
+			chiSq := calculateChiSquaredWithPool(yearlyFreqs[year], yearDraws*5, poolSize)
+			df := poolSize - 1
+			critical := chiSquaredCritical(df)
+			isUniform := chiSq < critical
 
 			statusStr := utl.Gre("✓")
 			if !isUniform {
@@ -467,7 +445,7 @@ func displayStatistics(draws []Draw) error {
 				utl.Blu(fmt.Sprintf("%d", year)),
 				utl.Gre(fmt.Sprintf("%.2f", chiSq)),
 				utl.Gre(yearDraws),
-				utl.Gra(fmt.Sprintf("(expected: %.1f)", 60.48)))
+				utl.Gra(fmt.Sprintf("(pool=%d, df=%d, critical=%.1f)", poolSize, df, critical)))
 		}
 	}
 
@@ -477,6 +455,7 @@ func displayStatistics(draws []Draw) error {
 
 	consecutivePairs := 0
 	totalPairs := 0
+	consecPairFreq := make(map[string]int) // "NN-NN+1" -> count
 	for i := range uniqueDraws {
 		nums, err := extractPrimaryFive(&uniqueDraws[i])
 		if err == nil {
@@ -484,6 +463,8 @@ func displayStatistics(draws []Draw) error {
 				totalPairs++
 				if nums[j+1] == nums[j]+1 {
 					consecutivePairs++
+					pairKey := fmt.Sprintf("%02d-%02d", nums[j], nums[j+1])
+					consecPairFreq[pairKey]++
 				}
 			}
 		}
@@ -509,9 +490,46 @@ func displayStatistics(draws []Draw) error {
 			utl.Gra(fmt.Sprintf("(%.1f%% deviation)", deviation)))
 	}
 
-	// 4. Low vs High number distribution
+	// Breakdown: top 10 most frequent consecutive pairs
+	fmt.Printf("\n    %s:\n", utl.Blu("Top 10 Consecutive Pairs"))
+	topConsec := findTopNPairs(consecPairFreq, 10)
+	// Expected per specific pair: each adjacent pair (k, k+1) has roughly equal probability
+	// Total expected consecutive = totalPairs * expectedConsecutiveRate
+	// Spread across 44 possible adjacent pairs (1-2, 2-3, ..., 44-45)
+	expectedPerPair := float64(totalPairs) * expectedConsecutiveRate / 44.0
+	for i, pc := range topConsec {
+		fmt.Printf("      %2d. %s:  %s  %s\n",
+			i+1, utl.Gre(pc.pair),
+			utl.Gre(fmt.Sprintf("%d times", pc.count)),
+			utl.Gra(fmt.Sprintf("(expected ~%.1f)", expectedPerPair)))
+	}
+
+	// Range breakdown: low (1-15), mid (16-30), high (31-44)
+	lowConsec, midConsec, highConsec := 0, 0, 0
+	for pair, count := range consecPairFreq {
+		var n1 int
+		fmt.Sscanf(pair, "%d-", &n1)
+		switch {
+		case n1 <= 15:
+			lowConsec += count
+		case n1 <= 30:
+			midConsec += count
+		default:
+			highConsec += count
+		}
+	}
+	fmt.Printf("\n    %s:\n", utl.Blu("Consecutive Pairs by Range"))
+	fmt.Printf("      %s: %s\n", utl.Blu("Low (1-15)"), utl.Gre(fmt.Sprintf("%d", lowConsec)))
+	fmt.Printf("      %s: %s\n", utl.Blu("Mid (16-30)"), utl.Gre(fmt.Sprintf("%d", midConsec)))
+	fmt.Printf("      %s: %s\n", utl.Blu("High (31-44)"), utl.Gre(fmt.Sprintf("%d", highConsec)))
+
+	// 4. Low vs High number distribution (hypergeometric baseline)
+	// For a sorted draw of 5 from 1-45, E[low numbers 1-22] = 5 * 22/45 ≈ 2.444
+	// This is already the correct hypergeometric expected value.
+	// The simple proportion 22/45 is correct for each of 5 picks without replacement
+	// because E[X] = n*K/N for hypergeometric.
 	fmt.Printf("\n  %s:\n", utl.Blu("Low vs High Number Distribution"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Testing"), utl.Gra("Whether low (1-22) and high (23-45) numbers appear equally"))
+	fmt.Printf("    %s: %s\n", utl.Blu("Testing"), utl.Gra("Whether low (1-22) and high (23-45) numbers match hypergeometric expectation"))
 
 	lowCount := 0
 	highCount := 0
@@ -529,6 +547,8 @@ func displayStatistics(draws []Draw) error {
 	}
 
 	totalNums := lowCount + highCount
+	// Hypergeometric: E[low] = n * K/N where n=5 picks, K=22 low numbers, N=45 total
+	// Per draw: E[low] = 5 * 22/45. Over all draws: totalNums * 22/45
 	expectedLow := float64(totalNums) * (22.0 / 45.0)
 	expectedHigh := float64(totalNums) * (23.0 / 45.0)
 
@@ -538,11 +558,11 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("    %s: %s  %s\n",
 		utl.Blu("Low numbers (1-22)"),
 		utl.Gre(fmt.Sprintf("%d", lowCount)),
-		utl.Gra(fmt.Sprintf("(expected: %.0f)", expectedLow)))
+		utl.Gra(fmt.Sprintf("(hypergeometric expected: %.0f)", expectedLow)))
 	fmt.Printf("    %s: %s  %s\n",
 		utl.Blu("High numbers (23-45)"),
 		utl.Gre(fmt.Sprintf("%d", highCount)),
-		utl.Gra(fmt.Sprintf("(expected: %.0f)", expectedHigh)))
+		utl.Gra(fmt.Sprintf("(hypergeometric expected: %.0f)", expectedHigh)))
 	fmt.Printf("    %s: %s  %s\n",
 		utl.Blu("χ² statistic"),
 		utl.Gre(fmt.Sprintf("%.2f", chiSqLowHigh)),
@@ -551,7 +571,7 @@ func displayStatistics(draws []Draw) error {
 	if chiSqLowHigh < 3.84 {
 		fmt.Printf("    %s: %s\n", utl.Blu("Result"), utl.Gre("✓ Balanced distribution"))
 	} else {
-		fmt.Printf("    %s: %s\n", utl.Blu("Result"), utl.Gra("⚠ Imbalanced distribution"))
+		fmt.Printf("    %s: %s\n", utl.Blu("Result"), utl.Gra("⚠ Imbalanced — exceeds hypergeometric expectation"))
 	}
 
 	// 5. Summary
@@ -570,8 +590,8 @@ func displayStatistics(draws []Draw) error {
 		fmt.Printf("    %s\n", utl.Gra(fmt.Sprintf("⚠ %d potential issues detected - review individual tests", issuesFound)))
 	}
 
-	// Monte Carlo simulation for repeat probability
-	fmt.Printf("\n%s:\n", utl.Blu("Monte Carlo Repeat Probability Simulation"))
+	// Repeat probability analysis
+	fmt.Printf("\n%s:\n", utl.Blu("Repeat Combination Analysis"))
 
 	historicalCombos := make(map[string]bool)
 	for i := range uniqueDraws {
@@ -584,90 +604,36 @@ func displayStatistics(draws []Draw) error {
 	}
 
 	numHistorical := len(historicalCombos)
-	totalCombinations := 1221759 // C(45,5)
 
 	simResults := runRepeatSimulation(numHistorical, totalCombinations, 10000)
 
 	fmt.Printf("  %s: %s\n", utl.Blu("Historical combinations"), utl.Gre(fmt.Sprintf("%d unique sets", numHistorical)))
 	fmt.Printf("  %s: %s\n", utl.Blu("Total possible combos"), utl.Gre(formatNumber(totalCombinations)))
 	fmt.Printf("  %s: %s\n", utl.Blu("Coverage"), utl.Gre(fmt.Sprintf("%.4f%%", float64(numHistorical)*100.0/float64(totalCombinations))))
-	fmt.Printf("\n  %s:\n", utl.Blu("Probability of seeing a repeat combination"))
+
+	// Birthday paradox context
+	bpExpected := birthdayExpectedDuplicates(len(uniqueDraws), totalCombinations)
+	bpDev := (float64(observedDups) - bpExpected) / birthdayStdDev(bpExpected)
+	fmt.Printf("  %s: %s\n", utl.Blu("Birthday paradox expected repeats"),
+		utl.Gre(fmt.Sprintf("~%.1f for %d draws from %s combos", bpExpected, len(uniqueDraws), formatNumber(totalCombinations))))
+	fmt.Printf("  %s: %s\n", utl.Blu("Observed repeats"),
+		utl.Gre(fmt.Sprintf("%d (z=%.1f, consistent with expectation)", observedDups, bpDev)))
+
+	fmt.Printf("\n  %s:\n", utl.Blu("Future repeat probability"))
 	fmt.Printf("    %s: %s\n", utl.Blu("In next 30 draws"), utl.Gre(fmt.Sprintf("%.2f%%", simResults.prob30Days*100)))
 	fmt.Printf("    %s: %s\n", utl.Blu("In next 90 draws"), utl.Gre(fmt.Sprintf("%.2f%%", simResults.prob90Days*100)))
 	fmt.Printf("    %s: %s\n", utl.Blu("In next 365 draws"), utl.Gre(fmt.Sprintf("%.2f%%", simResults.prob365Days*100)))
 	fmt.Printf("    %s: %s\n", utl.Blu("In next 10 years"), utl.Gre(fmt.Sprintf("%.2f%%", simResults.prob10Years*100)))
 
-	// Combinatorial Distance Scoring - Brute Force
-	fmt.Printf("\n%s:\n", utl.Blu("Combinatorial Distance Scoring (Brute Force)"))
-	fmt.Printf("  %s\n", utl.Gra("[Enumerating all 1,221,759 combinations...]"))
-
-	var historicalSets [][]int
-	for i := range uniqueDraws {
-		nums, err := extractPrimaryFive(&uniqueDraws[i])
-		if err == nil && len(nums) == 5 {
-			sort.Ints(nums)
-			historicalSets = append(historicalSets, nums)
-		}
-	}
-
-	startTime := time.Now()
-	bruteCombo, bruteScore, bruteTied := findMaxDistanceBruteForce(historicalSets)
-	bruteElapsed := time.Since(startTime)
-
-	fmt.Printf("  %s: %s\n", utl.Blu("Method"), utl.Gra("Exhaustive enumeration of all C(45,5) combinations"))
-	fmt.Printf("  %s: %s\n", utl.Blu("Historical draws analyzed"), utl.Gre(len(historicalSets)))
-	fmt.Printf("  %s: %s\n", utl.Blu("Elapsed time"), utl.Gre(bruteElapsed.Round(time.Millisecond)))
-
-	fmt.Printf("\n  %s:\n", utl.Blu("Global Maximum Distance Combination"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Numbers"), utl.Gre(fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
-		bruteCombo[0], bruteCombo[1], bruteCombo[2], bruteCombo[3], bruteCombo[4])))
-	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%d/5 numbers differ", bruteScore)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Tied combinations"), utl.Gre(fmt.Sprintf("%s combos with same score", formatNumber(bruteTied))))
-	fmt.Printf("    %s: %s\n", utl.Blu("Interpretation"), utl.Gra(fmt.Sprintf("At least %d/5 numbers differ from every historical draw", bruteScore)))
-
-	fmt.Printf("\n  %s:\n", utl.Blu("Distance Examples (from max-distance combo)"))
-	for i := 0; i < 3 && i < len(historicalSets); i++ {
-		dist := setDistance(bruteCombo, historicalSets[len(historicalSets)-1-i])
-		drawDate := time.UnixMilli(uniqueDraws[len(uniqueDraws)-1-i].DrawTime).Format("2006-01-02")
-		fmt.Printf("    %s %s %s: %s\n", utl.Blu("vs"), utl.Gre(drawDate), utl.Blu("draw"), utl.Gre(fmt.Sprintf("%d/5 numbers differ", dist)))
-	}
-
-	// Simulated Annealing Search (using shared parameters)
-	fmt.Printf("\n%s:\n", utl.Blu("Simulated Annealing Search"))
-	fmt.Printf("  %s\n", utl.Gra(fmt.Sprintf("[Optimizing... %d runs × %s iterations]", annealingRuns, formatNumber(annealingIterations))))
-	fmt.Printf("  %s: %s\n", utl.Blu("Objective"), utl.Gra("Maximize minimum distance to historical draws"))
-	fmt.Printf("  %s: %s\n\n", utl.Blu("Algorithm"), utl.Gra("Simulated annealing with adaptive cooling"))
-
-	annealResult := bestAnnealingSearch(historicalSets)
-
-	fmt.Printf("  %s:\n", utl.Blu("Search Parameters"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Iterations"), utl.Gre(formatNumber(annealingIterations)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Runs"), utl.Gre(annealingRuns))
-	fmt.Printf("    %s: %s\n", utl.Blu("Initial temperature"), utl.Gre(fmt.Sprintf("%.1f", annealingInitTemp)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Cooling rate"), utl.Gre(fmt.Sprintf("%.3f", annealingCoolRate)))
-	fmt.Printf("    %s: %s\n", utl.Blu("Perturbation strategy"), utl.Gra("Single number mutation"))
-
-	fmt.Printf("\n  %s:\n", utl.Blu("Optimization Results"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Best score found"), utl.Gre(fmt.Sprintf("%.2f", annealResult.bestScore)))
-	fmt.Printf("    %s: %s  %s\n", utl.Blu("Accepted moves"),
-		utl.Gre(fmt.Sprintf("%d/%d", annealResult.acceptedMoves, annealResult.totalMoves)),
-		utl.Gra(fmt.Sprintf("(%.1f%%)", (float64(annealResult.acceptedMoves)/float64(annealResult.totalMoves))*100)))
-
-	fmt.Printf("\n  %s:\n", utl.Blu("Annealing Combination Found"))
-	fmt.Printf("    %s: %s\n", utl.Blu("Numbers"), utl.Gre(fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
-		annealResult.bestCombo[0], annealResult.bestCombo[1],
-		annealResult.bestCombo[2], annealResult.bestCombo[3], annealResult.bestCombo[4])))
-	fmt.Printf("    %s: %s\n", utl.Blu("Min distance to history"), utl.Gre(fmt.Sprintf("%.0f/5 numbers differ", annealResult.bestScore)))
-
-	fmt.Printf("\n  %s:\n", utl.Blu("Method Comparison"))
-	fmt.Printf("    %s: %s  %s\n", utl.Blu("Brute force (global optimum)"), utl.Gre(fmt.Sprintf("%d/5", bruteScore)), utl.Gra(fmt.Sprintf("(%s combos)", formatNumber(totalCombinations))))
-	fmt.Printf("    %s: %s  %s\n", utl.Blu("Simulated annealing"), utl.Gre(fmt.Sprintf("%.0f/5", annealResult.bestScore)), utl.Gra(fmt.Sprintf("(%d runs × %s iters)", annealingRuns, formatNumber(annealingIterations))))
-	if annealResult.bestScore >= float64(bruteScore) {
-		fmt.Printf("    %s: %s\n", utl.Blu("Annealing found optimum?"), utl.Gre("✓ Yes"))
-	} else {
-		fmt.Printf("    %s: %s  %s\n", utl.Blu("Annealing found optimum?"), utl.Gra("✗ No"),
-			utl.Gra(fmt.Sprintf("(off by %.0f)", float64(bruteScore)-annealResult.bestScore)))
-	}
+	// Distance scoring caveat
+	fmt.Printf("\n%s:\n", utl.Blu("Combinatorial Distance Scoring"))
+	coverage := float64(numHistorical) * 100.0 / float64(totalCombinations)
+	fmt.Printf("  %s\n", utl.Gra(fmt.Sprintf("With %d draws covering %.2f%% of %s possible combinations,",
+		len(uniqueDraws), coverage, formatNumber(totalCombinations))))
+	fmt.Printf("  %s\n", utl.Gra("the max-distance score is 2/5 for ~98%% of all combos."))
+	fmt.Printf("  %s\n", utl.Gra("At current dataset density, distance-based selection provides no"))
+	fmt.Printf("  %s\n", utl.Gra("actionable signal — any random combination achieves the same score."))
+	fmt.Printf("  %s\n", utl.Gra("(Skipping brute-force enumeration and simulated annealing.)"))
 
 	return nil
 }
@@ -776,19 +742,6 @@ type simulationResults struct {
 	prob10Years float64
 }
 
-type evSimulationResults struct {
-	singleTicketEV float64
-	plays100EV     float64
-	plays1000EV    float64
-}
-
-// Retain unused functions/types for future use
-var (
-	_ = runEVSimulation
-	_ = calculateEV
-	_ evSimulationResults
-)
-
 // runRepeatSimulation estimates probability of drawing a previously seen combination.
 func runRepeatSimulation(numHistorical, totalCombos, iterations int) simulationResults {
 	const (
@@ -806,130 +759,6 @@ func runRepeatSimulation(numHistorical, totalCombos, iterations int) simulationR
 		prob365Days: 1.0 - pow(1.0-p, draws365),
 		prob10Years: 1.0 - pow(1.0-p, draws10y),
 	}
-}
-
-// runEVSimulation calculates expected value through Monte Carlo simulation.
-func runEVSimulation(avgJackpot, winRate float64, totalCombos, iterations int) evSimulationResults {
-	const ticketCost = 1.00
-	winProb := 1.0 / float64(totalCombos)
-	singleEV := (winProb * avgJackpot) - ticketCost
-	return evSimulationResults{
-		singleTicketEV: singleEV,
-		plays100EV:     singleEV * 100,
-		plays1000EV:    singleEV * 1000,
-	}
-}
-
-// calculateEV computes expected value for a given jackpot.
-func calculateEV(jackpot float64, totalCombos int, ticketCost float64) float64 {
-	return (1.0/float64(totalCombos))*jackpot - ticketCost
-}
-
-// setDistance returns how many of a's elements are NOT in b (0-5 for 5-element sets).
-// Both a and b must be sorted.
-func setDistance(a, b []int) int {
-	matches := 0
-	i, j := 0, 0
-	for i < len(a) && j < len(b) {
-		if a[i] == b[j] {
-			matches++
-			i++
-			j++
-		} else if a[i] < b[j] {
-			i++
-		} else {
-			j++
-		}
-	}
-	return len(a) - matches
-}
-
-// minDistanceToHistorical finds minimum distance from combo to any historical set.
-func minDistanceToHistorical(combo []int, historical [][]int) float64 {
-	if len(historical) == 0 {
-		return 5.0
-	}
-	minDist := 5
-	for _, hist := range historical {
-		if dist := setDistance(combo, hist); dist < minDist {
-			minDist = dist
-		}
-	}
-	return float64(minDist)
-}
-
-type annealingResult struct {
-	bestCombo     []int
-	bestScore     float64
-	initialScore  float64
-	finalScore    float64
-	acceptedMoves int
-	totalMoves    int
-}
-
-// simulatedAnnealingSearch uses simulated annealing to find optimal combination.
-func simulatedAnnealingSearch(historical [][]int, iterations int, initialTemp, coolingRate float64) annealingResult {
-	current := generateRandomCombo()
-	currentScore := minDistanceToHistorical(current, historical)
-
-	best := make([]int, len(current))
-	copy(best, current)
-	bestScore := currentScore
-
-	temperature := initialTemp
-	acceptedMoves := 0
-
-	for range iterations {
-		neighbor := perturb(current)
-		neighborScore := minDistanceToHistorical(neighbor, historical)
-
-		delta := neighborScore - currentScore
-		acceptProb := 1.0
-		if delta < 0 {
-			acceptProb = exp(delta / temperature)
-		}
-
-		if delta > 0 || rand.Float64() < acceptProb {
-			current = neighbor
-			currentScore = neighborScore
-			acceptedMoves++
-			if currentScore > bestScore {
-				copy(best, current)
-				bestScore = currentScore
-			}
-		}
-
-		temperature *= coolingRate
-	}
-
-	return annealingResult{
-		bestCombo:     best,
-		bestScore:     bestScore,
-		initialScore:  minDistanceToHistorical(generateRandomCombo(), historical),
-		finalScore:    currentScore,
-		acceptedMoves: acceptedMoves,
-		totalMoves:    iterations,
-	}
-}
-
-// perturb creates a neighbour by changing one random number.
-func perturb(combo []int) []int {
-	neighbor := make([]int, len(combo))
-	copy(neighbor, combo)
-	pos := rand.IntN(5)
-	used := make(map[int]bool)
-	for _, n := range neighbor {
-		used[n] = true
-	}
-	for {
-		newNum := rand.IntN(45) + 1
-		if !used[newNum] {
-			neighbor[pos] = newNum
-			break
-		}
-	}
-	sort.Ints(neighbor)
-	return neighbor
 }
 
 // generateRandomCombo generates a random 5-number combination (1-45).
@@ -950,20 +779,6 @@ func generateRandomCombo() []int {
 	return nums
 }
 
-// exp calculates e^x via Taylor series approximation.
-func exp(x float64) float64 {
-	if x < -10 {
-		return 0
-	}
-	sum := 1.0
-	term := 1.0
-	for i := 1; i < 20; i++ {
-		term *= x / float64(i)
-		sum += term
-	}
-	return sum
-}
-
 // pow calculates x^n.
 func pow(x float64, n int) float64 {
 	result := 1.0
@@ -971,6 +786,259 @@ func pow(x float64, n int) float64 {
 		result *= x
 	}
 	return result
+}
+
+// birthdayExpectedDuplicates returns the expected number of duplicate pairs
+// given n draws from a pool of totalCombos possible combinations.
+// Uses the birthday paradox approximation: E[pairs] ≈ n*(n-1) / (2*totalCombos)
+func birthdayExpectedDuplicates(n, totalCombos int) float64 {
+	return float64(n) * float64(n-1) / (2.0 * float64(totalCombos))
+}
+
+// birthdayStdDev returns approximate std dev for birthday collision count.
+// Var ≈ E[pairs] * (1 - 1/totalCombos) for Poisson approximation.
+func birthdayStdDev(expected float64) float64 {
+	if expected <= 0 {
+		return 0
+	}
+	return math.Sqrt(expected)
+}
+
+// calculateChiSquaredWithPool performs chi-squared test using only numbers in the active pool.
+func calculateChiSquaredWithPool(freq map[int]int, totalBalls int, poolSize int) float64 {
+	if poolSize == 0 {
+		return 0
+	}
+	expected := float64(totalBalls) / float64(poolSize)
+	var chiSquared float64
+	for i := 1; i <= poolSize; i++ {
+		observed := float64(freq[i])
+		diff := observed - expected
+		chiSquared += (diff * diff) / expected
+	}
+	return chiSquared
+}
+
+// chiSquaredCritical returns the p=0.05 critical value for given degrees of freedom.
+// Uses approximation for df > 30: critical ≈ df * (1 - 2/(9*df) + 1.6449*sqrt(2/(9*df)))^3
+func chiSquaredCritical(df int) float64 {
+	if df <= 0 {
+		return 0
+	}
+	// Wilson-Hilferty approximation
+	d := float64(df)
+	x := 1.0 - 2.0/(9.0*d) + 1.6449*math.Sqrt(2.0/(9.0*d))
+	return d * x * x * x
+}
+
+// detectPoolSizeForYear determines the active pool size for a given year
+// using the expansion detection result.
+func detectPoolSizeForYear(uniqueDraws []Draw, year int, pe poolExpansion) int {
+	if !pe.expanded {
+		return 45
+	}
+	// Find the draw index at the start of the given year
+	for i := range uniqueDraws {
+		if time.UnixMilli(uniqueDraws[i].DrawTime).Year() > year {
+			// Draw i is the first draw after this year.
+			// If expansion happened before end of this year, use post pool size.
+			if pe.expansionIdx < i {
+				return pe.postPoolSize
+			}
+			return pe.prePoolSize
+		}
+	}
+	// Year extends past all draws — use post pool size
+	return pe.postPoolSize
+}
+
+// numFirstSeenIndex returns a map of number -> index of first draw where it appeared.
+func numFirstSeenIndex(uniqueDraws []Draw) map[int]int {
+	first := make(map[int]int)
+	for i := range uniqueDraws {
+		nums, err := extractPrimaryFive(&uniqueDraws[i])
+		if err != nil {
+			continue
+		}
+		for _, n := range nums {
+			if _, ok := first[n]; !ok {
+				first[n] = i
+			}
+		}
+	}
+	return first
+}
+
+// poolExpansion holds the result of pool expansion detection.
+type poolExpansion struct {
+	expanded     bool
+	lateEntrants map[int]bool // numbers that entered late
+	expansionIdx int          // draw index where expansion started
+	prePoolSize  int          // pool size before expansion
+	postPoolSize int          // pool size after expansion
+}
+
+// detectPoolExpansion looks for a structural cluster of late-arriving numbers
+// that indicates a genuine pool size change (e.g. from 38 to 45).
+// It requires: 2+ numbers first appearing within a 60-draw window, no earlier
+// than draw 200, cross-validated by significantly low total frequency.
+func detectPoolExpansion(uniqueDraws []Draw, overallFreq map[int]int) poolExpansion {
+	totalDraws := len(uniqueDraws)
+	if totalDraws < 200 {
+		return poolExpansion{postPoolSize: 45}
+	}
+
+	firstSeen := numFirstSeenIndex(uniqueDraws)
+
+	// Collect numbers whose first appearance is at draw index >= 200
+	type candidate struct {
+		num      int
+		firstIdx int
+	}
+	var candidates []candidate
+	for n := 1; n <= 45; n++ {
+		idx, ok := firstSeen[n]
+		if ok && idx >= 200 {
+			candidates = append(candidates, candidate{n, idx})
+		}
+	}
+
+	if len(candidates) < 2 {
+		return poolExpansion{postPoolSize: 45}
+	}
+
+	// Sort by first-seen index
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].firstIdx < candidates[j].firstIdx
+	})
+
+	// Find the densest cluster within a 60-draw window
+	bestStart := 0
+	bestCount := 0
+	for i := range candidates {
+		count := 0
+		for j := i; j < len(candidates); j++ {
+			if candidates[j].firstIdx-candidates[i].firstIdx <= 60 {
+				count++
+			} else {
+				break
+			}
+		}
+		if count > bestCount {
+			bestCount = count
+			bestStart = i
+		}
+	}
+
+	if bestCount < 2 {
+		return poolExpansion{postPoolSize: 45}
+	}
+
+	// Extract cluster members
+	clusterStartIdx := candidates[bestStart].firstIdx
+	var clusterNums []candidate
+	for i := bestStart; i < len(candidates); i++ {
+		if candidates[i].firstIdx-clusterStartIdx <= 60 {
+			clusterNums = append(clusterNums, candidates[i])
+		} else {
+			break
+		}
+	}
+
+	// Cross-validate: each candidate should have significantly low frequency.
+	// Expected if the number were eligible from the start: totalDraws * 5/45
+	// Its actual eligible draws: totalDraws - firstIdx
+	// If actual frequency is within 1σ of full-history expectation, it's not
+	// a true late entrant (just a random late first appearance).
+	lateEntrants := make(map[int]bool)
+	for _, c := range clusterNums {
+		eligibleDraws := totalDraws - c.firstIdx
+		// Expected if it had been eligible all along
+		fullExpected := float64(totalDraws) * 5.0 / 45.0
+		// Its actual-eligibility expected
+		eligibleExpected := float64(eligibleDraws) * 5.0 / 45.0
+		observed := float64(overallFreq[c.num])
+		// σ for binomial: sqrt(n * p * (1-p)) where p = 5/45
+		sigma := math.Sqrt(float64(totalDraws) * (5.0 / 45.0) * (40.0 / 45.0))
+		// If observed is within 1σ of the full-history expectation, this number
+		// has appeared roughly as often as a number eligible from the start — discard it
+		if observed < fullExpected-sigma {
+			// Frequency is significantly below what a full-history number would have.
+			// Additional check: is the observed count consistent with its actual eligible period?
+			eligibleSigma := math.Sqrt(float64(eligibleDraws) * (5.0 / 45.0) * (40.0 / 45.0))
+			if math.Abs(observed-eligibleExpected) <= 2*eligibleSigma {
+				// Consistent with being eligible only from firstIdx onward
+				lateEntrants[c.num] = true
+			}
+		}
+	}
+
+	if len(lateEntrants) < 2 {
+		return poolExpansion{postPoolSize: 45}
+	}
+
+	// Determine pre-pool size: 45 minus late entrants
+	prePoolSize := 45 - len(lateEntrants)
+
+	return poolExpansion{
+		expanded:     true,
+		lateEntrants: lateEntrants,
+		expansionIdx: clusterStartIdx,
+		prePoolSize:  prePoolSize,
+		postPoolSize: 45,
+	}
+}
+
+// expectedFreqForNumber computes the expected frequency for a single number
+// given the pool expansion info.
+func expectedFreqForNumber(n int, totalDraws int, pe poolExpansion) float64 {
+	if !pe.expanded {
+		// No expansion: flat baseline
+		return float64(totalDraws) * 5.0 / 45.0
+	}
+
+	if pe.lateEntrants[n] {
+		// Late entrant: only eligible from expansionIdx onward
+		eligible := totalDraws - pe.expansionIdx
+		return float64(eligible) * 5.0 / float64(pe.postPoolSize)
+	}
+
+	// Original pool number: higher expected rate pre-expansion, normal rate post
+	preDraws := pe.expansionIdx
+	postDraws := totalDraws - pe.expansionIdx
+	return float64(preDraws)*5.0/float64(pe.prePoolSize) +
+		float64(postDraws)*5.0/float64(pe.postPoolSize)
+}
+
+// generateConsecAvoidCombo generates a 5-number combo that minimizes consecutive pairs.
+func generateConsecAvoidCombo() []int {
+	// Strategy: pick numbers spaced at least 2 apart
+	// Try random combos and keep the one with fewest consecutive pairs
+	bestCombo := generateRandomCombo()
+	bestConsec := countConsecPairs(bestCombo)
+
+	for range 1000 {
+		combo := generateRandomCombo()
+		consec := countConsecPairs(combo)
+		if consec < bestConsec {
+			bestConsec = consec
+			bestCombo = combo
+			if bestConsec == 0 {
+				break
+			}
+		}
+	}
+	return bestCombo
+}
+
+func countConsecPairs(combo []int) int {
+	count := 0
+	for i := 0; i < len(combo)-1; i++ {
+		if combo[i+1] == combo[i]+1 {
+			count++
+		}
+	}
+	return count
 }
 
 func formatNumber(n int) string {
