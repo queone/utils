@@ -44,11 +44,16 @@ func displayStatistics(draws []Draw) error {
 	fmt.Printf("%s: %s\n", utl.Blu("Latest Drawing"), utl.Gre(latest.Format("2006-01-02")))
 
 	// Find biggest and smallest recorded prizes
-	var biggestPayout int64
 	var smallestPayout int64 = 999999999999
-	var biggestDraw, smallestDraw *Draw
+	var smallestDraw *Draw
 	winnersCount := 0
 	var winnerDates []time.Time
+
+	type winnerEntry struct {
+		draw   *Draw
+		payout int64
+	}
+	var allWinners []winnerEntry
 
 	firstNumFreq := make(map[int]int)
 	pos2Freq := make(map[int]int)
@@ -73,10 +78,7 @@ func displayStatistics(draws []Draw) error {
 		if payout > 0 {
 			winnersCount++
 			winnerDates = append(winnerDates, time.UnixMilli(d.DrawTime))
-			if payout > biggestPayout {
-				biggestPayout = payout
-				biggestDraw = d
-			}
+			allWinners = append(allWinners, winnerEntry{draw: d, payout: payout})
 			if payout < smallestPayout {
 				smallestPayout = payout
 				smallestDraw = d
@@ -211,13 +213,29 @@ func displayStatistics(draws []Draw) error {
 		}
 	}
 
-	if biggestDraw != nil {
-		nums, _ := extractPrimaryFive(biggestDraw)
-		drawDate := time.UnixMilli(biggestDraw.DrawTime).Format("2006-01-02")
-		numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d", nums[0], nums[1], nums[2], nums[3], nums[4])
-		fmt.Printf("\n%s: %s\n", utl.Blu("Biggest Prize"), utl.Gre(formatCurrency(biggestPayout/100)))
-		fmt.Printf("  %s: %s\n", utl.Blu("Date"), utl.Gre(drawDate))
-		fmt.Printf("  %s: %s\n", utl.Blu("Numbers"), utl.Gre(numStr))
+	if len(allWinners) > 0 {
+		sort.Slice(allWinners, func(i, j int) bool {
+			return allWinners[i].payout > allWinners[j].payout
+		})
+		topN := 10
+		if len(allWinners) < topN {
+			topN = len(allWinners)
+		}
+		fmt.Printf("\n%s:\n", utl.Blu("Biggest Prizes"))
+		fmt.Printf("  %s  %s  %s\n",
+			utl.Blu(fmt.Sprintf("%-14s", "Numbers")),
+			utl.Blu(fmt.Sprintf("%-10s", "Date")),
+			utl.Blu("Prize"))
+		for i := 0; i < topN; i++ {
+			w := allWinners[i]
+			nums, _ := extractPrimaryFive(w.draw)
+			drawDate := time.UnixMilli(w.draw.DrawTime).Format("2006-01-02")
+			numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d", nums[0], nums[1], nums[2], nums[3], nums[4])
+			fmt.Printf("  %s  %s  %s\n",
+				utl.Gre(numStr),
+				utl.Gre(drawDate),
+				utl.Gre(formatCurrency(w.payout/100)))
+		}
 	}
 
 	if smallestDraw != nil && smallestPayout < 999999999999 {
