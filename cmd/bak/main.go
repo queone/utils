@@ -9,13 +9,13 @@ import (
 )
 
 const (
-	program_name    = "bak"
-	program_version = "2.0.0"
+	programName    = "bak"
+	programVersion = "2.0.0"
 )
 
 func init() {
-	_ = program_name
-	_ = program_version
+	_ = programName
+	_ = programVersion
 }
 
 func usage() {

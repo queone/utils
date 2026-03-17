@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	program_name    = "cash5"
-	program_version = "0.9.3"
+	programName     = "cash5"
+	programVersion  = "0.9.3"
 	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit 😀"
 )
 
@@ -347,8 +347,8 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 }
 
 func printUsage() {
-	n := utl.Whi2(program_name)
-	v := program_version
+	n := utl.Whi2(programName)
+	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"NJ Cash 5 daily numbers recommender\n"+
 		"\n"+
@@ -414,7 +414,7 @@ func runCLI() {
 	var debugDate string
 
 	root := &cobra.Command{
-		Use:   program_name,
+		Use:   programName,
 		Short: "NJ Cash 5 daily numbers recommender",
 		Run: func(cmd *cobra.Command, args []string) {
 			if showVersion {

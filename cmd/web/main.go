@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	program_name    = "web"
-	program_version = "1.0.0"
+	programName    = "web"
+	programVersion = "1.0.0"
 )
 
 type Options struct {
@@ -31,8 +31,8 @@ type Options struct {
 }
 
 func printUsage() {
-	n := utl.Whi2(program_name)
-	v := program_version
+	n := utl.Whi2(programName)
+	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"DuckDuckGo search utility with fuzzy finder\n"+
 		"\n"+
@@ -59,7 +59,7 @@ func parseArgs(args []string) (*Options, error) {
 	var opts Options
 
 	p, err := arg.NewParser(arg.Config{
-		Program:   program_name,
+		Program:   programName,
 		IgnoreEnv: false,
 	}, &opts)
 	if err != nil {
@@ -72,7 +72,7 @@ func parseArgs(args []string) (*Options, error) {
 			printUsage()
 			return &opts, nil
 		case errors.Is(err, arg.ErrVersion):
-			fmt.Fprintf(os.Stdout, "%s v%s\n", program_name, program_version)
+			fmt.Fprintf(os.Stdout, "%s v%s\n", programName, programVersion)
 			os.Exit(0)
 		default:
 			return &opts, err

@@ -15,13 +15,13 @@ import (
 
 const (
 	// Global constants
-	program_name    = "days"
-	program_version = "1.0.7"
+	programName    = "days"
+	programVersion = "1.0.7"
 )
 
 func printUsage() {
-	n := utl.Whi2(program_name)
-	v := program_version
+	n := utl.Whi2(programName)
+	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Calendar days calculator — https://github.com/queone/utils/blob/main/cmd/days/README.md\n"+
 		"%s\n"+

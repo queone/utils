@@ -16,15 +16,15 @@ import (
 )
 
 const (
-	program_name    = "pgen"
-	program_version = "1.2.3"
-	delimiter       = "_" // Use underscore for diceware password
+	programName    = "pgen"
+	programVersion = "1.2.3"
+	delimiter      = "_" // Use underscore for diceware password
 )
 
 // Print usage information
 func printUsage() {
-	n := utl.Whi2(program_name)
-	v := program_version
+	n := utl.Whi2(programName)
+	v := programVersion
 	usageHeader := fmt.Sprintf("%s v%s\n"+
 		"Memorable password generator - https://github.com/queone/utils/blob/main/cmd/pgen/README.md\n"+
 		"%s\n"+

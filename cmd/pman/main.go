@@ -11,21 +11,21 @@ import (
 )
 
 const (
-	program_name    = "pman"
-	program_version = "2.0.0"
+	programName    = "pman"
+	programVersion = "2.0.0"
 )
 
 func printUsage() {
-	fmt.Printf("%s Azure REST API Caller v%s\n", program_name, program_version)
+	fmt.Printf("%s Azure REST API Caller v%s\n", programName, programVersion)
 	fmt.Println("  This utility relies on the 'azm' command-line utility being installed,")
 	fmt.Println("  authenticated, and properly configured to obtain Azure access tokens.")
 	fmt.Println("  It uses azm to retrieve Microsoft Graph or Azure Resource Manager tokens")
 	fmt.Println("  based on the target endpoint.")
 	fmt.Println()
 	fmt.Println("  Usage Examples:")
-	fmt.Printf("    %s GET \"https://graph.microsoft.com/v1.0/me\"\n", program_name)
-	fmt.Printf("    %s GET \"https://management.azure.com/subscriptions?api-version=2022-04-01\"\n", program_name)
-	fmt.Printf("    %s GET \"https://graph.microsoft.com/v1.0/applications/<id>\"\n", program_name)
+	fmt.Printf("    %s GET \"https://graph.microsoft.com/v1.0/me\"\n", programName)
+	fmt.Printf("    %s GET \"https://management.azure.com/subscriptions?api-version=2022-04-01\"\n", programName)
+	fmt.Printf("    %s GET \"https://graph.microsoft.com/v1.0/applications/<id>\"\n", programName)
 	os.Exit(1)
 }
 

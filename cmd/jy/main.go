@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	program_name    = "jy"
-	program_version = "1.4.6"
+	programName    = "jy"
+	programVersion = "1.4.6"
 )
 
 func printUsage() {
-	n := utl.Whi2(program_name)
-	v := program_version
+	n := utl.Whi2(programName)
+	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"JSON / YAML converter - https://github.com/queone/utils/blob/main/cmd/jy/README.md\n"+
 		"%s\n"+

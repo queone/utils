@@ -14,13 +14,13 @@ import (
 )
 
 const (
-	program_name    = "fr"
-	program_version = "1.0.2"
+	programName    = "fr"
+	programVersion = "1.0.2"
 )
 
 func init() {
-	_ = program_name
-	_ = program_version
+	_ = programName
+	_ = programVersion
 }
 
 // ---------------------------------------------------------------------

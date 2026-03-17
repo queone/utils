@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	blue            = "\033[34m"
-	reset           = "\033[0m"
-	program_name    = "pman"
-	program_version = "2.0.0"
+	blue           = "\033[34m"
+	reset          = "\033[0m"
+	programName    = "pman"
+	programVersion = "2.0.0"
 )
 
 func usage() {

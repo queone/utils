@@ -20,13 +20,13 @@ const (
 )
 
 const (
-	program_name    = "git-pullall"
-	program_version = "2.0.0"
+	programName    = "git-pullall"
+	programVersion = "2.0.0"
 )
 
 func init() {
-	_ = program_name
-	_ = program_version
+	_ = programName
+	_ = programVersion
 }
 
 // isGitRepo checks if a directory is a git repository

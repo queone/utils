@@ -19,13 +19,13 @@ const (
 )
 
 const (
-	program_name    = "git-cloneall"
-	program_version = "2.0.0"
+	programName    = "git-cloneall"
+	programVersion = "2.0.0"
 )
 
 func init() {
-	_ = program_name
-	_ = program_version
+	_ = programName
+	_ = programVersion
 }
 
 // Repo represents a GitHub repository
@@ -85,11 +85,11 @@ func directoryExists(path string) bool {
 
 // printUsage displays usage information
 func printUsage() {
-	fmt.Printf("Usage: %s <org/username>\n", program_name)
+	fmt.Printf("Usage: %s <org/username>\n", programName)
 	fmt.Printf("\nClone all repositories from a GitHub organization or user.\n")
 	fmt.Printf("\nExample:\n")
-	fmt.Printf("  %s myorg\n", program_name)
-	fmt.Printf("  %s someuser\n", program_name)
+	fmt.Printf("  %s myorg\n", programName)
+	fmt.Printf("  %s someuser\n", programName)
 }
 
 func main() {

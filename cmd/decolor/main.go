@@ -13,13 +13,13 @@ import (
 )
 
 const (
-	program_name    = "decolor"
-	program_version = "1.1.1"
+	programName    = "decolor"
+	programVersion = "1.1.1"
 )
 
 func printUsage() {
-	n := utl.Whi2(program_name)
-	v := program_version
+	n := utl.Whi2(programName)
+	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Text decolorizer - https://github.com/queone/utils/blob/main/cmd/decolor/README.md\n"+
 		"%s\n"+

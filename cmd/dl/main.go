@@ -19,13 +19,13 @@ const (
 )
 
 const (
-	program_name    = "dl"
-	program_version = "2.0.0"
+	programName    = "dl"
+	programVersion = "2.0.0"
 )
 
 func init() {
-	_ = program_name
-	_ = program_version
+	_ = programName
+	_ = programVersion
 }
 
 // checkYtDlpInstalled checks if yt-dlp is installed and accessible
@@ -65,7 +65,7 @@ func upgradeYtDlp() error {
 
 // showVersion displays version information for dl and yt-dlp
 func showVersion() error {
-	fmt.Printf("%s %s\n", program_name, program_version)
+	fmt.Printf("%s %s\n", programName, programVersion)
 
 	ytdlpVersion, err := getYtDlpVersion()
 	if err != nil {
@@ -108,14 +108,14 @@ func downloadVideo(filename, url string) error {
 
 // printUsage displays usage information
 func printUsage() {
-	fmt.Printf("Usage: %s [OPTIONS] FILENAME \"URL\"\n\n", program_name)
+	fmt.Printf("Usage: %s [OPTIONS] FILENAME \"URL\"\n\n", programName)
 	fmt.Println("Options:")
 	fmt.Println("  -u    Upgrade yt-dlp to nightly version")
 	fmt.Println("  -v    Show version information")
 	fmt.Println("\nExamples:")
-	fmt.Printf("  %s myvideo \"https://youtube.com/watch?v=...\"\n", program_name)
-	fmt.Printf("  %s -u\n", program_name)
-	fmt.Printf("  %s -v\n", program_name)
+	fmt.Printf("  %s myvideo \"https://youtube.com/watch?v=...\"\n", programName)
+	fmt.Printf("  %s -u\n", programName)
+	fmt.Printf("  %s -v\n", programName)
 }
 
 func main() {

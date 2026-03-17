@@ -27,25 +27,25 @@ import (
 )
 
 const (
-	program_name    = "sms"
-	program_version = "1.2.0"
+	programName    = "sms"
+	programVersion = "1.2.0"
 )
 
 // Global variables
 var (
-	cfgfile = "" // func processConfigFile sets it to $HOME/.${ program_name} + "rc"
+	cfgfile = "" // func processConfigFile sets it to $HOME/.${ programName} + "rc"
 	svckey  = "textbelt"
 	svcurl  = "https://textbelt.com/text"
 )
 
 // Print usage information
 func printUsage() {
-	fmt.Printf("SMS CLI utility %s\n", program_version)
-	fmt.Printf("%s <CellPhoneNum> <Message>\n", program_name)
-	fmt.Printf("%s -y Create skeleton ~/.%src file\n", program_name, program_name)
+	fmt.Printf("SMS CLI utility %s\n", programVersion)
+	fmt.Printf("%s <CellPhoneNum> <Message>\n", programName)
+	fmt.Printf("%s -y Create skeleton ~/.%src file\n", programName, programName)
 	fmt.Println("Visit https://textbelt.com for more info.")
-	// n := utl.Whi2(program_name)
-	// v := program_version
+	// n := utl.Whi2(programName)
+	// v := programVersion
 	// usageHeader := fmt.Sprintf("%s v%s\n"+
 	// 	"Memorable password generator - https://github.com/queone/utils/blob/main/cmd/pgen/README.md\n"+
 	// 	"%s\n"+
@@ -64,9 +64,9 @@ func printUsage() {
 // Set up global variables as per values in configuration file
 func processConfigFile() {
 	// Read config file
-	cfgfile = filepath.Join(os.Getenv("HOME"), "."+program_name+"rc")
+	cfgfile = filepath.Join(os.Getenv("HOME"), "."+programName+"rc")
 	if _, err := os.Stat(cfgfile); os.IsNotExist(err) {
-		fmt.Printf("Error. Missing '%s' file. Run '%s -y' to create a new one.\n", cfgfile, program_name)
+		fmt.Printf("Error. Missing '%s' file. Run '%s -y' to create a new one.\n", cfgfile, programName)
 		os.Exit(1)
 	}
 
@@ -88,7 +88,7 @@ func processConfigFile() {
 
 // Create a skeleton configuration file with default hard-coded values
 func createSkeletonConfigFile() {
-	cfgfile := filepath.Join(os.Getenv("HOME"), "."+program_name+"rc")
+	cfgfile := filepath.Join(os.Getenv("HOME"), "."+programName+"rc")
 
 	// Check if file already exists
 	if _, err := os.Stat(cfgfile); err == nil {

@@ -10,18 +10,18 @@ import (
 )
 
 const (
-	program_name    = "rn"
-	program_version = "1.5.0"
+	programName    = "rn"
+	programVersion = "1.5.0"
 )
 
 func init() {
-	_ = program_name
-	_ = program_version
+	_ = programName
+	_ = programVersion
 }
 
 func printUsage() {
-	n := utl.Whi2(program_name)
-	v := program_version
+	n := utl.Whi2(programName)
+	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Bulk file re-namer — https://github.com/queone/utils/blob/main/cmd/rn/README.md\n"+
 		"\n"+

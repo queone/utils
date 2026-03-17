@@ -19,13 +19,13 @@ const (
 )
 
 const (
-	program_name    = "brew-update"
-	program_version = "1.3.5"
+	programName    = "brew-update"
+	programVersion = "1.3.5"
 )
 
 func init() {
-	_ = program_name
-	_ = program_version
+	_ = programName
+	_ = programVersion
 }
 
 // runCommand executes a command and streams its output
@@ -74,7 +74,7 @@ func upgradeCasks() error {
 }
 
 func main() {
-	fmt.Printf("%s %s\n\n", program_name, program_version)
+	fmt.Printf("%s %s\n\n", programName, programVersion)
 
 	// Step 1: brew update
 	if err := runCommand("brew update", Green); err != nil {

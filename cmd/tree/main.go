@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	program_name    = "tree"
-	program_version = "1.0.3"
+	programName    = "tree"
+	programVersion = "1.0.3"
 )
 
 func printUsage() {
-	n := utl.Whi2(program_name)
-	v := program_version
+	n := utl.Whi2(programName)
+	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Directory tree printer — https://github.com/queone/utils/blob/main/cmd/tree/README.md\n"+
 		"%s\n"+

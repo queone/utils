@@ -15,13 +15,13 @@ import (
 )
 
 const (
-	program_name    = "gencert"
-	program_version = "2.0.0"
+	programName    = "gencert"
+	programVersion = "2.0.0"
 )
 
 func init() {
-	_ = program_name
-	_ = program_version
+	_ = programName
+	_ = programVersion
 }
 
 func usage() {
