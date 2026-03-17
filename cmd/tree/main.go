@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/queone/utl"
+	"utils/internal/color"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 )
 
 func printUsage() {
-	n := utl.Whi2(programName)
+	n := color.Whi2(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Directory tree printer — https://github.com/queone/utils/blob/main/cmd/tree/README.md\n"+
@@ -35,7 +35,7 @@ func printUsage() {
 		"  %s -f /path/to/directory\n"+
 		"  %s /path/to/directory -f\n"+
 		"  %s -h\n",
-		n, v, utl.Whi2("Usage"), n, utl.Whi2("Options"), utl.Whi2("Examples"), n, n, n, n)
+		n, v, color.Whi2("Usage"), n, color.Whi2("Options"), color.Whi2("Examples"), n, n, n, n)
 	fmt.Print(usage)
 	os.Exit(0)
 }
@@ -110,9 +110,9 @@ func printTree(dir string, showFullPath bool) {
 		if e.isLast {
 			mark = "└── "
 		}
-		coloredName := utl.Gre(e.name)
+		coloredName := color.Grn(e.name)
 		if e.isDir {
-			coloredName = utl.Blu(e.name)
+			coloredName = color.Blu(e.name)
 		}
 
 		line := e.prefix + mark + coloredName
@@ -122,7 +122,7 @@ func printTree(dir string, showFullPath bool) {
 			fmt.Println(line)
 		} else {
 			if showFullPath {
-				fmt.Printf("%s%s%s\n", line, strings.Repeat(" ", spacing), utl.Cya(e.fullPath))
+				fmt.Printf("%s%s%s\n", line, strings.Repeat(" ", spacing), color.Cya(e.fullPath))
 			} else {
 				fmt.Println(line)
 			}

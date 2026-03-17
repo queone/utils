@@ -11,8 +11,8 @@ import (
 	"github.com/alexflint/go-arg"
 	fzf "github.com/koki-develop/go-fzf"
 	"github.com/mattn/go-runewidth"
-	"github.com/queone/utl"
 	"github.com/skratchdot/open-golang/open"
+	"utils/internal/color"
 )
 
 const (
@@ -31,7 +31,7 @@ type Options struct {
 }
 
 func printUsage() {
-	n := utl.Whi2(programName)
+	n := color.Whi2(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"DuckDuckGo search utility with fuzzy finder\n"+
@@ -51,7 +51,7 @@ func printUsage() {
 		"  %s golang\n"+
 		"  %s -j golang\n"+
 		"  %s -t 10 -b firefox golang\n",
-		n, v, utl.Whi2("Usage"), n, utl.Whi2("Options"), utl.Whi2("Examples"), n, n, n)
+		n, v, color.Whi2("Usage"), n, color.Whi2("Options"), color.Whi2("Examples"), n, n, n)
 	fmt.Print(usage)
 }
 

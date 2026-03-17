@@ -9,7 +9,7 @@ import (
 
 	"github.com/gookit/color"
 	"github.com/mattn/go-isatty"
-	"github.com/queone/utl"
+	icolor "utils/internal/color"
 )
 
 const (
@@ -18,7 +18,7 @@ const (
 )
 
 func printUsage() {
-	n := utl.Whi2(programName)
+	n := icolor.Whi2(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Text decolorizer - https://github.com/queone/utils/blob/main/cmd/decolor/README.md\n"+
@@ -36,7 +36,7 @@ func printUsage() {
 		"  cat file | %s\n"+
 		"  %s /path/to/file\n"+
 		"  %s -h\n",
-		n, v, utl.Whi2("Usage"), n, utl.Whi2("Options"), utl.Whi2("Examples"), n, n, n)
+		n, v, icolor.Whi2("Usage"), n, icolor.Whi2("Options"), icolor.Whi2("Examples"), n, n, n)
 	fmt.Print(usage)
 	os.Exit(0)
 }

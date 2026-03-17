@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/queone/utl"
 	"github.com/sethvargo/go-diceware/diceware"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"utils/internal/color"
 )
 
 const (
@@ -23,7 +23,7 @@ const (
 
 // Print usage information
 func printUsage() {
-	n := utl.Whi2(programName)
+	n := color.Whi2(programName)
 	v := programVersion
 	usageHeader := fmt.Sprintf("%s v%s\n"+
 		"Memorable password generator - https://github.com/queone/utils/blob/main/cmd/pgen/README.md\n"+
@@ -35,7 +35,7 @@ func printUsage() {
 		"                     For example, if NUMBER is '6' it generates a 6-word phrase\n"+
 		"                     Minimum is 1, maximum is 9\n"+
 		"  -?, -h, --help     Print this usage page\n",
-		n, v, utl.Whi2("Usage"), n, utl.Whi2("Options"))
+		n, v, color.Whi2("Usage"), n, color.Whi2("Options"))
 	fmt.Print(usageHeader)
 	os.Exit(0)
 }

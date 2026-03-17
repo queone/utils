@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/queone/utl"
+	"utils/internal/color"
 )
 
 const (
@@ -20,7 +21,7 @@ const (
 )
 
 func printUsage() {
-	n := utl.Whi2(programName)
+	n := color.Whi2(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Calendar days calculator — https://github.com/queone/utils/blob/main/cmd/days/README.md\n"+
@@ -44,7 +45,7 @@ func printUsage() {
 		"    GetDateInDays(string)             Parses a “±N” expression and returns the resulting time.Time.\n"+
 		"    GetDaysBetween(string, string)    Computes the signed difference between two dates.\n"+
 		"    PrintDays(int)                    Prints the integer day count in a human-readable form.\n",
-		n, v, utl.Whi2("Overview"))
+		n, v, color.Whi2("Overview"))
 	fmt.Print(usage)
 	os.Exit(0)
 }

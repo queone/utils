@@ -47,6 +47,9 @@ func Yel(v any) string { return wrap("33", v) }
 // Blu renders v in bright blue.
 func Blu(v any) string { return wrap("94", v) }
 
+// Cya renders v in cyan.
+func Cya(v any) string { return wrap("36", v) }
+
 // Red renders v in bright red.
 func Red(v any) string { return wrap("91", v) }
 

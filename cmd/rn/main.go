@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/queone/utl"
+	icolor "utils/internal/color"
 )
 
 const (
@@ -20,7 +20,7 @@ func init() {
 }
 
 func printUsage() {
-	n := utl.Whi2(programName)
+	n := icolor.Whi2(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Bulk file re-namer — https://github.com/queone/utils/blob/main/cmd/rn/README.md\n"+
@@ -41,9 +41,9 @@ func printUsage() {
 		"  %s \"temp\" \"final\" -f     Replace one substring with another.\n"+
 		"  %s -h                   Display this help message.\n",
 		n, v,
-		utl.Whi2("Usage"), n,
-		utl.Whi2("Options"),
-		utl.Whi2("Examples"),
+		icolor.Whi2("Usage"), n,
+		icolor.Whi2("Options"),
+		icolor.Whi2("Examples"),
 		n, n, n, n)
 	fmt.Print(usage)
 	os.Exit(0)

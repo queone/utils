@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/bitfield/script"
-	"github.com/queone/utl"
+	"utils/internal/color"
 )
 
 const (
@@ -61,7 +61,7 @@ func highlightLine(line, pattern string) string {
 		return line // invalid regex
 	}
 	return re.ReplaceAllStringFunc(line, func(m string) string {
-		return utl.Red(m)
+		return color.Red(m)
 	})
 }
 
@@ -133,7 +133,7 @@ func main() {
 			if err := os.Rename(tmp, path); err != nil {
 				return err
 			}
-			fmt.Printf("%s: %d occurrence(s) replaced\n", utl.Yel(path), occ)
+			fmt.Printf("%s: %d occurrence(s) replaced\n", color.Yel(path), occ)
 		} else if singleMode || (!replaceMode && !singleMode) {
 			// ---------------- show-only or single-arg search ----------------
 			scanner := bufio.NewScanner(strings.NewReader(string(orig)))
@@ -143,7 +143,7 @@ func main() {
 				line := scanner.Text()
 				if countMatches([]byte(line), from) > 0 {
 					hl := highlightLine(line, from)
-					fmt.Printf("%s:%d: %s\n", utl.Yel(path), lineNum, hl)
+					fmt.Printf("%s:%d: %s\n", color.Yel(path), lineNum, hl)
 				}
 			}
 		}

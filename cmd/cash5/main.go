@@ -842,13 +842,6 @@ func buildGridLines(transpose bool, highlight map[int]bool) []string {
 	return lines
 }
 
-// displayGeometricGrid prints a single grid to stdout.
-func displayGeometricGrid(transpose bool) {
-	for _, line := range buildGridLines(transpose, nil) {
-		fmt.Println(line)
-	}
-}
-
 // displayGeometricGridSideBySide prints the 9-col and 5-col grids side by side,
 // with winning numbers highlighted in green. indent is the left margin prefix.
 func displayGeometricGridSideBySide(winners []int, indent string) {
