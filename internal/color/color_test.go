@@ -16,9 +16,11 @@ func TestColorFunctionsContainInput(t *testing.T) {
 	}{
 		{"Gra", Gra},
 		{"Grn", Grn},
+		{"GrnR", GrnR},
 		{"Yel", Yel},
-		{"Red", Red},
 		{"Blu", Blu},
+		{"Cya", Cya},
+		{"Red", Red},
 		{"Whi", Whi},
 		{"Whi2", Whi2},
 	}
@@ -45,9 +47,11 @@ func TestColorFunctionsNoTTY(t *testing.T) {
 	}{
 		{"Gra", Gra},
 		{"Grn", Grn},
+		{"GrnR", GrnR},
 		{"Yel", Yel},
-		{"Red", Red},
 		{"Blu", Blu},
+		{"Cya", Cya},
+		{"Red", Red},
 		{"Whi", Whi},
 		{"Whi2", Whi2},
 	}
