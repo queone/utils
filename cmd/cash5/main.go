@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/queone/utl"
+	"utils/internal/color"
+
 	"github.com/spf13/cobra"
 )
 
 const (
 	programName     = "cash5"
-	programVersion  = "0.9.3"
+	programVersion  = "0.9.4"
 	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit 😀"
 )
 
@@ -33,7 +34,7 @@ func runDailyWithRand() error {
 	// Check connectivity once, up front. All fetch decisions key off this.
 	online := checkInternet()
 	if !online {
-		fmt.Printf("%s\n", utl.Red("Internet is unreachable — showing cached data"))
+		fmt.Printf("%s\n", color.Red("Internet is unreachable — showing cached data"))
 	}
 
 	// Auto-fetch if no data or data is too old (more than 7 days)
@@ -86,7 +87,7 @@ func runDailyWithRand() error {
 				fmt.Printf("Fetched recent draws. Total in database: %d\n\n", len(existing))
 			} else if is404Error(err) {
 				// Primary returned 404 — try backup sources transparently
-				fmt.Printf("%s\n", utl.Red(fmt.Sprintf("Primary source unavailable (%v) — trying backup...", err)))
+				fmt.Printf("%s\n", color.Red(fmt.Sprintf("Primary source unavailable (%v) — trying backup...", err)))
 				existing = tryBackupFetchers(existing, dateFrom, dateTo)
 			} else {
 				fmt.Printf("Warning: failed to fetch recent draws: %v\n", err)
@@ -141,24 +142,24 @@ func runDailyWithRand() error {
 	if online {
 		jackpot, err := fetchCurrentJackpot()
 		if err == nil && jackpot > 0 {
-			fmt.Printf("  %s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jackpot/100)))
+			fmt.Printf("  %s: %s\n", color.Blu("CURRENT JACKPOT"), color.Grn(formatCurrency(jackpot/100)))
 		} else if len(uniqueDraws) > 0 {
 			// Fall back to latest draw's estimated jackpot
 			jp := uniqueDraws[len(uniqueDraws)-1].EstimatedJackpot
 			if jp > 0 {
-				fmt.Printf("  %s: %s\n", utl.Blu("CURRENT JACKPOT"), utl.Gre(formatCurrency(jp/100)))
+				fmt.Printf("  %s: %s\n", color.Blu("CURRENT JACKPOT"), color.Grn(formatCurrency(jp/100)))
 			}
 		}
 	} else if len(uniqueDraws) > 0 {
 		jp := uniqueDraws[len(uniqueDraws)-1].EstimatedJackpot
 		if jp > 0 {
-			fmt.Printf("  %s: %s %s\n", utl.Blu("CURRENT JACKPOT"),
-				utl.Gre(formatCurrency(jp/100)), utl.Gra("(cached)"))
+			fmt.Printf("  %s: %s %s\n", color.Blu("CURRENT JACKPOT"),
+				color.Grn(formatCurrency(jp/100)), color.Gra("(cached)"))
 		}
 	}
 
 	// LWN repeat check
-	fmt.Printf("  %s: %s", utl.Blu("LAST WINNING NUMBERS"), utl.Gre(lwnKey))
+	fmt.Printf("  %s: %s", color.Blu("LAST WINNING NUMBERS"), color.Grn(lwnKey))
 	lwnDates := comboHistory[lwnKey]
 	if len(lwnDates) > 1 {
 		// Filter out the last draw date itself to find prior occurrences
@@ -169,14 +170,18 @@ func runDailyWithRand() error {
 			}
 		}
 		if len(priorDates) > 0 {
-			fmt.Printf("  %s", utl.Blu("REPEATED: "+strings.Join(priorDates, ", ")))
+			fmt.Printf("  %s", color.Blu("REPEATED: "+strings.Join(priorDates, ", ")))
 		} else {
-			fmt.Printf("  %s", utl.Gra("Never repeated"))
+			fmt.Printf("  %s", color.Gra("Never repeated"))
 		}
 	} else {
-		fmt.Printf("  %s", utl.Gra("Never repeated"))
+		fmt.Printf("  %s", color.Gra("Never repeated"))
 	}
 	fmt.Println()
+
+	// Winning geometries — side-by-side grids with winners highlighted
+	fmt.Printf("  %s:\n", color.Blu("WINNING GEOMETRIES"))
+	displayGeometricGridSideBySide(lwn, "  ")
 
 	// Closest matches to LWN (3+ matching numbers)
 	type closeMatch struct {
@@ -211,31 +216,31 @@ func runDailyWithRand() error {
 		return closeMatches[i].drawTime > closeMatches[j].drawTime
 	})
 
-	fmt.Printf("  %s:\n", utl.Blu("CLOSEST 5 PREVIOUS WINNING MATCHES"))
+	fmt.Printf("  %s:\n", color.Blu("CLOSEST 5 PREVIOUS WINNING MATCHES"))
 	if len(closeMatches) == 0 {
-		fmt.Printf("  %s\n", utl.Gra("No previous draws with 3+ matching numbers"))
+		fmt.Printf("  %s\n", color.Gra("No previous draws with 3+ matching numbers"))
 	} else {
 		limit := min(len(closeMatches), 5)
 		for _, cm := range closeMatches[:limit] {
 			numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 				cm.nums[0], cm.nums[1], cm.nums[2], cm.nums[3], cm.nums[4])
 			fmt.Printf("    %s  %s  %s\n",
-				utl.Gre(numStr), utl.Gre(cm.date),
-				utl.Gra(fmt.Sprintf("(%d/5 match)", cm.matches)))
+				color.Grn(numStr), color.Grn(cm.date),
+				color.Gra(fmt.Sprintf("(%d/5 match)", cm.matches)))
 		}
 	}
 
 	// Generate intelligent recommendations
 	recommendations := generateRecommendations(uniqueDraws)
 
-	fmt.Printf("  %s:\n", utl.Blu("RECOMMENDATION"))
+	fmt.Printf("  %s:\n", color.Blu("RECOMMENDATION"))
 	for _, rec := range recommendations {
 		numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 			rec.numbers[0], rec.numbers[1], rec.numbers[2], rec.numbers[3], rec.numbers[4])
-		fmt.Printf("    %s  %s\n", utl.Gre(numStr), utl.Gra(rec.strategy))
+		fmt.Printf("    %s  %s\n", color.Grn(numStr), color.Gra(rec.strategy))
 	}
 
-	fmt.Printf("\n  %s\n", utl.Red(lottery_warning))
+	fmt.Printf("\n  %s\n", color.Red(lottery_warning))
 
 	return nil
 }
@@ -347,7 +352,7 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 }
 
 func printUsage() {
-	n := utl.Whi2(programName)
+	n := color.Whi2(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"NJ Cash 5 daily numbers recommender\n"+
@@ -359,6 +364,7 @@ func printUsage() {
 		"  -f             Fetch new draws since last run (within last year)\n"+
 		"  -a             Display all previous drawings\n"+
 		"  -s             Show statistics about historical data\n"+
+		"  -g             Display geometric number grids\n"+
 		"  -m             Show closest-match analysis for all drawings\n"+
 		"  -o [N]         Show odds table for 1 to N combos played (default: 30)\n"+
 		"  -d DATE        Show raw JSON for draws on DATE (format: 2026-02-06)\n"+
@@ -376,10 +382,10 @@ func printUsage() {
 		"  %s -s\n"+
 		"  %s -o 100\n"+
 		"  %s -o\n",
-		n, v, utl.Whi2("Usage"), n, utl.Whi2("Options"),
-		utl.Whi2("Running without switches will"), utl.Whi2("Examples"),
+		n, v, color.Whi2("Usage"), n, color.Whi2("Options"),
+		color.Whi2("Running without switches will"), color.Whi2("Examples"),
 		n, n, n, n, n)
-	usage += "\n" + utl.Red(lottery_warning) + "\n"
+	usage += "\n" + color.Red(lottery_warning) + "\n"
 	fmt.Print(usage)
 }
 
@@ -388,6 +394,14 @@ func runCLI() {
 	for _, arg := range os.Args[1:] {
 		if arg == "-?" || arg == "-h" || arg == "--help" {
 			printUsage()
+			return
+		}
+	}
+
+	// Handle -g before cobra
+	for _, arg := range os.Args[1:] {
+		if arg == "-g" {
+			displayGeometricGridSideBySide(nil, "  ")
 			return
 		}
 	}
@@ -781,6 +795,122 @@ func formatProbability(pct float64) string {
 	return fmt.Sprintf("%.6f%%", pct)
 }
 
+// buildGridLines returns the lines of an ASCII-bordered grid of all 45 numbers.
+// transpose=false → 5 rows × 9 cols; transpose=true → 9 rows × 5 cols.
+// Numbers in the highlight set are rendered in green.
+func buildGridLines(transpose bool, highlight map[int]bool) []string {
+	var rows, cols int
+	if transpose {
+		rows, cols = 9, 5
+	} else {
+		rows, cols = 5, 9
+	}
+
+	cell := "────"
+	border := func(left, mid, right string) string {
+		parts := make([]string, cols)
+		for i := range parts {
+			parts[i] = cell
+		}
+		return left + strings.Join(parts, mid) + right
+	}
+
+	var lines []string
+	lines = append(lines, border("┌", "┬", "┐"))
+	for r := range rows {
+		row := ""
+		for c := range cols {
+			var n int
+			if transpose {
+				n = c*9 + r + 1
+			} else {
+				n = r*cols + c + 1
+			}
+			cell := fmt.Sprintf("%02d", n)
+			if highlight[n] {
+				cell = color.GrnR(cell)
+			}
+			row += fmt.Sprintf("│ %s ", cell)
+		}
+		row += "│"
+		lines = append(lines, row)
+		if r < rows-1 {
+			lines = append(lines, border("├", "┼", "┤"))
+		}
+	}
+	lines = append(lines, border("└", "┴", "┘"))
+	return lines
+}
+
+// displayGeometricGrid prints a single grid to stdout.
+func displayGeometricGrid(transpose bool) {
+	for _, line := range buildGridLines(transpose, nil) {
+		fmt.Println(line)
+	}
+}
+
+// displayGeometricGridSideBySide prints the 9-col and 5-col grids side by side,
+// with winning numbers highlighted in green. indent is the left margin prefix.
+func displayGeometricGridSideBySide(winners []int, indent string) {
+	highlight := make(map[int]bool)
+	for _, n := range winners {
+		highlight[n] = true
+	}
+
+	left := buildGridLines(false, highlight) // 5×9
+	right := buildGridLines(true, highlight) // 9×5
+
+	// The left grid (5 rows of data, 9 cols) has 11 lines (5 data + 6 borders).
+	// The right grid (9 rows of data, 5 cols) has 19 lines.
+	// Pad the shorter one so they align at the top.
+	maxLines := len(left)
+	if len(right) > maxLines {
+		maxLines = len(right)
+	}
+	for len(left) < maxLines {
+		left = append(left, "")
+	}
+	for len(right) < maxLines {
+		right = append(right, "")
+	}
+
+	// Left grid visible width: 9 cells × 4 chars + 10 borders = 46
+	// But ANSI codes make len() unreliable, so use a fixed pad width.
+	leftWidth := 9*4 + 10 // "│ XX │ XX │ ... │" = 46 chars visible
+
+	for i := range maxLines {
+		l := left[i]
+		r := right[i]
+		// Pad left line to fixed visible width
+		visLen := visibleLen(l)
+		pad := ""
+		if visLen < leftWidth {
+			pad = strings.Repeat(" ", leftWidth-visLen)
+		}
+		fmt.Printf("%s%s%s   %s\n", indent, l, pad, r)
+	}
+}
+
+// visibleLen returns the visible length of a string, ignoring ANSI escape codes.
+func visibleLen(s string) int {
+	n := 0
+	inEsc := false
+	for _, r := range s {
+		if r == '\033' {
+			inEsc = true
+			continue
+		}
+		if inEsc {
+			if r == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+		n++
+	}
+	return n
+}
+
 // is404Error reports whether an error originated from an HTTP 404 response.
 func is404Error(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "404")
@@ -829,7 +959,7 @@ func tryBackupFetchers(existing []Draw, dateFrom, dateTo time.Time) []Draw {
 		return existing
 	}
 
-	fmt.Printf("%s\n", utl.Red("All backup sources failed — showing cached data"))
+	fmt.Printf("%s\n", color.Red("All backup sources failed — showing cached data"))
 	return existing
 }
 
