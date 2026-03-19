@@ -820,12 +820,7 @@ func buildGridLines(transpose bool, highlight map[int]bool) []string {
 	for r := range rows {
 		row := ""
 		for c := range cols {
-			var n int
-			if transpose {
-				n = c*9 + r + 1
-			} else {
-				n = r*cols + c + 1
-			}
+			n := r*cols + c + 1
 			cell := fmt.Sprintf("%02d", n)
 			if highlight[n] {
 				cell = color.GrnR(cell)
