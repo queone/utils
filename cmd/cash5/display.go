@@ -307,9 +307,74 @@ func buildGridLines(transpose bool, highlight map[int]bool) []string {
 	return lines
 }
 
-// displayGeometricGridSideBySide prints the 9-col and 5-col grids side by side,
-// with winning numbers highlighted in green. indent is the left margin prefix.
+// buildHexGridLines returns lines for a bordered shield-shaped grid.
+// 5-cell rows (top/bottom) are centered within the 7-cell-wide body using a
+// 5-char indent; shared divider positions at columns 5,10,15,20,25,30 use ┼
+// in the transition rows to connect the two widths cleanly:
+//
+//	     ┌────┬────┬────┬────┬────┐
+//	     │ 01 │ 02 │ 03 │ 04 │ 05 │
+//	┌────┼────┼────┼────┼────┼────┼────┐
+//	│ 06 │ 07 │ 08 │ 09 │ 10 │ 11 │ 12 │
+//	...
+//	│ 34 │ 35 │ 36 │ 37 │ 38 │ 39 │ 40 │
+//	└────┼────┼────┼────┼────┼────┼────┘
+//	     │ 41 │ 42 │ 43 │ 44 │ 45 │
+//	     └────┴────┴────┴────┴────┘
+func buildHexGridLines(highlight map[int]bool) []string {
+	seg := "────"
+
+	top5 := "     ┌" + seg + "┬" + seg + "┬" + seg + "┬" + seg + "┬" + seg + "┐"
+	bot5 := "     └" + seg + "┴" + seg + "┴" + seg + "┴" + seg + "┴" + seg + "┘"
+	// transition rows: outer corners wrap the 7-wide body, ┼ at shared divider positions
+	trans7open := "┌" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┐"
+	trans7close := "└" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┘"
+	mid7 := "├" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┼" + seg + "┤"
+
+	row := func(nums []int, indent string) string {
+		var sb strings.Builder
+		sb.WriteString(indent)
+		for _, n := range nums {
+			num := fmt.Sprintf("%02d", n)
+			if highlight[n] {
+				num = color.GrnR(num)
+			}
+			sb.WriteString("│ ")
+			sb.WriteString(num)
+			sb.WriteString(" ")
+		}
+		sb.WriteString("│")
+		return sb.String()
+	}
+
+	return []string{
+		top5,
+		row([]int{1, 2, 3, 4, 5}, "     "),
+		trans7open,
+		row([]int{6, 7, 8, 9, 10, 11, 12}, ""),
+		mid7,
+		row([]int{13, 14, 15, 16, 17, 18, 19}, ""),
+		mid7,
+		row([]int{20, 21, 22, 23, 24, 25, 26}, ""),
+		mid7,
+		row([]int{27, 28, 29, 30, 31, 32, 33}, ""),
+		mid7,
+		row([]int{34, 35, 36, 37, 38, 39, 40}, ""),
+		trans7close,
+		row([]int{41, 42, 43, 44, 45}, "     "),
+		bot5,
+	}
+}
+
+// displayGeometricGridSideBySide renders all four geometry grids.
+// In iTerm2 it emits a single composite inline image; otherwise it falls back
+// to the ASCII side-by-side layout.
 func displayGeometricGridSideBySide(winners []int, indent string) {
+	if isITerm2() {
+		displayGeometriesImage(winners, indent)
+		return
+	}
+
 	highlight := make(map[int]bool)
 	for _, n := range winners {
 		highlight[n] = true
@@ -317,13 +382,15 @@ func displayGeometricGridSideBySide(winners []int, indent string) {
 
 	left := buildGridLines(false, highlight) // 5x9
 	right := buildGridLines(true, highlight) // 9x5
+	hex := buildHexGridLines(highlight)
 
-	// The left grid (5 rows of data, 9 cols) has 11 lines (5 data + 6 borders).
-	// The right grid (9 rows of data, 5 cols) has 19 lines.
-	// Pad the shorter one so they align at the top.
+	// Pad all columns to the same height.
 	maxLines := len(left)
 	if len(right) > maxLines {
 		maxLines = len(right)
+	}
+	if len(hex) > maxLines {
+		maxLines = len(hex)
 	}
 	for len(left) < maxLines {
 		left = append(left, "")
@@ -331,21 +398,27 @@ func displayGeometricGridSideBySide(winners []int, indent string) {
 	for len(right) < maxLines {
 		right = append(right, "")
 	}
+	for len(hex) < maxLines {
+		hex = append(hex, "")
+	}
 
-	// Left grid visible width: 9 cells x 4 chars + 10 borders = 46
-	// But ANSI codes make len() unreliable, so use a fixed pad width.
-	leftWidth := 9*4 + 10 // "│ XX │ XX │ ... │" = 46 chars visible
+	// Fixed visible widths (ANSI codes make len() unreliable).
+	leftWidth := 9*4 + 10 // 46: "│ XX │ ... │" across 9 cols
+	rightWidth := 5*4 + 6 // 26: "│ XX │ ... │" across 5 cols
 
 	for i := range maxLines {
-		l := left[i]
-		r := right[i]
-		// Pad left line to fixed visible width
-		visLen := visibleLen(l)
-		pad := ""
-		if visLen < leftWidth {
-			pad = strings.Repeat(" ", leftWidth-visLen)
+		l, r, h := left[i], right[i], hex[i]
+
+		lPad := ""
+		if v := visibleLen(l); v < leftWidth {
+			lPad = strings.Repeat(" ", leftWidth-v)
 		}
-		fmt.Printf("%s%s%s   %s\n", indent, l, pad, r)
+		rPad := ""
+		if v := visibleLen(r); v < rightWidth {
+			rPad = strings.Repeat(" ", rightWidth-v)
+		}
+
+		fmt.Printf("%s%s%s   %s%s   %s\n", indent, l, lPad, r, rPad, h)
 	}
 }
 
