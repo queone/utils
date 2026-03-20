@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -16,18 +15,13 @@ const (
 	programVersion = "2.0.0"
 )
 
-func init() {
-	_ = programName
-	_ = programVersion
-}
-
 func usage() {
 	fmt.Println("Print SSL certificate details for given FQDN:Port.")
 	fmt.Println()
-	fmt.Printf("Usage: %s FQDN[:PORT]\n", filepath.Base(os.Args[0]))
+	fmt.Printf("Usage: %s FQDN[:PORT]\n", programName)
 	fmt.Println("  Examples:")
-	fmt.Printf("    %s microsoft.com     Uses 443 by default\n", filepath.Base(os.Args[0]))
-	fmt.Printf("    %s mysite.com:1473   Uses port 1473\n", filepath.Base(os.Args[0]))
+	fmt.Printf("    %s microsoft.com     Uses 443 by default\n", programName)
+	fmt.Printf("    %s mysite.com:1473   Uses port 1473\n", programName)
 	os.Exit(1)
 }
 
@@ -49,6 +43,11 @@ func parseTarget(arg string) (string, string) {
 }
 
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		fmt.Printf("%s v%s\n", programName, programVersion)
+		return
+	}
+
 	if len(os.Args) != 2 {
 		usage()
 	}

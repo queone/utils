@@ -23,11 +23,6 @@ const (
 	programVersion = "2.0.0"
 )
 
-func init() {
-	_ = programName
-	_ = programVersion
-}
-
 // checkYtDlpInstalled checks if yt-dlp is installed and accessible
 func checkYtDlpInstalled() error {
 	_, err := exec.LookPath("yt-dlp")
@@ -65,7 +60,7 @@ func upgradeYtDlp() error {
 
 // showVersion displays version information for dl and yt-dlp
 func showVersion() error {
-	fmt.Printf("%s %s\n", programName, programVersion)
+	fmt.Printf("%s v%s\n", programName, programVersion)
 
 	ytdlpVersion, err := getYtDlpVersion()
 	if err != nil {

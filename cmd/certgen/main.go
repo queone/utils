@@ -15,21 +15,21 @@ import (
 )
 
 const (
-	programName    = "gencert"
+	programName    = "certgen"
 	programVersion = "2.0.0"
 )
 
-func init() {
-	_ = programName
-	_ = programVersion
-}
-
 func usage() {
-	fmt.Printf("Usage: %s <common-name>\n", os.Args[0])
+	fmt.Printf("Usage: %s <common-name>\n", programName)
 	os.Exit(1)
 }
 
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		fmt.Printf("%s v%s\n", programName, programVersion)
+		return
+	}
+
 	if len(os.Args) != 2 {
 		usage()
 	}

@@ -30,6 +30,14 @@ var defaultClientOption = &ClientOption{
 	Timeout:   5 * time.Second,
 }
 
+var buildSearchURL = func(param *SearchParam) (*url.URL, error) {
+	return param.buildURL()
+}
+
+var buildHTTPClient = func(opt *ClientOption) *http.Client {
+	return &http.Client{Timeout: opt.Timeout}
+}
+
 func NewClientOption(referrer, userAgent string, timeout time.Duration) *ClientOption {
 	if referrer == "" {
 		referrer = defaultClientOption.Referrer
@@ -79,7 +87,7 @@ func (param *SearchParam) buildURL() (*url.URL, error) {
 }
 
 func buildRequest(param *SearchParam, opt *ClientOption) (*http.Request, error) {
-	u, err := param.buildURL()
+	u, err := buildSearchURL(param)
 	if err != nil {
 		return nil, err
 	}
@@ -174,9 +182,7 @@ func extractLink(href string) string {
 }
 
 func SearchWithOption(param *SearchParam, opt *ClientOption) (*[]SearchResult, error) {
-	c := &http.Client{
-		Timeout: opt.Timeout,
-	}
+	c := buildHTTPClient(opt)
 	req, err := buildRequest(param, opt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)

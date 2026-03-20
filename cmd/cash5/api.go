@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"utils/internal/color"
+
 	"golang.org/x/net/html"
 )
 
@@ -484,4 +486,56 @@ func saveDrawsCallback(draws []Draw) error {
 	enc := json.NewEncoder(file)
 	enc.SetIndent("", "  ")
 	return enc.Encode(draws)
+}
+
+// is404Error reports whether an error originated from an HTTP 404 response.
+func is404Error(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "404")
+}
+
+// tryBackupFetchers attempts each backup source in order, merges any draws found
+// into existing, saves, and returns the result. Prints status for each attempt.
+func tryBackupFetchers(existing []Draw, dateFrom, dateTo time.Time) []Draw {
+	for _, fetcher := range backupFetchers {
+		fmt.Printf("  Trying %s...\n", fetcher.Name())
+		draws, err := fetcher.FetchRecent(dateFrom, dateTo)
+		if err != nil {
+			fmt.Printf("  %s failed: %v\n", fetcher.Name(), err)
+			continue
+		}
+		if len(draws) == 0 {
+			fmt.Printf("  %s: no new draws found\n", fetcher.Name())
+			continue
+		}
+
+		// Merge: add draws not already in existing (match by date, since IDs differ
+		// between primary and backup sources)
+		existingDates := make(map[string]bool)
+		for _, d := range existing {
+			existingDates[time.UnixMilli(d.DrawTime).Format("2006-01-02")] = true
+		}
+		added := 0
+		for _, d := range draws {
+			dateKey := time.UnixMilli(d.DrawTime).Format("2006-01-02")
+			if !existingDates[dateKey] {
+				existing = append(existing, d)
+				added++
+			}
+		}
+
+		sort.Slice(existing, func(i, j int) bool { return existing[i].DrawTime < existing[j].DrawTime })
+
+		if added > 0 {
+			fmt.Printf("  %s: added %d draw(s) via backup\n", fetcher.Name(), added)
+			if err := saveDrawsCallback(existing); err != nil {
+				fmt.Printf("  Warning: failed to save after backup fetch: %v\n", err)
+			}
+		} else {
+			fmt.Printf("  %s: draws already in cache\n", fetcher.Name())
+		}
+		return existing
+	}
+
+	fmt.Printf("%s\n", color.Red("All backup sources failed — showing cached data"))
+	return existing
 }

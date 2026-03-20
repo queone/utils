@@ -28,6 +28,7 @@ func printUsage() {
 		"\n"+
 		"%s\n"+
 		"  -f                Show full file paths. Can be placed before or after the dir path.\n"+
+		"  -v, --version     Print version and exit\n"+
 		"  -?, --help, -h    Show this help message and exit\n"+
 		"\n"+
 		"%s\n"+
@@ -143,6 +144,9 @@ func main() {
 		for _, arg := range args {
 			if arg == "-?" || arg == "--help" || arg == "-h" {
 				printUsage()
+			} else if arg == "-v" || arg == "--version" {
+				fmt.Printf("%s v%s\n", programName, programVersion)
+				return
 			} else if arg == "-f" {
 				showFullPath = true
 			} else {

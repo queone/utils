@@ -36,6 +36,7 @@ func printUsage() {
 		"%s\n"+
 		"  -c                     Colorize the output for the specified file.\n"+
 		"  -d                     Decolorize the output for piped input or file.\n"+
+		"  -v, --version          Print version and exit.\n"+
 		"  -?, --help, -h         Show this help message and exit.\n"+
 		"\n"+
 		"%s\n"+
@@ -162,6 +163,9 @@ func main() {
 				decolorize = true // Set the decolorize flag
 			case "-c":
 				colorize = true // Set the colorize flag
+			case "-v", "--version":
+				fmt.Printf("%s v%s\n", programName, programVersion)
+				return
 			case "-?", "--help", "-h":
 				printUsage()
 				return

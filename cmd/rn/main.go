@@ -14,11 +14,6 @@ const (
 	programVersion = "1.5.0"
 )
 
-func init() {
-	_ = programName
-	_ = programVersion
-}
-
 func printUsage() {
 	n := icolor.Whi2(programName)
 	v := programVersion
@@ -33,24 +28,35 @@ func printUsage() {
 		"\n"+
 		"%s\n"+
 		"  -f                     Perform actual renaming (required to make changes).\n"+
+		"  -v, --version          Print version and exit.\n"+
 		"  -?, --help, -h         Show this help message and exit.\n"+
 		"\n"+
 		"%s\n"+
 		"  %s \"_draft\" \"\"           Show files that would be renamed (dry run).\n"+
 		"  %s \"_draft\" \"\" -f       Actually rename files.\n"+
 		"  %s \"temp\" \"final\" -f     Replace one substring with another.\n"+
+		"  %s -v                   Print version.\n"+
 		"  %s -h                   Display this help message.\n",
 		n, v,
 		icolor.Whi2("Usage"), n,
 		icolor.Whi2("Options"),
 		icolor.Whi2("Examples"),
-		n, n, n, n)
+		n, n, n, n, n)
 	fmt.Print(usage)
 	os.Exit(0)
 }
 
 func main() {
 	args := os.Args[1:]
+	if len(args) == 1 {
+		switch args[0] {
+		case "-v", "--version":
+			fmt.Printf("%s v%s\n", programName, programVersion)
+			return
+		case "-?", "--help", "-h":
+			printUsage()
+		}
+	}
 	if len(args) < 1 || len(args) > 3 {
 		printUsage()
 	}

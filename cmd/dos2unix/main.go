@@ -10,16 +10,22 @@ import (
 const (
 	blue           = "\033[34m"
 	reset          = "\033[0m"
-	programName    = "pman"
+	programName    = "dos2unix"
 	programVersion = "2.0.0"
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: %s FILE [-f]\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "usage: %s FILE [-f]\n", programName)
+	fmt.Fprintf(os.Stderr, "       %s -v | --version\n", programName)
 	os.Exit(1)
 }
 
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		fmt.Printf("%s v%s\n", programName, programVersion)
+		return
+	}
+
 	if len(os.Args) < 2 || len(os.Args) > 3 {
 		usage()
 	}

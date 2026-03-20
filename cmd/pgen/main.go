@@ -34,6 +34,7 @@ func printUsage() {
 		"  NUMBER             Generates a NUMBER-word memorable password phrase\n"+
 		"                     For example, if NUMBER is '6' it generates a 6-word phrase\n"+
 		"                     Minimum is 1, maximum is 9\n"+
+		"  -v, --version      Print version and exit\n"+
 		"  -?, -h, --help     Print this usage page\n",
 		n, v, color.Whi2("Usage"), n, color.Whi2("Options"))
 	fmt.Print(usageHeader)
@@ -116,6 +117,9 @@ func main() {
 	if args == 1 {
 		arg1 := os.Args[1]
 		switch arg1 {
+		case "-v", "--version":
+			fmt.Printf("%s v%s\n", programName, programVersion)
+			return
 		case "-?", "-h", "--help":
 			printUsage()
 		default:

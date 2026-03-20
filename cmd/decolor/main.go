@@ -30,6 +30,7 @@ func printUsage() {
 		"%s\n"+
 		"  |piped input|       Piped text is decolorized\n"+
 		"  FILENAME            Decolorize given file path\n"+
+		"  -v, --version       Print version and exit\n"+
 		"  -?, --help, -h      Show this help message and exit\n"+
 		"\n"+
 		"%s\n"+
@@ -78,6 +79,9 @@ func loadAndDecolorize(filename string) {
 func main() {
 	if len(os.Args) == 2 {
 		switch os.Args[1] {
+		case "-v", "--version":
+			fmt.Printf("%s v%s\n", programName, programVersion)
+			return
 		case "-?", "-h", "--help":
 			printUsage()
 		default:

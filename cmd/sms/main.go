@@ -42,6 +42,7 @@ var (
 func printUsage() {
 	fmt.Printf("SMS CLI utility %s\n", programVersion)
 	fmt.Printf("%s <CellPhoneNum> <Message>\n", programName)
+	fmt.Printf("%s -v | --version\n", programName)
 	fmt.Printf("%s -y Create skeleton ~/.%src file\n", programName, programName)
 	fmt.Println("Visit https://textbelt.com for more info.")
 	// n := utl.Whi2(programName)
@@ -126,8 +127,20 @@ func main() {
 	if argCount < 1 || argCount > 2 {
 		printUsage()
 	}
-	if os.Args[1] == "-y" {
-		createSkeletonConfigFile()
+
+	if argCount == 1 {
+		switch os.Args[1] {
+		case "-v", "--version":
+			fmt.Printf("%s v%s\n", programName, programVersion)
+			return
+		case "-?", "-h", "--help":
+			printUsage()
+		case "-y":
+			createSkeletonConfigFile()
+			return
+		default:
+			printUsage()
+		}
 	}
 
 	processConfigFile()

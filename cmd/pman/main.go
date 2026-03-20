@@ -66,6 +66,11 @@ func getToken(url string) string {
 }
 
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		fmt.Printf("%s v%s\n", programName, programVersion)
+		return
+	}
+
 	checkBinary("azm")
 
 	if len(os.Args) < 3 {

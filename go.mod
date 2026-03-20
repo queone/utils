@@ -5,7 +5,6 @@ go 1.26.0
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/alexflint/go-arg v1.6.1
-	github.com/bitfield/script v0.24.1
 	github.com/fatih/color v1.10.0
 	github.com/goccy/go-yaml v1.11.0
 	github.com/gookit/color v1.5.2
@@ -33,8 +32,6 @@ require (
 	github.com/containerd/console v1.0.4-0.20230313162750-1ae8d489ac81 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/itchyny/gojq v0.12.13 // indirect
-	github.com/itchyny/timefmt-go v0.1.5 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
@@ -50,5 +47,4 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	mvdan.cc/sh/v3 v3.7.0 // indirect
 )

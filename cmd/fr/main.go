@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	"github.com/bitfield/script"
 	"utils/internal/color"
 )
 
@@ -18,21 +18,17 @@ const (
 	programVersion = "1.0.2"
 )
 
-func init() {
-	_ = programName
-	_ = programVersion
-}
-
 // ---------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------
 
 func isTextFile(path string) bool {
-	out, err := script.Exec(fmt.Sprintf(`file -b --mime-type "%s"`, path)).String()
+	cmd := exec.Command("file", "-b", "--mime-type", path)
+	out, err := cmd.Output()
 	if err != nil {
 		return false
 	}
-	mime := strings.TrimSpace(out)
+	mime := strings.TrimSpace(string(out))
 	if mime == "application/xml" || mime == "application/json" {
 		return true
 	}
@@ -70,6 +66,11 @@ func highlightLine(line, pattern string) string {
 // ---------------------------------------------------------------------
 
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		fmt.Printf("%s v%s\n", programName, programVersion)
+		return
+	}
+
 	var from, to string
 	var replaceMode, singleMode bool
 
@@ -93,9 +94,9 @@ func main() {
 		replaceMode = true
 	default:
 		fmt.Fprintf(os.Stderr, "Usage:\n")
-		fmt.Fprintf(os.Stderr, "  %s <REGEX>                -> search-only mode\n", filepath.Base(os.Args[0]))
-		fmt.Fprintf(os.Stderr, "  %s <FROM> <TO>            -> show-only mode\n", filepath.Base(os.Args[0]))
-		fmt.Fprintf(os.Stderr, "  %s <FROM> <TO> -f         -> replace-and-write mode\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(os.Stderr, "  %s <REGEX>                -> search-only mode\n", programName)
+		fmt.Fprintf(os.Stderr, "  %s <FROM> <TO>            -> show-only mode\n", programName)
+		fmt.Fprintf(os.Stderr, "  %s <FROM> <TO> -f         -> replace-and-write mode\n", programName)
 		os.Exit(1)
 	}
 

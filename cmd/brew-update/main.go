@@ -23,11 +23,6 @@ const (
 	programVersion = "1.3.5"
 )
 
-func init() {
-	_ = programName
-	_ = programVersion
-}
-
 // runCommand executes a command and streams its output
 func runCommand(cmdStr string, color string) error {
 	fmt.Printf("==> %s%s%s\n", color, cmdStr, Reset)
@@ -74,6 +69,11 @@ func upgradeCasks() error {
 }
 
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		fmt.Printf("%s v%s\n", programName, programVersion)
+		return
+	}
+
 	fmt.Printf("%s %s\n\n", programName, programVersion)
 
 	// Step 1: brew update

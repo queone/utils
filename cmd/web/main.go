@@ -27,7 +27,7 @@ type Options struct {
 	Referrer   string   `arg:"-r, --referrer" help:"Referrer value" env:"DUCKGO_REFERRER"`
 	Browser    string   `arg:"-b, --browser" help:"the command of Web browser to open URL"`
 	Query      []string `arg:"positional" help:"keywords to search"`
-	Version    bool     `help:"show version"`
+	Version    bool     `arg:"-v, --version" help:"show version"`
 }
 
 func printUsage() {
@@ -73,7 +73,7 @@ func parseArgs(args []string) (*Options, error) {
 			return &opts, nil
 		case errors.Is(err, arg.ErrVersion):
 			fmt.Fprintf(os.Stdout, "%s v%s\n", programName, programVersion)
-			os.Exit(0)
+			return &opts, nil
 		default:
 			return &opts, err
 		}
@@ -158,6 +158,11 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+
+	if opts.Version {
+		fmt.Fprintf(os.Stdout, "%s v%s\n", programName, programVersion)
+		return
 	}
 
 	if err := run(opts); err != nil {

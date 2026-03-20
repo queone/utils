@@ -24,11 +24,6 @@ const (
 	programVersion = "2.0.0"
 )
 
-func init() {
-	_ = programName
-	_ = programVersion
-}
-
 // isGitRepo checks if a directory is a git repository
 func isGitRepo(dir string) bool {
 	gitDir := filepath.Join(dir, ".git")
@@ -109,6 +104,11 @@ func getDirectories() ([]string, error) {
 }
 
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		fmt.Printf("%s v%s\n", programName, programVersion)
+		return
+	}
+
 	// Get all directories in current directory
 	dirs, err := getDirectories()
 	if err != nil {
