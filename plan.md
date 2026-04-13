@@ -137,16 +137,6 @@ cmd/cash5/
 
 ---
 
-## 8. Installation method
-
-- Adopt skout repo's new build.go/rel.go for these utils
-- Use below as new installation method:
-- go install github.com/queone/utils/cmd/<utility>@latest
-- But note risks with go install distribution
-Tag integrity: v1.4.2 is tagged but later force-moved or rebuilt differently; users installing at different times get different binaries. Version gaps: a fix is merged but not tagged, so @latest lags and users unknowingly install a stale version. Breaking path change: cmd/tips renamed to cmd/tips2; existing install commands fail or silently install an unintended package. Major version bump: repo moves to v2 without /v2 module path; installs break or pull wrong code. Dependency drift: a tagged release references transient upstream versions (no go.sum hygiene), causing non-reproducible builds. Platform assumptions: a utility starts requiring CGO or OS-specific tooling; go install fails on some systems. Binary naming collisions: multiple tools install same name into $GOBIN.
-
----
-
 ## Recommended Execution Order
 
 1. **Security fix** in `fr`.
