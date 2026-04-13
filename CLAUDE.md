@@ -14,4 +14,5 @@
   - `./build.sh <name>` (e.g. `./build.sh cash5`) builds only that utility
   - `./build.sh -h` for build help, `./build.sh v0.0.0 -h` for release help
   - **Release** (`./build.sh vX.Y.Z "message"`) is a separate pipeline that only does git add/commit/tag/push — it does **not** re-run the build/test pipeline. Always run a successful `./build.sh` first before releasing.
+  - **Adding a new utility**: add its entry to the README.md utility list in alphabetical order.
 

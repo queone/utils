@@ -33,16 +33,10 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 With Go installed, install all utilities at once:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/queone/utils/main/install-utils.sh | bash
-```
-
-Or without the script:
-
-```bash
 go install github.com/queone/utils/cmd/...@latest
 ```
 
-To install a single utility:
+Or install a single utility:
 
 ```bash
 go install github.com/queone/utils/cmd/fr@latest
