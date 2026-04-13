@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"utils/internal/color"
+	"github.com/queone/utils/internal/color"
 )
 
 func printTimestamp() {

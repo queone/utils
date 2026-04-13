@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"utils/internal/color"
+	"github.com/queone/utils/internal/color"
 )
 
 const (

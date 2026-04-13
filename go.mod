@@ -1,4 +1,4 @@
-module utils
+module github.com/queone/utils
 
 go 1.26.0
 

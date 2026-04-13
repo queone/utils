@@ -11,9 +11,9 @@ import (
 	goyaml "github.com/goccy/go-yaml"
 	"github.com/gookit/color"
 	"github.com/mattn/go-isatty"
+	icolor "github.com/queone/utils/internal/color"
 	"github.com/queone/utl"
 	"gopkg.in/yaml.v3"
-	icolor "utils/internal/color"
 )
 
 const (

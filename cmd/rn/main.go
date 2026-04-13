@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	icolor "utils/internal/color"
+	icolor "github.com/queone/utils/internal/color"
 )
 
 const (

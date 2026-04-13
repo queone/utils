@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/queone/utils/internal/color"
 	"github.com/sethvargo/go-diceware/diceware"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	"utils/internal/color"
 )
 
 const (

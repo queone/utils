@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"utils/internal/color"
+	"github.com/queone/utils/internal/color"
 )
 
 func displayStatistics(draws []Draw) error {

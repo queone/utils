@@ -10,8 +10,8 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/queone/utils/internal/color"
 	"github.com/queone/utl"
-	"utils/internal/color"
 )
 
 const (

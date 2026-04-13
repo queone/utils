@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"utils/internal/color"
+	"github.com/queone/utils/internal/color"
 
 	"github.com/spf13/cobra"
 )

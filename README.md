@@ -4,6 +4,7 @@ A collection of small CLI utilities written in Go.
 - [`bak`](cmd/bak/README.md): Create dated backups of files or directories.
 - [`brew-update`](cmd/brew-update/README.md): Update, upgrade, and clean up Homebrew packages.
 - [`cash5`](cmd/cash5/README.md): Analyze historical Cash5 draws and generate number recommendations.
+- [`claude-env`](cmd/claude-env): Set up Claude Code environment portability via iCloud.
 - [`certgen`](cmd/certgen/README.md): Generate self-signed TLS certificates for local testing.
 - [`certls`](cmd/certls/README.md): Show SSL/TLS certificate details for a host and port.
 - [`days`](cmd/days/README.md): A CLI calendar days calculator.
@@ -25,8 +26,29 @@ A collection of small CLI utilities written in Go.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
 - [`web`](cmd/web/README.md): Search DuckDuckGo and open results with an interactive selector.
 
-## Why?
+## Why
 Go's tool chain is the ideal way to maintain a set of commonly used CLI utilities. They can be quickly compiled and installed whether you're in Windows, macOS, or Linux. This provides a unified and portable solution to many a scripting needs. With this setup, Go turns into a quasi-package manager for these utilities.
+
+## Quick Install
+With Go installed, install all utilities at once:
+
+```bash
+curl -sL https://raw.githubusercontent.com/queone/utils/main/install-utils.sh | bash
+```
+
+Or without the script:
+
+```bash
+go install github.com/queone/utils/cmd/...@latest
+```
+
+To install a single utility:
+
+```bash
+go install github.com/queone/utils/cmd/fr@latest
+```
+
+Binaries are placed in `$GOPATH/bin` (typically `~/go/bin`), which should be in your `$PATH`.
 
 ## Getting Started
 To compile the entire collection, you obviously need to have GoLang installed and properly setup in your system, with `$GOPATH` set up correctly (typically at `$HOME/go`). Also setup `$GOPATH/bin/` in your `$PATH`, since that is where all executable binaries will be placed.

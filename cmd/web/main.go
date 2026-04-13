@@ -11,8 +11,8 @@ import (
 	"github.com/alexflint/go-arg"
 	fzf "github.com/koki-develop/go-fzf"
 	"github.com/mattn/go-runewidth"
+	"github.com/queone/utils/internal/color"
 	"github.com/skratchdot/open-golang/open"
-	"utils/internal/color"
 )
 
 const (
