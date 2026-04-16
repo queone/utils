@@ -14,6 +14,9 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
+# Coverage
+build-cover-*.out
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
@@ -23,3 +26,18 @@ go.work.sum
 
 # env file
 .env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Governa working artifacts
+governa-sync-review.md
+.governa-proposed/
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
