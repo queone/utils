@@ -39,19 +39,18 @@ Do not begin this checklist until the user explicitly asks to prep for release o
 4. **Audit `arch.md` against the code.** Verify affected reference docs are current.
 5. **Update `CHANGELOG.md`.** The file is a `# Changelog` heading followed by a 2-column markdown table (`| Version | Summary |`). Move the current `Unreleased` summary into a new row for the release version directly below `Unreleased`, then restore an empty `Unreleased` row. Summaries are single-line, ≤ 500 characters, and should lead with the AC reference if any. Versions are unprefixed (`0.29.0`, not `v0.29.0`). Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
 
-   The canonical table format:
+    Canonical shape:
 
-   ```
-   # Changelog
+    ```
+    # Changelog
 
-   | Version | Summary |
-   |---------|---------|
-   | Unreleased | |
-   | 0.6.0 | AC1: adopt governa v0.29.0 governance baseline — AGENTS.md as canonical contract, ... |
-   | 0.5.0 | <prior release summary> |
-   ```
+    | Version | Summary |
+    |---------|---------|
+    | Unreleased | |
+    | 0.29.0 | AC47: <one-line summary> |
+    ```
 
-   Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions.
+    Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions.
 6. **Bump version constants.** Use the tag from step 1 as the baseline.
 7. **Remove completed features from `plan.md`.**
 8. **Consolidate finished AC decisions into durable docs, then delete the AC file.** Do not delete AC files that are PENDING, IN PROGRESS, or DEFERRED — they are still active contracts. Only completed (released) ACs are deleted.
@@ -66,7 +65,7 @@ This repo was generated from a governa governance template. To check for templat
 1. Run `governa sync` to generate a review document with per-file recommendations. This also updates `TEMPLATE_VERSION` to the current template version.
 2. Compare `TEMPLATE_VERSION` in this repo against the template's current version. `TEMPLATE_VERSION` reflects the last template version this repo was evaluated against, not the original bootstrap version.
 3. `.governa-manifest`, if present, records SHA-256 checksums of each file at bootstrap time. This enables comparison to distinguish your customizations from stale template content.
-4. **Produce a per-sync feedback artifact.** Every governa sync that draws an AC must also produce a separate file-based feedback artifact at `docs/ac<N>-<slug>-feedback.md` capturing genuine observations about the sync output (template defaults that fight the repo, drift contributors, methodology gaps, things that landed well). The artifact is out-of-band — not folded into the sync AC's body — so the feedback exists independently of the implementation work. The director routes its content upstream to the governa team. The artifact is deleted at release prep alongside the AC. This codifies step 7 of the sync's Evaluation Methodology so it cannot be silently skipped.
+4. **Produce a per-sync feedback artifact.** Every governa sync that produces an adoption AC must also produce a separate file at `docs/ac<N>-<slug>-feedback.md` capturing genuine observations about the sync output (template defaults that fight the repo, scoring gaps, methodology issues, things that landed well). The artifact is out-of-band — not folded into the sync AC's body — so the feedback exists independently of the adoption work. The director routes its content upstream to governa. The artifact is deleted at release prep alongside the AC. This codifies step 7 of the sync's Evaluation Methodology so it cannot be silently skipped.
 
 Template refresh is operator-driven. The governa tool proposes; the repo maintainer decides what to adopt.
 
@@ -75,9 +74,4 @@ Template refresh is operator-driven. The governa tool proposes; the repo maintai
 Durable record of explicit-keep decisions where this repo intentionally differs from the governa template. Each entry survives across AC deletions and gives future syncs a documented reason to leave the divergence in place.
 
 - `README.md` — kept project-specific. Template scaffolding sections (`Overview`, `Core Repo Files`, `Working Agreement`, `Workflow Summary`, `Replace Me`) intentionally not adopted; the existing utility list, Quick Install, and Getting Started content already serves the same purpose. Decision: AC1.
-- `plan.md` — kept current shape pending a separate AC for restructure. Adopting the template's `Product Direction / Current Platform / Priorities / Ideas To Explore / Deferred / Constraints` shape requires per-item evaluation of existing fix-plan entries. Decision: AC1; restructure tracked as a follow-up AC.
-- `.gitignore` — kept project-specific. Template's leaner baseline strips Go-language protections (binary patterns `*.exe~`, `*.dll`, `*.so`, `*.dylib`; build/test outputs `*.test`, `*.out`; workspace files `go.work`, `go.work.sum`; `.env`; the standard Go-ignore comment header) that this multi-binary Go repo legitimately needs. Existing entries are preserved. Decision: AC2.
-- `docs/build-release.md` — repo additions retained beyond template wording in two sections:
-  - **Pre-Release Checklist step 5:** template provides a single-paragraph CHANGELOG spec; this repo additionally includes a visual code-block example and an explicit bootstrap note (originally added in AC1, retained per QA recommendation in AC2 because the concrete visual example makes the required shape easier to verify against).
-  - **Template Upgrade section:** repo adds step 4 codifying the per-sync feedback artifact obligation (`docs/ac<N>-<slug>-feedback.md`). This codifies step 7 of the sync's Evaluation Methodology so it cannot be silently skipped between sync runs. Should be promoted into the template; until then, this repo carries it locally.
-  - Decision: AC2.
+- `docs/build-release.md` Pre-Release Checklist step 5 **bootstrap note** — repo addition below the canonical code block: *"Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions."* The template's step 5 has a canonical-shape code block (restored in v0.31.0) but no bootstrap guidance; this repo retains the note because the bootstrap case is the one place an operator is most likely to invent an alternative shape. Decision: AC3.

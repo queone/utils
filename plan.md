@@ -1,150 +1,38 @@
-# Fix Plan: utils Repo Improvements (Revised)
+# utils Plan
 
-This plan reflects current repository state and prioritizes risk reduction first.
+## Product Direction
 
-## 1. Security Fix: Shell Injection in `fr`
-**File:** `cmd/fr/main.go:31`
+A collection of small CLI utilities written in Go. Each utility is a single-purpose, composable tool — installable as a standalone binary via `go install`. The repo prioritizes correctness, stability, and low-friction install/use over feature breadth.
 
-**Problem:** `script.Exec(fmt.Sprintf(...))` builds a shell command string using a filename, enabling shell injection via crafted paths.
+## Current Platform
 
-**Fix:**
-- Replace shell invocation with `exec.Command("file", "-b", "--mime-type", path)`.
-- Keep MIME parsing behavior (`text/*`, plus XML/JSON allowances).
-- Remove dependency on `github.com/bitfield/script` in this command.
-- Define behavior if `file` is unavailable (e.g., safe fallback to `false` with clear error handling).
+- Go
+- Canonical build via `./build.sh` (dispatches to `go run ./cmd/build` and `go run ./cmd/rel`)
+- Multi-binary layout under `cmd/*`; shared helpers in `internal/*`
 
-**Acceptance criteria:**
-- No command string interpolation with path values.
-- `script.Exec` is no longer used in `cmd/fr`.
-- Existing behavior for normal text file detection remains unchanged.
+## Priorities
 
-**Priority:** Critical
+Active work items. Each bullet names the file(s), the one-line problem/fix, and a priority tag. Promote to a standalone AC when picked up; remove when shipped.
 
----
+- **Security: shell injection in `fr`** — `cmd/fr/main.go:31` builds a shell command via `script.Exec(fmt.Sprintf(...))` using a filename; fix by switching to `exec.Command("file", "-b", "--mime-type", path)`, preserving MIME parsing (`text/*` plus XML/JSON allowances) and defining safe fallback if `file` is unavailable. **Priority:** Critical.
+- **Bugfix: `dos2unix` wrong programName** — `cmd/dos2unix/main.go:13` sets `programName` to `"pman"` instead of `"dos2unix"`; correct the constant and verify usage/help output. **Priority:** Medium.
+- **Test coverage expansion** — only `cmd/web/search_test.go` exists under `cmd/*`; add `*_test.go` for `cmd/rn` (dry-run vs `-f` rename), `cmd/fr` (regex match counting, replace output, file update path), and `cmd/web` (replace live-network test with mocked HTTP transport; add parsing/error tests). Use table-driven tests and temp dirs. Must be deterministic — no live network. **Priority:** Medium.
+- **README placeholder cleanup** — `README.md` has lingering `<description>` placeholders and references to `cmd/*/README.md` files that do not exist; replace every placeholder with a one-line summary and ensure `cash5` is listed. Create per-utility READMEs only if scoped separately. **Priority:** Low.
+- **`init()` no-op suppressor cleanup** — multiple `cmd/*/main.go` files use `func init() { _ = programName; _ = programVersion }`. Audit per command: remove the no-op only where the constants are genuinely used, otherwise remove the unused constants or surface them in usage/version output. `./build.sh` must pass for every affected utility. **Priority:** Low.
+- **`cash5` refactor** — `cmd/cash5/main.go` is ~956 lines; split into `main.go` (CLI wiring), `fetch.go` (data acquisition), `display.go` (terminal output), `stats.go` (analysis), `model.go` (shared data structures). No behavior change in CLI flags or output semantics; `./build.sh cash5` must pass before broader rollout. **Priority:** Medium (high effort, moderate risk).
+- **CLI framework standardization policy** — existing CLIs mix manual parsing, `go-arg`, and `cobra`; do not rewrite stable commands for consistency alone. For new commands: manual parsing for tiny tools, `go-arg` for moderate complexity, `cobra` for multi-command UX. **Priority:** Low (policy/process).
 
-## 2. Test Coverage Expansion for `cmd/` Utilities
-**Current state:** only `cmd/web/search_test.go` exists in `cmd/*` tests.
+## Ideas To Explore
 
-**Targets:**
-- `cmd/rn/`: dry-run output vs `-f` rename behavior.
-- `cmd/fr/`: regex match counting, replace output, and file update path.
-- `cmd/web/`: replace live-network test with mocked HTTP transport and add parsing/error tests.
+Pre-rubric ideas captured for future discussion. Prefix each with `IE<N>:` (sequential N) for stable references. These are not commitments and have not passed the objective-fit rubric in `AGENTS.md`. Remove entries when promoted to an AC, completed, or no longer interesting; this section is pre-rubric staging, not a historical record.
 
-**Approach:**
-- Add `*_test.go` files under each command directory.
-- Use table-driven tests where practical.
-- Use temp directories/files for filesystem behavior.
-- Mock HTTP responses for `web`; avoid live network in default tests.
+- IE1: evaluate governa canonical `internal/buildtool` + `internal/reltool` updates since utils extracted — governa has grown ~100 impl lines and ~2x the test coverage since this repo forked to its DI-based version (utils: 478/308 impl/test lines; governa: 580/647). Decide whether to port governa's additions, back-port utils's DI abstractions upstream, or accept the fork.
 
-**Acceptance criteria:**
-- New tests pass via `./build.sh`.
-- `cmd/web` tests are deterministic and do not require internet access.
+## Deferred
 
-**Priority:** Medium
+| ID | Description | Reason |
+|----|-------------|--------|
 
----
+## Constraints
 
-## 3. README Placeholder Cleanup (Scope Corrected)
-**Primary file:** `README.md`
-
-**Problem:** Placeholder `<description>` entries remain in root README; several referenced `cmd/*/README.md` files do not currently exist.
-
-**Fix:**
-- Replace all `<description>` placeholders in `README.md` with concise one-line descriptions.
-- Include missing utility `cash5` in the completed descriptions list.
-- Validate links; create missing `cmd/*/README.md` files only if explicitly desired in a separate docs pass.
-
-**Acceptance criteria:**
-- No `<description>` tokens remain in `README.md`.
-- Every utility listed in root README has a meaningful one-line summary.
-
-**Priority:** Low
-
----
-
-## 4. Guarded Cleanup of `init()` No-op Usage Suppressors
-**Files:** multiple `cmd/*/main.go`
-
-**Problem:** Many commands use:
-```go
-func init() {
-    _ = programName
-    _ = programVersion
-}
-```
-Blind removal may introduce compile errors where constants are otherwise unused.
-
-**Fix:**
-- Audit each command individually.
-- Remove no-op `init()` only where `programName`/`programVersion` are genuinely used.
-- Where constants are unused, either remove unused constants or surface them in usage/version output.
-
-**Acceptance criteria:**
-- No no-op `init()` suppressors remain.
-- Build still succeeds for all utilities via `./build.sh`.
-
-**Priority:** Low
-
----
-
-## 5. Refactor `cash5` (High Effort)
-**File:** `cmd/cash5/main.go` (~956 lines)
-
-**Goal:** Improve maintainability by separating concerns while preserving CLI behavior.
-
-**Suggested split:**
-```
-cmd/cash5/
-  main.go          # CLI setup, flags, command wiring
-  fetch.go         # API/data acquisition
-  display.go       # formatting and terminal output
-  stats.go         # statistics and analysis
-  model.go         # shared data structures
-```
-
-**Acceptance criteria:**
-- No behavior change in CLI flags/output semantics.
-- `./build.sh cash5` passes before broader rollout.
-
-**Priority:** Medium (high effort, moderate risk)
-
----
-
-## 6. CLI Framework Standardization Policy
-**Current state:** mixed manual parsing, `go-arg`, and `cobra`.
-
-**Decision (pragmatic):**
-- Keep mixed tooling for existing stable commands.
-- For new commands, prefer:
-  - manual parsing for tiny single-purpose tools,
-  - `go-arg` for moderate complexity,
-  - `cobra` for multi-command/advanced UX.
-
-**Scope note:** do not rewrite existing CLIs solely for framework consistency unless tied to feature work.
-
-**Priority:** Low (policy/process)
-
----
-
-## 7. Additional Bugfix to Add
-**File:** `cmd/dos2unix/main.go:13`
-
-**Issue:** `programName` is set to `"pman"` instead of `"dos2unix"`.
-
-**Fix:** Correct constant value and verify usage/help output consistency.
-
-**Priority:** Medium
-
----
-
-## Recommended Execution Order
-
-1. **Security fix** in `fr`.
-2. **dos2unix programName bugfix** (small, clear correctness issue).
-3. **Test coverage** (`rn`, `fr`, `web`) with deterministic tests.
-4. **README placeholder cleanup** in root docs.
-5. **`init()` cleanup** with per-file audit and build validation.
-6. **`cash5` refactor** (optional, scoped effort).
-7. **CLI policy adoption** for future work (no mass rewrite).
-
-
+- project-specific anti-patterns and guardrails here
