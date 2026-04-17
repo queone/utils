@@ -26,8 +26,6 @@ Active work items. Each bullet names the file(s), the one-line problem/fix, and 
 
 Pre-rubric ideas captured for future discussion. Prefix each with `IE<N>:` (sequential N) for stable references. These are not commitments and have not passed the objective-fit rubric in `AGENTS.md`. Remove entries when promoted to an AC, completed, or no longer interesting; this section is pre-rubric staging, not a historical record.
 
-- IE1: evaluate governa canonical `internal/buildtool` + `internal/reltool` updates since utils extracted — governa has grown ~100 impl lines and ~2x the test coverage since this repo forked to its DI-based version (utils: 478/308 impl/test lines; governa: 580/647). Decide whether to port governa's additions, back-port utils's DI abstractions upstream, or accept the fork.
-
 ## Deferred
 
 | ID | Description | Reason |

@@ -1,5 +1,3 @@
-// Package buildtool implements the build/test pipeline for utils.
-// It is invoked via `go run ./cmd/build` (or the `./build.sh` wrapper).
 package buildtool
 
 import (
@@ -20,39 +18,10 @@ import (
 	"github.com/queone/utils/internal/color"
 )
 
-// Config holds parsed build arguments.
 type Config struct {
 	Verbose bool
 	Targets []string
 }
-
-// CmdRunner abstracts command execution so the pipeline can be tested with
-// fake commands.
-type CmdRunner interface {
-	// Streaming runs a command with stdout/stderr connected to the given writers.
-	Streaming(out, errOut io.Writer, name string, args ...string) error
-	// CapturedSoft runs a command and returns its combined output. On failure
-	// with empty output, returns the error string.
-	CapturedSoft(name string, args ...string) string
-	// CapturedCheck runs a command and returns (output, failed).
-	CapturedCheck(name string, args ...string) (string, bool)
-	// Captured runs a command and returns its combined output or an error.
-	Captured(name string, args ...string) (string, error)
-}
-
-// Pipeline holds the injectable dependencies for a build run.
-type Pipeline struct {
-	Cmd CmdRunner
-}
-
-// scriptOnlyCommands lists cmd/ entrypoints that are run via `go run` and
-// should not be installed as binaries.
-var scriptOnlyCommands = map[string]struct{}{
-	"build": {},
-	"rel":   {},
-}
-
-var versionPattern = regexp.MustCompile(`^v(\d+)\.(\d+)\.(\d+)$`)
 
 type semver struct {
 	major int
@@ -60,7 +29,17 @@ type semver struct {
 	patch int
 }
 
-// ParseArgs parses build command-line arguments.
+// build and rel are intentionally treated as go-run entrypoints
+// rather than installed binaries for now. That may change in the future.
+var scriptOnlyCommands = map[string]struct{}{
+	"build": {},
+	"rel":   {},
+}
+
+var versionPattern = regexp.MustCompile(`^v(\d+)\.(\d+)\.(\d+)$`)
+var programVersionInlineRe = regexp.MustCompile(`(?m)^\s*const\s+programVersion\s*(?:string\s*)?=\s*"([^"]*)"`)
+var programVersionBlockRe = regexp.MustCompile(`(?s)const\s*\(.*?programVersion\s*(?:string\s*)?=\s*"([^"]*)".*?\)`)
+
 func ParseArgs(args []string) (Config, bool, error) {
 	if len(args) == 1 && isHelpArg(args[0]) {
 		return Config{}, true, nil
@@ -82,7 +61,6 @@ func ParseArgs(args []string) (Config, bool, error) {
 	return cfg, false, nil
 }
 
-// Usage returns the help text for the build command.
 func Usage() string {
 	return color.FormatUsage("build [target ...] [-v|--verbose]", []color.UsageLine{
 		{Flag: "-v, --verbose", Desc: "run go test in verbose mode"},
@@ -90,67 +68,50 @@ func Usage() string {
 	}, "When targets are specified, validation (vet, fmt, test, staticcheck) runs\nonly against those cmd packages. To validate the full repo, run with no targets.")
 }
 
-// Run executes the full build pipeline using real command execution.
 func Run(cfg Config, out io.Writer, errOut io.Writer) error {
-	return (&Pipeline{Cmd: &execRunner{}}).Run(cfg, out, errOut)
-}
-
-// Run executes the full build pipeline using the pipeline's command runner.
-func (p *Pipeline) Run(cfg Config, out io.Writer, errOut io.Writer) error {
-	modulePath, err := p.Cmd.Captured("go", "list", "-m", "-f", "{{.Path}}")
+	modulePath, err := modulePath()
 	if err != nil {
 		return err
 	}
-	modulePath = strings.TrimSpace(modulePath)
-
-	gopathOut, err := p.Cmd.Captured("go", "env", "GOPATH")
+	binDir, err := goBinDir()
 	if err != nil {
 		return err
 	}
-	gopath := strings.TrimSpace(gopathOut)
-	if gopath == "" {
-		return errors.New("go env GOPATH returned an empty value")
-	}
-	binDir := filepath.Join(gopath, "bin")
 	ext := binaryExt()
 	scopes := packageScopes(cfg.Targets)
 
-	// go mod tidy
 	fmt.Fprintln(out, color.Yel("==> Update go.mod to reflect actual dependencies"))
-	if err := p.Cmd.Streaming(out, errOut, "go", "mod", "tidy"); err != nil {
+	if err := runStreaming(out, errOut, "go", "mod", "tidy"); err != nil {
 		return err
 	}
 
-	// go fmt — fail-hard if files were reformatted
 	fmt.Fprintln(out, "\n"+color.Yel("==> Format Go code according to standard rules"))
-	if fmtOutput := p.Cmd.CapturedSoft("go", append([]string{"fmt"}, scopes...)...); strings.TrimSpace(fmtOutput) == "" {
+	if output := runCapturedSoft("go", append([]string{"fmt"}, scopes...)...); strings.TrimSpace(output) == "" {
 		fmt.Fprintln(out, "    No formatting changes needed.")
 	} else {
-		writeIndented(out, fmtOutput)
+		writeIndented(out, output)
 		return fmt.Errorf("go fmt found files that need formatting")
 	}
 
-	// go fix — advisory only
+	// go fix is advisory — it reports rewrites but does not indicate errors that should block the build.
 	fmt.Fprintln(out, "\n"+color.Yel("==> Automatically fix code for API/language changes"))
-	if fixOutput := p.Cmd.CapturedSoft("go", append([]string{"fix"}, scopes...)...); strings.TrimSpace(fixOutput) == "" {
+	if output := runCapturedSoft("go", append([]string{"fix"}, scopes...)...); strings.TrimSpace(output) == "" {
 		fmt.Fprintln(out, "    No fixes applied.")
 	} else {
-		writeIndented(out, fixOutput)
+		writeIndented(out, output)
 	}
 
-	// go vet — fail-hard
 	fmt.Fprintln(out, "\n"+color.Yel("==> Check code for potential issues"))
-	if vetOutput, vetFailed := p.Cmd.CapturedCheck("go", append([]string{"vet"}, scopes...)...); vetFailed {
-		writeIndented(out, vetOutput)
+	if output, failed := runCapturedCheck("go", append([]string{"vet"}, scopes...)...); failed {
+		writeIndented(out, output)
 		return fmt.Errorf("go vet found issues")
-	} else if trimmed := strings.TrimSpace(vetOutput); trimmed != "" {
-		writeIndented(out, vetOutput)
+	} else if trimmed := strings.TrimSpace(output); trimmed != "" {
+		writeIndented(out, output)
 	} else {
 		fmt.Fprintln(out, "    No issues found by go vet.")
 	}
 
-	// go test with coverage
-	coverFile, err := os.CreateTemp("", "utils-cover-*.out")
+	coverFile, err := os.CreateTemp("", "build-cover-*.out")
 	if err != nil {
 		return fmt.Errorf("create coverage file: %w", err)
 	}
@@ -165,34 +126,29 @@ func (p *Pipeline) Run(cfg Config, out io.Writer, errOut io.Writer) error {
 	}
 	testArgs = append(testArgs, "-coverprofile="+coverPath)
 	testArgs = append(testArgs, scopes...)
-	if err := p.Cmd.Streaming(out, errOut, "go", testArgs...); err != nil {
+	if err := runStreaming(out, errOut, "go", testArgs...); err != nil {
 		return err
 	}
-	if err := p.printCoverageSummary(out, coverPath, modulePath); err != nil {
+	if err := printCoverageSummary(out, coverPath, modulePath); err != nil {
 		return err
 	}
 
-	// staticcheck — always install @latest, fail-hard
-	fmt.Fprintln(out, "\n"+color.Yel("==> Install static analysis tool for Go"))
-	if err := p.Cmd.Streaming(out, errOut, "go", "install", "honnef.co/go/tools/cmd/staticcheck@latest"); err != nil {
+	fmt.Fprintln(out, "\n"+color.Yel("==> Ensure staticcheck is available"))
+	staticcheckPath, err := ensureStaticcheck(out, errOut)
+	if err != nil {
 		return err
 	}
 
 	fmt.Fprintln(out, "\n"+color.Yel("==> Analyze Go code for potential issues"))
-	staticcheckPath, err := exec.LookPath("staticcheck")
-	if err != nil {
-		staticcheckPath = filepath.Join(binDir, "staticcheck"+binaryExt())
-	}
-	if scOutput, scFailed := p.Cmd.CapturedCheck(staticcheckPath, scopes...); scFailed {
-		writeIndented(out, scOutput)
+	if output, failed := runCapturedCheck(staticcheckPath, scopes...); failed {
+		writeIndented(out, output)
 		return fmt.Errorf("staticcheck found issues")
-	} else if trimmed := strings.TrimSpace(scOutput); trimmed != "" {
-		writeIndented(out, scOutput)
+	} else if trimmed := strings.TrimSpace(output); trimmed != "" {
+		writeIndented(out, output)
 	} else {
 		fmt.Fprintln(out, "    No issues found by staticcheck.")
 	}
 
-	// Build binaries
 	targets, err := buildTargets(cfg.Targets)
 	if err != nil {
 		return err
@@ -202,39 +158,163 @@ func (p *Pipeline) Run(cfg Config, out io.Writer, errOut io.Writer) error {
 	} else {
 		fmt.Fprintf(out, "\n%s %s\n", color.Yel("==> Building specific utilities:"), color.Grn(strings.Join(cfg.Targets, " ")))
 	}
-	builtCount := 0
+	if shouldSkipBinaryInstall(cfg.Targets) {
+		fmt.Fprintf(out, "    %s %s\n", color.Yel("Skipping binary install for"), color.Cya(joinScriptOnlyTargets(cfg.Targets)+"; run them with go run for now."))
+	}
+	if len(targets) > 0 {
+		fmt.Fprintln(out, "\n"+color.Yel("==> Validate programVersion declarations"))
+		if err := validateProgramVersions(targets, out); err != nil {
+			return err
+		}
+	}
+	installedGoverna := ""
 	for _, target := range targets {
-		version := extractProgramVersion(filepath.Join("cmd", target, "main.go"))
 		outputPath := filepath.Join(binDir, target+ext)
-		fmt.Fprintf(out, "\n%s %s\n", color.Yel("==> Building and installing"), color.Grn(target+" v"+version))
-		if err := p.Cmd.Streaming(out, errOut, "go", "build", "-o", outputPath, "-ldflags", "-s -w", "./cmd/"+target); err != nil {
+		fmt.Fprintf(out, "\n%s %s\n", color.Yel("==> Building and installing"), color.Grn(target))
+		if err := runStreaming(out, errOut, "go", "build", "-o", outputPath, "-ldflags", "-s -w", "./cmd/"+target); err != nil {
 			return err
 		}
 		fmt.Fprintf(out, "    installed: %s\n", color.Cya(outputPath))
-		builtCount++
-	}
-	if builtCount == 0 {
-		fmt.Fprintln(out, "\n"+color.Yel("Warning: No utilities were built."))
-		if len(cfg.Targets) > 0 {
-			fmt.Fprintln(out, "    Check that the specified utilities exist in ./cmd/")
+		if target == "governa" {
+			installedGoverna = outputPath
 		}
 	}
 
-	// Version hint
-	tagOutput, err := p.Cmd.Captured("git", "tag", "--list")
-	if err != nil {
-		return err
-	}
-	if nextTag, ok, err := NextPatchTagFromOutput(tagOutput); err != nil {
+	checkDrift(out, installedGoverna)
+
+	if nextTag, ok, err := nextPatchTag(); err != nil {
 		return err
 	} else if ok {
-		fmt.Fprintf(out, "\n%s\n\n    ./build.sh %s %s\n\n", color.Yel("==> To release, run:"), color.Grn(nextTag), color.Gra("\"<release message>\""))
+		fmt.Fprintf(out, "\n%s\n\n    ./build.sh %s %s\n", color.Yel("==> To release, run:"), color.Grn(nextTag), color.Gra("\"<release message>\""))
 	}
 	return nil
 }
 
-func (p *Pipeline) printCoverageSummary(out io.Writer, coverPath, modulePath string) error {
-	output, err := p.Cmd.Captured("go", "tool", "cover", "-func="+coverPath)
+func isHelpArg(arg string) bool {
+	return arg == "-h" || arg == "-?" || arg == "--help"
+}
+
+func packageScopes(targets []string) []string {
+	if len(targets) == 0 {
+		return []string{"./..."}
+	}
+	out := make([]string, 0, len(targets))
+	for _, target := range targets {
+		out = append(out, "./cmd/"+target)
+	}
+	return out
+}
+
+func buildTargets(targets []string) ([]string, error) {
+	if len(targets) > 0 {
+		return filterInstallTargets(targets), nil
+	}
+	entries, err := os.ReadDir("cmd")
+	if err != nil {
+		return nil, fmt.Errorf("read ./cmd: %w", err)
+	}
+	var out []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			out = append(out, entry.Name())
+		}
+	}
+	return filterInstallTargets(out), nil
+}
+
+func filterInstallTargets(targets []string) []string {
+	out := make([]string, 0, len(targets))
+	for _, target := range targets {
+		if _, skip := scriptOnlyCommands[target]; skip {
+			continue
+		}
+		out = append(out, target)
+	}
+	slices.Sort(out)
+	return out
+}
+
+func shouldSkipBinaryInstall(requested []string) bool {
+	if len(requested) == 0 {
+		return true
+	}
+	for _, target := range requested {
+		if _, skip := scriptOnlyCommands[target]; skip {
+			return true
+		}
+	}
+	return false
+}
+
+func joinScriptOnlyTargets(requested []string) string {
+	var names []string
+	if len(requested) == 0 {
+		for name := range scriptOnlyCommands {
+			names = append(names, "cmd/"+name)
+		}
+	} else {
+		for _, target := range requested {
+			if _, skip := scriptOnlyCommands[target]; skip {
+				names = append(names, "cmd/"+target)
+			}
+		}
+	}
+	slices.Sort(names)
+	return strings.Join(names, ", ")
+}
+
+func modulePath() (string, error) {
+	output, err := runCaptured("go", "list", "-m", "-f", "{{.Path}}")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(output), nil
+}
+
+func goBinDir() (string, error) {
+	output, err := runCaptured("go", "env", "GOPATH")
+	if err != nil {
+		return "", err
+	}
+	gopath := strings.TrimSpace(output)
+	if gopath == "" {
+		return "", errors.New("go env GOPATH returned an empty value")
+	}
+	return filepath.Join(gopath, "bin"), nil
+}
+
+func binaryExt() string {
+	if runtime.GOOS == "windows" {
+		return ".exe"
+	}
+	return ""
+}
+
+func ensureStaticcheck(out io.Writer, errOut io.Writer) (string, error) {
+	if path, err := exec.LookPath("staticcheck"); err == nil {
+		fmt.Fprintf(out, "    found: %s\n", color.Cya(path))
+		return path, nil
+	}
+	fmt.Fprintf(out, "    installing: %s\n", color.Grn("honnef.co/go/tools/cmd/staticcheck@latest"))
+	if err := runStreaming(out, errOut, "go", "install", "honnef.co/go/tools/cmd/staticcheck@latest"); err != nil {
+		return "", err
+	}
+	if path, err := exec.LookPath("staticcheck"); err == nil {
+		return path, nil
+	}
+	binDir, err := goBinDir()
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(binDir, "staticcheck"+binaryExt())
+	if _, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("staticcheck not found after installation: %w", err)
+	}
+	return path, nil
+}
+
+func printCoverageSummary(out io.Writer, coverPath, modulePath string) error {
+	output, err := runCaptured("go", "tool", "cover", "-func="+coverPath)
 	if err != nil {
 		return err
 	}
@@ -257,93 +337,27 @@ func (p *Pipeline) printCoverageSummary(out io.Writer, coverPath, modulePath str
 		return nil
 	}
 
-	domainPct, err := DomainCoverage(coverPath, modulePath+"/internal/")
+	domainPct, err := domainCoverage(coverPath, modulePath+"/internal/")
 	if err != nil {
 		return err
 	}
 	coverageText := fmt.Sprintf("domain coverage: %.1f%%", domainPct)
-	styledCoverage := CoverageColor(domainPct, coverageText)
+	styledCoverage := color.Red(coverageText)
+	switch {
+	case domainPct >= 75:
+		styledCoverage = color.Grn(coverageText)
+	case domainPct >= 50:
+		styledCoverage = color.Yel(coverageText)
+	}
 	fmt.Fprintf(out, "    %s  %s\n", styledCoverage, color.Gra("(total: "+total+")"))
 	return nil
 }
 
-func isHelpArg(arg string) bool {
-	return arg == "-h" || arg == "-?" || arg == "--help"
-}
-
-func packageScopes(targets []string) []string {
-	if len(targets) == 0 {
-		return []string{"./..."}
-	}
-	out := make([]string, 0, len(targets))
-	for _, target := range targets {
-		out = append(out, "./cmd/"+target)
-	}
-	return out
-}
-
-func buildTargets(targets []string) ([]string, error) {
-	if len(targets) > 0 {
-		return FilterInstallTargets(targets), nil
-	}
-	entries, err := os.ReadDir("cmd")
-	if err != nil {
-		return nil, fmt.Errorf("read ./cmd: %w", err)
-	}
-	var out []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			out = append(out, entry.Name())
-		}
-	}
-	return FilterInstallTargets(out), nil
-}
-
-// FilterInstallTargets removes script-only commands (build, rel) from a list
-// of build targets. Only product binaries are installed.
-func FilterInstallTargets(targets []string) []string {
-	out := make([]string, 0, len(targets))
-	for _, target := range targets {
-		if _, skip := scriptOnlyCommands[target]; skip {
-			continue
-		}
-		out = append(out, target)
-	}
-	slices.Sort(out)
-	return out
-}
-
-func extractProgramVersion(mainPath string) string {
-	data, err := os.ReadFile(mainPath)
-	if err != nil {
-		return "unknown"
-	}
-	re := regexp.MustCompile(`programVersion\s*=\s*"([^"]*)"`)
-	match := re.FindSubmatch(data)
-	if len(match) < 2 {
-		return "unknown"
-	}
-	return string(match[1])
-}
-
-func binaryExt() string {
-	if runtime.GOOS == "windows" {
-		return ".exe"
-	}
-	return ""
-}
-
-// DomainCoverage computes coverage percentage for lines matching the given prefix.
-func DomainCoverage(coverPath, prefix string) (float64, error) {
+func domainCoverage(coverPath, prefix string) (float64, error) {
 	content, err := os.ReadFile(coverPath)
 	if err != nil {
 		return 0, fmt.Errorf("read coverage profile: %w", err)
 	}
-	return DomainCoverageFromBytes(content, prefix)
-}
-
-// DomainCoverageFromBytes computes coverage from raw profile bytes.
-func DomainCoverageFromBytes(content []byte, prefix string) (float64, error) {
 	var totalStatements int
 	var coveredStatements int
 	scanner := bufio.NewScanner(bytes.NewReader(content))
@@ -381,20 +395,15 @@ func DomainCoverageFromBytes(content []byte, prefix string) (float64, error) {
 	return float64(coveredStatements) / float64(totalStatements) * 100, nil
 }
 
-// CoverageColor applies threshold-based coloring to coverage text.
-func CoverageColor(pct float64, text string) string {
-	switch {
-	case pct >= 75:
-		return color.Grn(text)
-	case pct >= 50:
-		return color.Yel(text)
-	default:
-		return color.Red(text)
+func nextPatchTag() (string, bool, error) {
+	output, err := runCaptured("git", "tag", "--list")
+	if err != nil {
+		return "", false, err
 	}
+	return nextPatchTagFromOutput(output)
 }
 
-// NextPatchTagFromOutput computes the next patch tag from raw `git tag` output.
-func NextPatchTagFromOutput(output string) (string, bool, error) {
+func nextPatchTagFromOutput(output string) (string, bool, error) {
 	var versions []semver
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
@@ -427,10 +436,127 @@ func NextPatchTagFromOutput(output string) (string, bool, error) {
 	return fmt.Sprintf("v%d.%d.%d", last.major, last.minor, last.patch+1), true, nil
 }
 
-// execRunner is the production CmdRunner using os/exec.
-type execRunner struct{}
+// resolveGoverna returns the path to the governa binary. It prefers
+// the path installed by this build run (installedPath). If that is
+// empty it falls back to exec.LookPath. Returns "" if unavailable.
+func resolveGoverna(installedPath string) string {
+	if installedPath != "" {
+		return installedPath
+	}
+	if p, err := exec.LookPath("governa"); err == nil {
+		return p
+	}
+	return ""
+}
 
-func (r *execRunner) Streaming(out, errOut io.Writer, name string, args ...string) error {
+// checkDrift runs `governa enhance -d` (self-review mode) and relays
+// the summary line. It is advisory — failures are silently ignored.
+// Self-review outputs either "no changes since embedded version" (clean)
+// or "summary: N changed, N added, N removed" (drift detected).
+func checkDrift(out io.Writer, installedPath string) {
+	bin := resolveGoverna(installedPath)
+	if bin == "" {
+		return
+	}
+	cmd := exec.Command(bin, "enhance", "-d")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return
+	}
+	relayDriftSummary(out, string(output))
+}
+
+// relayDriftSummary scans enhance self-review output for the summary:
+// line and prints a banner if drift is detected. Exported for testing.
+func relayDriftSummary(out io.Writer, output string) {
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		stripped := stripAnsi(line)
+		if strings.HasPrefix(stripped, "summary:") {
+			fmt.Fprintf(out, "\n%s\n", color.Yel("==> Governance drift check"))
+			fmt.Fprintf(out, "    %s\n", line)
+			return
+		}
+	}
+}
+
+// stripAnsi removes ANSI escape sequences for prefix matching.
+func stripAnsi(s string) string {
+	var buf strings.Builder
+	i := 0
+	for i < len(s) {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && !((s[j] >= 'A' && s[j] <= 'Z') || (s[j] >= 'a' && s[j] <= 'z')) {
+				j++
+			}
+			if j < len(s) {
+				j++ // skip the final letter
+			}
+			i = j
+			continue
+		}
+		buf.WriteByte(s[i])
+		i++
+	}
+	return buf.String()
+}
+
+func extractProgramVersion(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	if match := programVersionInlineRe.FindSubmatch(content); match != nil {
+		return string(match[1]), nil
+	}
+	if match := programVersionBlockRe.FindSubmatch(content); match != nil {
+		return string(match[1]), nil
+	}
+	return "", nil
+}
+
+func validateProgramVersions(targets []string, out io.Writer) error {
+	for _, target := range targets {
+		mainPath := filepath.Join("cmd", target, "main.go")
+		ver, err := extractProgramVersion(mainPath)
+		if err != nil {
+			return err
+		}
+		if ver == "" {
+			return fmt.Errorf("cmd/%s/main.go must declare a non-empty const programVersion string literal", target)
+		}
+		fmt.Fprintf(out, "    %s: programVersion = %s\n", color.Cya("cmd/"+target), color.Grn(fmt.Sprintf("%q", ver)))
+	}
+	return nil
+}
+
+func runCaptured(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%s %s failed: %w\n%s", name, strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return string(output), nil
+}
+
+func runCapturedSoft(name string, args ...string) string {
+	cmd := exec.Command(name, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil && strings.TrimSpace(string(output)) == "" {
+		return err.Error()
+	}
+	return string(output)
+}
+
+func runCapturedCheck(name string, args ...string) (string, bool) {
+	cmd := exec.Command(name, args...)
+	output, err := cmd.CombinedOutput()
+	return string(output), err != nil
+}
+
+func runStreaming(out io.Writer, errOut io.Writer, name string, args ...string) error {
 	command := strings.TrimSpace(name + " " + strings.Join(args, " "))
 	fmt.Fprintf(out, "    %s\n", color.Grn(command))
 	cmd := exec.Command(name, args...)
@@ -440,30 +566,6 @@ func (r *execRunner) Streaming(out, errOut io.Writer, name string, args ...strin
 		return fmt.Errorf("%s %s failed: %w", name, strings.Join(args, " "), err)
 	}
 	return nil
-}
-
-func (r *execRunner) CapturedSoft(name string, args ...string) string {
-	cmd := exec.Command(name, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil && strings.TrimSpace(string(output)) == "" {
-		return err.Error()
-	}
-	return string(output)
-}
-
-func (r *execRunner) CapturedCheck(name string, args ...string) (string, bool) {
-	cmd := exec.Command(name, args...)
-	output, err := cmd.CombinedOutput()
-	return string(output), err != nil
-}
-
-func (r *execRunner) Captured(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("%s %s failed: %w\n%s", name, strings.Join(args, " "), err, strings.TrimSpace(string(output)))
-	}
-	return string(output), nil
 }
 
 func writeIndented(out io.Writer, text string) {

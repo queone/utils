@@ -1,5 +1,3 @@
-// Package reltool implements the release pipeline for utils.
-// It is invoked via `go run ./cmd/rel` (or `./build.sh vX.Y.Z "message"`).
 package reltool
 
 import (
@@ -16,35 +14,20 @@ import (
 
 var semverTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
-// Config holds parsed release arguments.
 type Config struct {
 	Tag     string
 	Message string
 }
 
-// GitRunner abstracts git command execution so the release pipeline can be
-// tested with fake git operations.
-type GitRunner interface {
-	RunGit(out, errOut io.Writer, name string, args ...string) error
-}
-
-// Release holds the injectable dependencies for a release run.
-type Release struct {
-	Git          GitRunner
-	Confirm      func(in io.Reader, out io.Writer, prompt string) (bool, error)
-	CheckGitRepo func() error
-}
-
-// ParseArgs parses release command-line arguments.
 func ParseArgs(args []string) (Config, bool, error) {
 	if len(args) == 0 {
 		return Config{}, true, nil
 	}
-	if len(args) == 1 && isHelpArg(args[0]) {
+	if len(args) == 1 && IsHelpArg(args[0]) {
 		return Config{}, true, nil
 	}
 	for _, arg := range args {
-		if isHelpArg(arg) {
+		if IsHelpArg(arg) {
 			return Config{}, false, errors.New("help flags must be used by themselves")
 		}
 		if strings.HasPrefix(arg, "-") {
@@ -71,26 +54,18 @@ func ParseArgs(args []string) (Config, bool, error) {
 	return cfg, false, nil
 }
 
-// Usage returns the help text for the release command.
+func IsHelpArg(arg string) bool {
+	return arg == "-h" || arg == "-?" || arg == "--help"
+}
+
 func Usage() string {
 	return color.FormatUsage("rel vX.Y.Z \"release message\"", []color.UsageLine{
 		{Flag: "-h, -?, --help", Desc: "show this help"},
 	}, "Release message must be 80 characters or fewer.")
 }
 
-// Run executes the release pipeline using real git execution.
 func Run(cfg Config, in io.Reader, out io.Writer, errOut io.Writer) error {
-	r := &Release{
-		Git:          &execGitRunner{},
-		Confirm:      confirmStdin,
-		CheckGitRepo: ensureGitRepo,
-	}
-	return r.Run(cfg, in, out, errOut)
-}
-
-// Run executes the release pipeline using the release's git runner.
-func (r *Release) Run(cfg Config, in io.Reader, out io.Writer, errOut io.Writer) error {
-	if err := r.CheckGitRepo(); err != nil {
+	if err := ensureGitRepo(); err != nil {
 		return err
 	}
 
@@ -99,7 +74,7 @@ func (r *Release) Run(cfg Config, in io.Reader, out io.Writer, errOut io.Writer)
 	fmt.Fprintf(out, "%s %s\n", color.Yel("remote:"), color.Cya("origin"))
 
 	fmt.Fprintln(out, color.Yel("\nFiles that will be staged (git status):"))
-	if err := r.Git.RunGit(out, errOut, "git status preview", "status", "--short"); err != nil {
+	if err := runGit(out, errOut, "git status preview", "status", "--short"); err != nil {
 		return err
 	}
 
@@ -110,7 +85,7 @@ func (r *Release) Run(cfg Config, in io.Reader, out io.Writer, errOut io.Writer)
 	fmt.Fprintf(out, "- git push origin %s\n", cfg.Tag)
 	fmt.Fprintln(out, "- git push origin")
 
-	ok, err := r.Confirm(in, out, color.Yel("Review the file list above. Proceed with release? (y/N): "))
+	ok, err := confirm(in, out, color.Yel("Review the file list above. Proceed with release? (y/N): "))
 	if err != nil {
 		return err
 	}
@@ -130,17 +105,15 @@ func (r *Release) Run(cfg Config, in io.Reader, out io.Writer, errOut io.Writer)
 	}
 	var completed []string
 	for _, step := range steps {
-		if err := r.Git.RunGit(out, errOut, step.name, step.args...); err != nil {
-			return RecoveryError(err, step.name, cfg.Tag, completed)
+		if err := runGit(out, errOut, step.name, step.args...); err != nil {
+			return recoveryError(err, step.name, cfg.Tag, completed)
 		}
 		completed = append(completed, step.name)
 	}
 	return nil
 }
 
-// RecoveryError builds an error with actionable recovery guidance based on
-// which git steps completed before the failure.
-func RecoveryError(err error, failedStep, tag string, completed []string) error {
+func recoveryError(err error, failedStep, tag string, completed []string) error {
 	msg := fmt.Sprintf("%s failed: %v", failedStep, err)
 	if len(completed) == 0 {
 		return errors.New(msg)
@@ -167,12 +140,15 @@ func RecoveryError(err error, failedStep, tag string, completed []string) error 
 	return errors.New(msg)
 }
 
-func isHelpArg(arg string) bool {
-	return arg == "-h" || arg == "-?" || arg == "--help"
+func ensureGitRepo() error {
+	return ensureGitRepoIn("")
 }
 
-func ensureGitRepo() error {
+func ensureGitRepoIn(dir string) error {
 	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("verify git repo: %w: %s", err, strings.TrimSpace(string(output)))
@@ -183,7 +159,7 @@ func ensureGitRepo() error {
 	return nil
 }
 
-func confirmStdin(in io.Reader, out io.Writer, prompt string) (bool, error) {
+func confirm(in io.Reader, out io.Writer, prompt string) (bool, error) {
 	fmt.Fprint(out, prompt)
 	reader := bufio.NewReader(in)
 	line, err := reader.ReadString('\n')
@@ -194,10 +170,7 @@ func confirmStdin(in io.Reader, out io.Writer, prompt string) (bool, error) {
 	return value == "y" || value == "Y", nil
 }
 
-// execGitRunner is the production GitRunner using os/exec.
-type execGitRunner struct{}
-
-func (r *execGitRunner) RunGit(out io.Writer, errOut io.Writer, name string, args ...string) error {
+func runGit(out io.Writer, errOut io.Writer, name string, args ...string) error {
 	fmt.Fprintf(out, "%s %s\n", color.Yel("running:"), color.Grn("git "+strings.Join(args, " ")))
 	cmd := exec.Command("git", args...)
 	cmd.Stdout = out

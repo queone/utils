@@ -1,6 +1,3 @@
-// rel runs the utils release pipeline.
-// Invoke via: go run ./cmd/rel vX.Y.Z "release message"
-// Or via the convenience wrapper: ./build.sh vX.Y.Z "release message"
 package main
 
 import (

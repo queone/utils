@@ -15,7 +15,7 @@ The build pipeline runs these steps in order, fail-hard on each:
 3. `go fix ./...` — advisory; output is logged but does not break the build
 4. `go vet ./...` — **fail-hard**
 5. Test suite with coverage — fail-hard on any test failure
-6. `staticcheck ./...` — **fail-hard.** Installed via `go install staticcheck@latest` before each run.
+6. `staticcheck ./...` — **fail-hard.** Installed on first run via `go install honnef.co/go/tools/cmd/staticcheck@latest` if not already on `PATH`; subsequent runs reuse the existing install.
 7. Binary build — installs utilities to `$GOPATH/bin`
 
 Invoking individual Go tools directly skips the tidy/fmt/lint pipeline above. A "passing" direct invocation can still produce a build that `./build.sh` would reject. The wrapper guarantees that what passes locally is what would pass in CI.
@@ -54,7 +54,7 @@ Do not begin this checklist until the user explicitly asks to prep for release o
 6. **Bump version constants.** Use the tag from step 1 as the baseline.
 7. **Remove completed features from `plan.md`.**
 8. **Consolidate finished AC decisions into durable docs, then delete the AC file.** Do not delete AC files that are PENDING, IN PROGRESS, or DEFERRED — they are still active contracts. Only completed (released) ACs are deleted.
-9. **Present the release command for the user to run.** The agent never runs the release command directly. The release message must be **≤ 80 characters** — `cmd/rel` enforces this and will reject longer messages. Count before presenting.
+9. **Present the release command for the user to run.** The agent never runs the release command directly. The release message must be **≤ 80 characters** — `cmd/rel` enforces this and will reject longer messages. Count before presenting. Present only the command; do not add trailing commentary explaining what it does, how the wrapper routes, or what prompts will appear. The director already knows.
 
 The release command (`./build.sh vX.Y.Z "message"`) executes `cmd/rel`, which orchestrates `git add → commit → tag → push tag → push branch` and produces recovery guidance if any step fails.
 
@@ -75,3 +75,4 @@ Durable record of explicit-keep decisions where this repo intentionally differs 
 
 - `README.md` — kept project-specific. Template scaffolding sections (`Overview`, `Core Repo Files`, `Working Agreement`, `Workflow Summary`, `Replace Me`) intentionally not adopted; the existing utility list, Quick Install, and Getting Started content already serves the same purpose. Decision: AC1.
 - `docs/build-release.md` Pre-Release Checklist step 5 **bootstrap note** — repo addition below the canonical code block: *"Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions."* The template's step 5 has a canonical-shape code block (restored in v0.31.0) but no bootstrap guidance; this repo retains the note because the bootstrap case is the one place an operator is most likely to invent an alternative shape. Decision: AC3.
+- `AGENTS.md` Project Rules **README alphabetical rule** — repo addition: *"Adding a new utility: add its entry to the `README.md` utility list in alphabetical order."* The template v0.32.1 dropped this bullet from Project Rules; this repo retains it because the utility list in `README.md` is a real user-facing surface of this multi-binary repo, and alphabetical order is the convention contributors should follow. Decision: AC4.

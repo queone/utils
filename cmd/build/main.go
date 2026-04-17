@@ -1,6 +1,5 @@
-// build runs the utils build/test pipeline.
-// Invoke via: go run ./cmd/build [target ...] [-v|--verbose]
-// Or via the convenience wrapper: ./build.sh [target ...] [-v|--verbose]
+// build is based on an original build.sh Bash script from the source project
+// that inspired this template.
 package main
 
 import (
