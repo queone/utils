@@ -4,9 +4,9 @@ A collection of small CLI utilities written in Go.
 - [`bak`](cmd/bak/README.md): Create dated backups of files or directories.
 - [`brew-update`](cmd/brew-update/README.md): Update, upgrade, and clean up Homebrew packages.
 - [`cash5`](cmd/cash5/README.md): Analyze historical Cash5 draws and generate number recommendations.
-- [`claude-env`](cmd/claude-env): Set up Claude Code environment portability via iCloud.
 - [`certgen`](cmd/certgen/README.md): Generate self-signed TLS certificates for local testing.
 - [`certls`](cmd/certls/README.md): Show SSL/TLS certificate details for a host and port.
+- [`claudecfg`](cmd/claudecfg/main.go): Manage Claude Code config — iCloud-backed memory portability and project permissions seeding/auditing.
 - [`days`](cmd/days/README.md): A CLI calendar days calculator.
 - [`decolor`](cmd/decolor/README.md): A utility that removes shell color escape codes from input stream or given file.
 - [`dl`](cmd/dl/README.md): Download online videos using `yt-dlp` with a target filename.

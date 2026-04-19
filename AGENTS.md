@@ -96,7 +96,7 @@ Prefer flat `##` sections with inline bullets over `###` sub-subsections in gove
 
 ## Project Rules
 
-- Always use the repo's canonical build command (`./build.sh` or equivalent) — never run individual tool commands directly. See `docs/build-release.md` for the full pipeline.
+- Always use the repo's canonical build command (`./build.sh` or equivalent) — never run individual tool commands directly. See `docs/build-release.md` for the full pipeline. For quick smoke-testing of a single utility, use `go run ./cmd/<tool>/` or `go build -o /tmp/<name> ./cmd/<tool>/`; do not `go build ./cmd/<tool>/` from the repo root (it drops a stray binary).
 - Follow semver: PATCH for changes invisible to users (bug fixes, refactors, tooling). MINOR for user-visible changes (commands, flags, schema, behavioral). Batch PATCH-level changes when possible.
 - Pin dependencies to explicit versions. Do not stay on an older version without a documented reason.
 - Follow existing repo patterns unless a clear improvement is approved.
@@ -104,3 +104,4 @@ Prefer flat `##` sections with inline bullets over `###` sub-subsections in gove
 - Wrap user-facing errors with operation context and recovery guidance.
 - Every AC must label each acceptance test as `[Automated]` or `[Manual]`. See `docs/ac-template.md`.
 - Adding a new utility: add its entry to the `README.md` utility list in alphabetical order.
+- Every user-facing flag in a utils tool has a one-letter short form (the standard) and a long-form alias; both are accepted and help output leads with the short form.
