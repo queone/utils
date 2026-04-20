@@ -67,7 +67,6 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
 - When motivated by consumer sync feedback, credit the consumer: `(addresses <consumer> feedback from vX.Y.Z sync)`.
 - When an AC closes a consumer-tracked IE, include `closes <consumer>:IE<N>` so sync can advise the consumer to retire the entry.
-- Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions.
 
 Flags: `--dry-run` (or `-n`) prints intended writes without touching the working tree; `--no-build` skips phases 3 and 8. Both are for power users or tests — the common path is plain `./prep.sh vX.Y.Z "message"`.
 
@@ -85,11 +84,8 @@ This repo was generated from a governa governance template. To check for templat
 
 Template refresh is operator-driven. The governa tool proposes; the repo maintainer decides what to adopt.
 
-## Standing Divergences from Template
+## Local Rules
 
-Durable record of explicit-keep decisions where this repo intentionally differs from the governa template. Each entry survives across AC deletions and gives future syncs a documented reason to leave the divergence in place.
+Project-specific extensions of this doc that don't warrant upstream adoption into the governa template. See `docs/development-cycle.md` § Local Rules for the convention.
 
-- `README.md` — kept project-specific. Template v0.42.0 enforces only the intro paragraph + `## Why` at the top; we satisfy that after relocating the utility list to a new `## Utilities` section below `## Why`. The `## Utilities`, `## Quick Install`, and `## Getting Started` blocks stay as project-specific content. Decision: AC1, reaffirmed AC6.
-- `docs/build-release.md` **CHANGELOG bootstrap bullet** — repo addition in the `CHANGELOG row shape` list: *"Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions."* Template v0.42.0 describes the file shape but does not include bootstrap guidance; this repo retains the note because the bootstrap case is where operators are most likely to invent alternative shapes. Decision: AC3, reaffirmed AC6.
-- `AGENTS.md` Project Rules **README alphabetical rule** — repo addition: *"Adding a new utility: add its entry to the `README.md` utility list in alphabetical order."* Template v0.42.0 does not carry an equivalent rule; this repo retains it because the utility list in `README.md` (now in `## Utilities`) is a real user-facing surface of this multi-binary repo, and alphabetical order is the convention contributors should follow. Decision: AC4, reaffirmed AC6.
-- `AGENTS.md` Project Rules **canonical-build smoke-test clause** — repo extension to the canonical-build rule: *"For quick smoke-testing of a single utility, use `go run ./cmd/<tool>/` or `go build -o /tmp/<name> ./cmd/<tool>/`; do not `go build ./cmd/<tool>/` from the repo root (it drops a stray binary)."* Template v0.42.0 does not carry this guidance in AGENTS.md; it defends against stray binaries only for template-owned `/build`, `/prep`, `/rel` via `.gitignore` enumeration. This repo keeps the process-level rule and surfaces it as upstream feedback for governa to consider. Decision: AC5, reaffirmed AC6.
+- Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions. Extends the `CHANGELOG row shape` list in the `Pre-Release Checklist` Appendix with guidance for the zero-state case.
