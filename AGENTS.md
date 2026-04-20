@@ -4,9 +4,7 @@ This file is the governance contract for this repo and the only doc guaranteed t
 
 ## Purpose
 
-This file is the base governance contract for a generated repo.
-Keep content here focused on cross-repo governance. Detail, rationale, and examples belong in supplementary docs — see `Governed Sections` below.
-Repo-specific workflow belongs in the selected overlay, not here.
+A collection of small CLI utilities written in Go.
 
 ## Governed Sections
 
@@ -46,7 +44,7 @@ Prefer flat `##` sections with inline bullets over `###` sub-subsections in gove
 - Do not create, delete, rename, publish, release, or perform destructive changes without explicit user approval.
 - Do not change governance files, CI/release configuration, secrets handling, or external integrations without explicit user approval.
 - Use an AC-first workflow for non-trivial changes. Before implementation, draft an AC doc (`docs/ac<N>-<slug>.md`) that defines scope, out-of-scope, objective fit, and required tests. Use `docs/ac-template.md` as the starting point if available. Do not begin implementation until the AC is reviewed and the user authorizes it.
-- **AC critique gate:** After drafting an AC, ask the user to initiate an external critique. Do not proceed to implementation until: (1) the critique has happened — its findings either saved as `docs/ac<N>-<slug>-critique.md` or integrated directly into the AC, and (2) the user explicitly confirms the AC is implementation-ready.
+- **AC critique gate:** After drafting an AC, ask the user to initiate an external critique. Do not proceed to implementation until: (1) the critique has happened — its findings either saved as `docs/ac<N>-<slug>-critique.md` (QA-owned; DEV responds via the AC revision, not the critique file) or integrated directly into the AC, and (2) the user explicitly confirms the AC is implementation-ready. (See `docs/ac-template.md` Companion Artifacts for the full convention, including `-feedback.md` and `-dispositions.md`.)
 - Before committing to an AC, every roadmap item must answer: (1) What user or system outcome does this serve? (2) Why is this a better next step than competing work? (3) What existing decisions or constraints does it depend on? (4) Is this direct roadmap work or an intentional pivot? These questions must be answered in the AC's Objective Fit section.
 - Normal in-scope edits to existing project files are allowed once the user has asked for implementation.
 - Never run the release command yourself; present it for the user to run.
@@ -62,6 +60,7 @@ Prefer flat `##` sections with inline bullets over `###` sub-subsections in gove
 - Prefer terse completions: lead with what changed, then flat bullets and a one-sentence next step. Do not add extra sections like "What's in it", "Main conclusion", or "Next steps" unless the user asks.
 - Prefer plain text and simple bullets over heavy Markdown tables or ASCII art. Use richer structure only when content clearly benefits.
 - Do not note skipped checks when the skip is already implied by repo rules or the review scope. Mention them only if the omission is unusual or affects confidence.
+- When presenting an architectural decision to the director, surface two bounded options plus a recommendation. Avoid open menus of three or more — they read as dithering. If only one option exists, state it as a recommendation; if more than two are genuinely viable, name the two best and note the rest in one sentence.
 
 ## File-Change Discipline
 
@@ -80,7 +79,7 @@ Prefer flat `##` sections with inline bullets over `###` sub-subsections in gove
 ## Release Or Publish Triggers
 
 - Do not prepare or execute a release, publish, deploy, or distribution step unless the user explicitly asks for it.
-- Bootstrap and maintain a root `CHANGELOG.md` for release-bearing repos, following the canonical table specified in `docs/build-release.md` Pre-Release Checklist step 5. Do not invent alternative shapes.
+- Bootstrap and maintain a root `CHANGELOG.md` for release-bearing repos, following the canonical table specified in `docs/build-release.md` Pre-Release Checklist CHANGELOG step. Do not invent alternative shapes.
 - Do not start release-prep bookkeeping early. Only begin the Pre-Release Checklist in `docs/build-release.md` when the user explicitly asks to prep for release or equivalent.
 - Version bumps, changelog/release-note updates, tag prep, and publish workflows are release-scoped work, not routine edits.
 - When release prep is explicitly requested, run the documented pre-release checklist, prepare the exact version and a concrete release message derived from the actual changes, and then present only the canonical release command for the user to run or approve. Show the full git sequence only if the user explicitly asks for it.
@@ -103,5 +102,5 @@ Prefer flat `##` sections with inline bullets over `###` sub-subsections in gove
 - Every new feature or logic change must include tests in the same pass.
 - Wrap user-facing errors with operation context and recovery guidance.
 - Every AC must label each acceptance test as `[Automated]` or `[Manual]`. See `docs/ac-template.md`.
+- New CLI flags pair a one-letter short form (the standard form; leads help output) with a long-form alias; migrate existing when their code is next touched.
 - Adding a new utility: add its entry to the `README.md` utility list in alphabetical order.
-- Every user-facing flag in a utils tool has a one-letter short form (the standard) and a long-form alias; both are accepted and help output leads with the short form.

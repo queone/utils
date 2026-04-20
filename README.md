@@ -1,6 +1,11 @@
 # utils
 A collection of small CLI utilities written in Go.
 
+## Why
+Go's tool chain is the ideal way to maintain a set of commonly used CLI utilities. They can be quickly compiled and installed whether you're in Windows, macOS, or Linux. This provides a unified and portable solution to many a scripting needs. With this setup, Go turns into a quasi-package manager for these utilities.
+
+## Utilities
+
 - [`bak`](cmd/bak/README.md): Create dated backups of files or directories.
 - [`brew-update`](cmd/brew-update/README.md): Update, upgrade, and clean up Homebrew packages.
 - [`cash5`](cmd/cash5/README.md): Analyze historical Cash5 draws and generate number recommendations.
@@ -25,9 +30,6 @@ A collection of small CLI utilities written in Go.
 - [`sms`](cmd/sms/README.md): Send SMS messages using Twilio credentials from a local config file.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
 - [`web`](cmd/web/README.md): Search DuckDuckGo and open results with an interactive selector.
-
-## Why
-Go's tool chain is the ideal way to maintain a set of commonly used CLI utilities. They can be quickly compiled and installed whether you're in Windows, macOS, or Linux. This provides a unified and portable solution to many a scripting needs. With this setup, Go turns into a quasi-package manager for these utilities.
 
 ## Quick Install
 With Go installed, install all utilities at once:

@@ -10,15 +10,20 @@ This repo has a single canonical build/test workflow: `./build.sh`.
 
 The build pipeline runs these steps in order, fail-hard on each:
 
-1. `go mod tidy` — ensure `go.mod` and `go.sum` are consistent
-2. `go fmt ./...` — **fail-hard.** If `go fmt` rewrote any file (non-empty stdout), the build fails. Re-run after committing the formatting fix.
-3. `go fix ./...` — advisory; output is logged but does not break the build
-4. `go vet ./...` — **fail-hard**
-5. Test suite with coverage — fail-hard on any test failure
-6. `staticcheck ./...` — **fail-hard.** Installed on first run via `go install honnef.co/go/tools/cmd/staticcheck@latest` if not already on `PATH`; subsequent runs reuse the existing install.
-7. Binary build — installs utilities to `$GOPATH/bin`
+1. `mdcheck` — **fail-hard.** Scans tracked markdown files for nested-fence bugs (3-backtick outer fence containing a tagged 3-backtick inner opener). The fix is to widen the outer fence to 4+ backticks or switch to `~~~`.
+2. `go mod tidy` — ensure `go.mod` and `go.sum` are consistent
+3. `go fmt ./...` — **fail-hard.** If `go fmt` rewrote any file (non-empty stdout), the build fails. Re-run after committing the formatting fix.
+4. `go fix ./...` — advisory; output is logged but does not break the build
+5. `go vet ./...` — **fail-hard**
+6. Test suite with coverage — fail-hard on any test failure
+7. `staticcheck ./...` — **fail-hard.** Installed via `go install staticcheck@latest` before each run.
+8. Binary build — installs utilities to `$GOPATH/bin`
 
 Invoking individual Go tools directly skips the tidy/fmt/lint pipeline above. A "passing" direct invocation can still produce a build that `./build.sh` would reject. The wrapper guarantees that what passes locally is what would pass in CI.
+
+## Sandboxed Execution
+
+Under sandboxed execution that blocks Go's build cache (look for `writing stat cache ... operation not permitted`), `staticcheck` may print a `matched no packages` warning even though it ran cleanly. Treat as advisory unless real findings appear; an unrestricted rerun confirms.
 
 ## Acceptance Tests
 
@@ -33,30 +38,38 @@ Default to Automated whenever the result is verifiable without a live external s
 
 Do not begin this checklist until the user explicitly asks to prep for release or equivalent. This is gated by the release-prep trigger rule in `AGENTS.md` (Release Or Publish Triggers).
 
-1. **Check the latest git tag and working tree.** Run `git tag --sort=-v:refname | head -1` and `git status`. If the tree is clean and the latest tag matches the `programVersion` constant in the main binary source, there is nothing to release — do not proceed. Never assume the current version from build output or prior conversation; always verify from git.
-2. **Run `./build.sh`.** Fix all failures until the build is clean.
-3. **Ask the user whether the live ATs were run.** Manual ATs cannot be verified from CLI output and require explicit confirmation.
-4. **Audit `arch.md` against the code.** Verify affected reference docs are current.
-5. **Update `CHANGELOG.md`.** The file is a `# Changelog` heading followed by a 2-column markdown table (`| Version | Summary |`). Move the current `Unreleased` summary into a new row for the release version directly below `Unreleased`, then restore an empty `Unreleased` row. Summaries are single-line, ≤ 500 characters, and should lead with the AC reference if any. Versions are unprefixed (`0.29.0`, not `v0.29.0`). Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
+The operator flow is two steps:
 
-    Canonical shape:
+1. **Run `./prep.sh vX.Y.Z "message"`.** Stages version bumps, inserts the CHANGELOG row, deletes completed AC files (plus `-critique.md` and `-dispositions.md` companions), moves any `-feedback.md` companion to `.governa/feedback/`, runs validation builds before and after, and prints the canonical release command. The agent determines the version (semver classification from the AC's scope) and drafts the release message (≤ 80 characters) before invoking prep.
+2. **Run the printed release command (`./build.sh vX.Y.Z "message"`).** `cmd/rel` shows `git status --short`, lists every git step it will execute, and prompts for interactive confirmation. On approval it orchestrates `git add → commit → tag → push tag → push branch`. Optional: run `git diff` between the two steps if you want to inspect the CHANGELOG row wording and version-string values before committing — `cmd/rel`'s own status preview is sufficient to catch wrong-file inclusions or deletions.
 
-    ```
-    # Changelog
+Present only the release command after prep; do not add trailing commentary about wrapper routing or prompts. The director already knows.
 
-    | Version | Summary |
-    |---------|---------|
-    | Unreleased | |
-    | 0.29.0 | AC47: <one-line summary> |
-    ```
+### Appendix: what prep does
 
-    Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions.
-6. **Bump version constants.** Use the tag from step 1 as the baseline.
-7. **Remove completed features from `plan.md`.**
-8. **Consolidate finished AC decisions into durable docs, then delete the AC file.** Do not delete AC files that are PENDING, IN PROGRESS, or DEFERRED — they are still active contracts. Only completed (released) ACs are deleted.
-9. **Present the release command for the user to run.** The agent never runs the release command directly. The release message must be **≤ 80 characters** — `cmd/rel` enforces this and will reject longer messages. Count before presenting. Present only the command; do not add trailing commentary explaining what it does, how the wrapper routes, or what prompts will appear. The director already knows.
+`./prep.sh` runs nine phases internally so the operator flow above stays short:
 
-The release command (`./build.sh vX.Y.Z "message"`) executes `cmd/rel`, which orchestrates `git add → commit → tag → push tag → push branch` and produces recovery guidance if any step fails.
+1. **Validate inputs.** Semver pattern (`vX.Y.Z`), message non-empty and ≤ 80 characters.
+2. **Validate git state.** Inside a git work tree, target tag does not exist yet, HEAD is not at the latest tag with a clean working tree.
+3. **Pre-check build.** `./build.sh` run before any writes; skipped with `--no-build` or `--dry-run`.
+4. **Detect version targets.** Scans `cmd/*/main.go` for `programVersion`, plus `TEMPLATE_VERSION` and `internal/templates/version.go` when present (both presence-gated). Multi-binary repos are picked up automatically.
+5. **Detect CHANGELOG targets + fail-fast idempotency guard.** Root `CHANGELOG.md` and `internal/templates/CHANGELOG.md` (template-repo case). If any target already contains a row for the target version, prep exits with a fatal error before any writes.
+6. **Parse AC refs.** `AC[0-9]+` scan on the release message; composites like `AC60+AC61` yield multiple refs.
+7. **Apply writes.** Version bumps (per-file idempotent no-op when the file already has the target value); CHANGELOG row insertion under `| Unreleased | |`; AC file deletions plus `-critique.md`/`-dispositions.md` companion deletions; `-feedback.md` moved to `.governa/feedback/ac<N>-<slug>.md`. Skipped when `--dry-run`.
+8. **Post-check build.** `./build.sh` run after writes; skipped with `--no-build` or `--dry-run`.
+9. **Print release command.** Exactly `./build.sh vX.Y.Z "message"` — nothing else.
+
+CHANGELOG row shape (enforced by prep's insertion code and by convention):
+
+- File shape: `# Changelog` heading, then a 2-column markdown table (`| Version | Summary |` with a `|---|---|` separator); first data row is `| Unreleased | |`, followed by one row per release (e.g., `| <version> | <AC-ref>: <one-line summary> |`).
+- Summaries are single-line, ≤ 500 characters; lead with the AC reference if any.
+- Versions are unprefixed (`0.29.0`, not `v0.29.0`).
+- Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
+- When motivated by consumer sync feedback, credit the consumer: `(addresses <consumer> feedback from vX.Y.Z sync)`.
+- When an AC closes a consumer-tracked IE, include `closes <consumer>:IE<N>` so sync can advise the consumer to retire the entry.
+- Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions.
+
+Flags: `--dry-run` (or `-n`) prints intended writes without touching the working tree; `--no-build` skips phases 3 and 8. Both are for power users or tests — the common path is plain `./prep.sh vX.Y.Z "message"`.
 
 ## Template Upgrade
 
@@ -64,8 +77,11 @@ This repo was generated from a governa governance template. To check for templat
 
 1. Run `governa sync` to generate a review document with per-file recommendations. This also updates `TEMPLATE_VERSION` to the current template version.
 2. Compare `TEMPLATE_VERSION` in this repo against the template's current version. `TEMPLATE_VERSION` reflects the last template version this repo was evaluated against, not the original bootstrap version.
-3. `.governa-manifest`, if present, records SHA-256 checksums of each file at bootstrap time. This enables comparison to distinguish your customizations from stale template content.
-4. **Produce a per-sync feedback artifact.** Every governa sync that produces an adoption AC must also produce a separate file at `docs/ac<N>-<slug>-feedback.md` capturing genuine observations about the sync output (template defaults that fight the repo, scoring gaps, methodology issues, things that landed well). The artifact is out-of-band — not folded into the sync AC's body — so the feedback exists independently of the adoption work. The director routes its content upstream to governa. The artifact is deleted at release prep alongside the AC. This codifies step 7 of the sync's Evaluation Methodology so it cannot be silently skipped.
+3. `.governa/manifest`, if present, records SHA-256 checksums of each file at bootstrap time. This enables comparison to distinguish your customizations from stale template content.
+4. **Produce a per-sync feedback artifact.** Every governa sync that produces an adoption AC must also produce a separate file at `docs/ac<N>-<slug>-feedback.md` capturing genuine observations about the sync output (template defaults that fight the repo, scoring gaps, methodology issues, things that landed well). The artifact is out-of-band — not folded into the sync AC's body — so the feedback exists independently of the adoption work. The director routes its content upstream to governa. At release prep, the artifact is moved to `.governa/feedback/ac<N>-<slug>.md` (not deleted) so the feedback persists for governa's future `enhance -r` runs. This codifies the Feedback step of the sync's Evaluation Methodology so it cannot be silently skipped. (See `docs/ac-template.md` Companion Artifacts for the full convention, including `-critique.md` and `-dispositions.md`.)
+5. **Feedback-file filename convention.** When moving `-feedback.md` to `.governa/feedback/`, encode the governa version the feedback was produced against in the destination filename — for example, `ac<N>-governa-sync-<vX.Y.Z>.md`. This lets future `governa sync` runs detect when governa has addressed the feedback and offer automated cleanup via `-f` / `--prune-feedback`. Filenames without a parseable `X.Y.Z` substring (e.g., pre-convention `ac<N>-governa-sync-adoption.md`) are left for manual cleanup.
+6. **Prune addressed feedback files.** On a sync where governa's CHANGELOG includes an `(addresses <consumer> feedback from v<range> syncs)` credit matching this repo, the sync review flags the closed feedback files under Advisory Notes. To delete them in the same sync run, pass `-f` (or `--prune-feedback`) — the flag is opt-in and respects `-d` / `--dry-run` (emits `prune: would remove <path>` without deleting). Pre-convention filenames are never pruned automatically.
+7. When a file should remain a stable repo-specific carve-out after review, record that decision with `governa ack <path> --reason "..."` so future syncs move it into `## Acknowledged Drift` instead of re-flagging it in `## Adoption Items`.
 
 Template refresh is operator-driven. The governa tool proposes; the repo maintainer decides what to adopt.
 
@@ -73,6 +89,7 @@ Template refresh is operator-driven. The governa tool proposes; the repo maintai
 
 Durable record of explicit-keep decisions where this repo intentionally differs from the governa template. Each entry survives across AC deletions and gives future syncs a documented reason to leave the divergence in place.
 
-- `README.md` — kept project-specific. Template scaffolding sections (`Overview`, `Core Repo Files`, `Working Agreement`, `Workflow Summary`, `Replace Me`) intentionally not adopted; the existing utility list, Quick Install, and Getting Started content already serves the same purpose. Decision: AC1.
-- `docs/build-release.md` Pre-Release Checklist step 5 **bootstrap note** — repo addition below the canonical code block: *"Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions."* The template's step 5 has a canonical-shape code block (restored in v0.31.0) but no bootstrap guidance; this repo retains the note because the bootstrap case is the one place an operator is most likely to invent an alternative shape. Decision: AC3.
-- `AGENTS.md` Project Rules **README alphabetical rule** — repo addition: *"Adding a new utility: add its entry to the `README.md` utility list in alphabetical order."* The template v0.32.1 dropped this bullet from Project Rules; this repo retains it because the utility list in `README.md` is a real user-facing surface of this multi-binary repo, and alphabetical order is the convention contributors should follow. Decision: AC4.
+- `README.md` — kept project-specific. Template v0.42.0 enforces only the intro paragraph + `## Why` at the top; we satisfy that after relocating the utility list to a new `## Utilities` section below `## Why`. The `## Utilities`, `## Quick Install`, and `## Getting Started` blocks stay as project-specific content. Decision: AC1, reaffirmed AC6.
+- `docs/build-release.md` **CHANGELOG bootstrap bullet** — repo addition in the `CHANGELOG row shape` list: *"Bootstrap: if `CHANGELOG.md` does not yet exist, create it with the header, the `Unreleased` row, and the new release row. No need to backfill historical versions."* Template v0.42.0 describes the file shape but does not include bootstrap guidance; this repo retains the note because the bootstrap case is where operators are most likely to invent alternative shapes. Decision: AC3, reaffirmed AC6.
+- `AGENTS.md` Project Rules **README alphabetical rule** — repo addition: *"Adding a new utility: add its entry to the `README.md` utility list in alphabetical order."* Template v0.42.0 does not carry an equivalent rule; this repo retains it because the utility list in `README.md` (now in `## Utilities`) is a real user-facing surface of this multi-binary repo, and alphabetical order is the convention contributors should follow. Decision: AC4, reaffirmed AC6.
+- `AGENTS.md` Project Rules **canonical-build smoke-test clause** — repo extension to the canonical-build rule: *"For quick smoke-testing of a single utility, use `go run ./cmd/<tool>/` or `go build -o /tmp/<name> ./cmd/<tool>/`; do not `go build ./cmd/<tool>/` from the repo root (it drops a stray binary)."* Template v0.42.0 does not carry this guidance in AGENTS.md; it defends against stray binaries only for template-owned `/build`, `/prep`, `/rel` via `.gitignore` enumeration. This repo keeps the process-level rule and surfaces it as upstream feedback for governa to consider. Decision: AC5, reaffirmed AC6.
