@@ -24,6 +24,8 @@ Only these sections may be edited through a guided update:
 - `Documentation Update Expectations`
 - `Project Rules`
 
+Repo-specific rules do **not** add a new `## Local Rules` section to this file — the section set above is fixed. Use `## Local Rules` in supplementary docs (e.g., `docs/build-release.md`); see `docs/development-cycle.md` § Local Rules.
+
 Do not add new sections, reorder sections, or rewrite the whole file unless the user explicitly asks for a contract change.
 Treat this file as a governed config artifact, not freeform prose.
 When asked to update it, propose the exact section names to change and keep edits local to those sections.
@@ -44,7 +46,7 @@ Prefer flat `##` sections with inline bullets over `###` sub-subsections in gove
 - Do not create, delete, rename, publish, release, or perform destructive changes without explicit user approval.
 - Do not change governance files, CI/release configuration, secrets handling, or external integrations without explicit user approval.
 - Use an AC-first workflow for non-trivial changes. Before implementation, draft an AC doc (`docs/ac<N>-<slug>.md`) that defines scope, out-of-scope, objective fit, and required tests. Use `docs/ac-template.md` as the starting point if available. Do not begin implementation until the AC is reviewed and the user authorizes it.
-- **AC critique gate:** After drafting an AC, ask the user to initiate an external critique. Do not proceed to implementation until: (1) the critique has happened — its findings either saved as `docs/ac<N>-<slug>-critique.md` (QA-owned; DEV responds via the AC revision, not the critique file) or integrated directly into the AC, and (2) the user explicitly confirms the AC is implementation-ready. (See `docs/ac-template.md` Companion Artifacts for the full convention, including `-feedback.md` and `-dispositions.md`.)
+- **AC critique gate:** After drafting an AC, ask the user to initiate an external critique. Do not proceed to implementation until: (1) the critique has happened — its findings integrated into the AC's `## Critique` section (QA-authored content transcribed by DEV; DEV's responses land as AC revisions + `### Disposition Log` entries), and (2) the user explicitly confirms the AC is implementation-ready. (See `docs/critique-protocol.md` for the full shape and `docs/ac-template.md` Companion Artifacts for `-feedback.md` and `-dispositions.md` conventions.)
 - Before committing to an AC, every roadmap item must answer: (1) What user or system outcome does this serve? (2) Why is this a better next step than competing work? (3) What existing decisions or constraints does it depend on? (4) Is this direct roadmap work or an intentional pivot? These questions must be answered in the AC's Objective Fit section.
 - Normal in-scope edits to existing project files are allowed once the user has asked for implementation.
 - Never run the release command yourself; present it for the user to run.

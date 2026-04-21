@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.13.0 | AC8: adopt governa v0.45.1 sync; integrated critique + Feedback Credits |
 | 0.12.0 | AC7: adopt governa v0.43.1 sync; migrate to Local Rules |
 | 0.11.0 | AC6: adopt governa v0.42.0; 2-step release flow, mdcheck |
 | 0.10.0 | AC5: add `claudecfg` unified Claude Code config utility — env subcommands ported from `claude-env` (memory + projects symlinks, conflict preservation, conflicts listing); perms subcommands (init/list/show/check) with embedded `go` profile + iCloud override dir; longest-prefix WARN/INFO matching; non-darwin platform gate scoped to env; remove `cmd/claude-env/`; lift flag-convention rule into AGENTS.md Project Rules; extend canonical-build rule with smoke-test guidance |
