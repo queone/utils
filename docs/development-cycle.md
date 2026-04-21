@@ -12,7 +12,7 @@ This repo uses an acceptance-criteria-first workflow.
 
 ## Cycle
 
-1. **Choose the next approved item.** Pull from the `Priorities` section of `plan.md` (never from `Ideas To Explore`, which is pre-rubric). Governance, sync-adoption, and director-originated ACs may originate outside this section — for example, template-upgrade ACs, hotfix ACs, or director-requested refinements. Draft those directly when authorized.
+1. **Choose the next approved item.** Origination is either (a) an `Ideas To Explore` entry promoted after the director rubric-clears it, or (b) director-originated work (governance, sync-adoption, template-upgrade, hotfix, refinement). ACs are the single execution surface — draft directly when authorized.
 2. **Draft an acceptance-criteria doc.** Start from `docs/ac-template.md` (see preamble for the monotonic-numbering rule); save as `docs/ac<N>-<slug>.md`.
 3. **Review and tighten scope before implementation.** When QA files findings on the AC, DEV responds in the conversation with proposed changes or explicit disagreement, but does not edit the AC file until QA replies and the director confirms the iteration is closed. Repeat until the AC is implementation-ready. See `docs/critique-protocol.md` for the full critique-round protocol (round-append structure, terminator shape, and DEV/QA cross-references).
 4. **Implement code, tests, and direct doc updates together.**
@@ -27,9 +27,8 @@ This repo uses an acceptance-criteria-first workflow.
 - keep repo-level governance in `AGENTS.md`
 - record loose, pre-rubric follow-on ideas in `plan.md` under `Ideas To Explore` with an `IE<N>:` prefix
 - remove IE entries when promoted to an AC or completed; the list is staging, not history
-- record rubric-cleared follow-on work in `plan.md` under `Priorities`
 - write AC docs to file (`docs/ac<N>-<slug>.md`); summarize in the response but do not dump full AC content into conversation
-- promotion path: IE entry → discussion → objective-fit rubric (see `AGENTS.md` Approval Boundaries) → `Priorities` → AC
+- promotion path: IE entry → discussion → objective-fit rubric (see `AGENTS.md` Approval Boundaries) → AC
 
 ## Local Rules
 
@@ -40,3 +39,8 @@ Repos may extend governance docs with rules specific to the project. Place these
 Use Local Rules when a rule is genuinely repo-specific — it applies to this project only and doesn't warrant upstream adoption into the governa template. If a rule might benefit other consumer repos, also surface it via the per-sync `-feedback.md` artifact so governa can consider lifting it upstream.
 
 The section name is exact: `## Local Rules` (title case, singular "Local" + plural "Rules"). The scorer matches on this canonical name; variants like "Local Rule" or "Local Guidance" are not recognized.
+
+### Repo-specific rules
+
+- **IE-as-pointer.** IE entries in this repo persist as pointers to their originating stub ACs; they are removed only when the referenced AC ships (or is deleted during de-prioritization). Diverges from the template's staging-only IE semantics (Notes bullet: "remove IE entries when promoted to an AC or completed"). Upstream proposal surfaced via this sync's per-sync feedback artifact. (Temporary — governa AC74 will lift this into the template; remove this entry when utils syncs to the governa version that ships IE-as-pointer semantics.)
+- **Stub ACs — ACs that carry `TBD — requires scoping before critique gate` in their Out Of Scope and Acceptance Tests sections until scoped — are permitted.** Such ACs are flagged in Implementation Notes with the literal marker `Rudimentary stub — requires further scoping before critique gate or implementation authorization.` and remain `PENDING` until a scoping pass runs and the critique gate activates.
