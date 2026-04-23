@@ -22,6 +22,7 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`git-remotev`](cmd/git-remotev/README.md): Print each local repository with its `origin` remote URL.
 - [`git-statall`](cmd/git-statall/README.md): Show git status across local repositories.
 - [`jy`](cmd/jy/README.md): A lightweight JSON and YAML converter utility.
+- [`moneycon`](cmd/moneycon/README.md): Financial data consolidation — reads CSV or aligned text, outputs aligned summary with totals.
 - [`pgen`](cmd/pgen/README.md): A simple generator of memorable passwords.
 - [`pman`](cmd/pman/README.md): Run authenticated Microsoft Graph and Azure REST API requests.
 - [`rn`](cmd/rn/README.md): A bulk file re-namer.

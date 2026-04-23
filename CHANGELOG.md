@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.16.0 | AC18: add moneycon financial data consolidation utility |
 | 0.15.0 | AC10: adopt governa v0.46.0 sync; migrate plan Priorities to stub ACs |
 | 0.14.0 | AC9: adopt governa v0.45.3 sync; first integrated-critique AC |
 | 0.13.0 | AC8: adopt governa v0.45.1 sync; integrated critique + Feedback Credits |
