@@ -18,4 +18,3 @@ Per the `IE-as-pointer` Local Rule in `docs/development-cycle.md`, IE entries in
 - IE6: `cmd/cash5/main.go` refactor — split ~956 lines into `main.go` / `fetch.go` / `display.go` / `stats.go` / `model.go` — tracked as `docs/ac16-cash5-refactor.md`.
 - IE7: CLI framework standardization policy (manual / go-arg / cobra) — tracked as `docs/ac17-cli-framework-policy.md`.
 - IE8: Replace cash5 WINNING GEOMETRIES with just the WINNING CIRCLE
-- IE9: Create new utility `moneycon` that does exactly what ./moneycon.py does — tracked as `docs/ac18-moneycon-utility.md`.

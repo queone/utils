@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.17.0 | AC19: adopt governa v0.47.0 sync; IE dual-use semantics upstream |
 | 0.16.1 | fix: case-insensitive CSV header matching in moneycon |
 | 0.16.0 | AC18: add moneycon financial data consolidation utility |
 | 0.15.0 | AC10: adopt governa v0.46.0 sync; migrate plan Priorities to stub ACs |
