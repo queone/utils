@@ -146,7 +146,7 @@ func readCSV(path string) ([]row, error) {
 		return nil, fmt.Errorf("read CSV headers from %s: %w", path, err)
 	}
 	for i := range headers {
-		headers[i] = strings.TrimSpace(headers[i])
+		headers[i] = strings.ToUpper(strings.TrimSpace(headers[i]))
 	}
 
 	colIdx := map[string]int{}

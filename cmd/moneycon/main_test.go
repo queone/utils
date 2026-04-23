@@ -290,6 +290,39 @@ func TestAllNumericTwoDecimalPlaces(t *testing.T) {
 	}
 }
 
+func TestCSVMixedCaseHeaders(t *testing.T) {
+	dir := t.TempDir()
+	in := filepath.Join(dir, "in.csv")
+
+	csv := "Type,description,mo/avg,yr/avg,Notes\n" +
+		"Home,Property taxes,413.26,\"4,959.16\",Quarterly\n" +
+		",Groceries,600,7200,\n"
+	os.WriteFile(in, []byte(csv), 0644)
+
+	if err := runInDir(t, dir, in); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, outputFile))
+	result := string(data)
+
+	if !strings.Contains(result, "Home - Property taxes") {
+		t.Errorf("expected TYPE merged into DESCRIPTION as 'Home - Property taxes':\n%s", result)
+	}
+	if !strings.Contains(result, "413.26") {
+		t.Errorf("expected MO 413.26:\n%s", result)
+	}
+	if !strings.Contains(result, "4,959.16") {
+		t.Errorf("expected YR 4,959.16:\n%s", result)
+	}
+	if !strings.Contains(result, "Quarterly") {
+		t.Errorf("expected NOTES 'Quarterly':\n%s", result)
+	}
+	if !strings.Contains(result, "1,013.26") {
+		t.Errorf("expected MO total 1,013.26:\n%s", result)
+	}
+}
+
 func TestOutputFileAlreadyExists(t *testing.T) {
 	dir := t.TempDir()
 	in := filepath.Join(dir, "in.csv")
