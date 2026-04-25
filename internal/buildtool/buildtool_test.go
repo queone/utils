@@ -820,6 +820,47 @@ func TestCheckNestedFencesOnFixtureDir(t *testing.T) {
 	}
 }
 
+func TestCheckNestedFencesSkipsDeletedFiles(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	// Init a git repo so listMarkdownFiles uses git ls-files.
+	for _, args := range [][]string{
+		{"init", "-b", "main"},
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "test"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	// Create and commit a .md file, then delete it on disk.
+	mdPath := filepath.Join(dir, "gone.md")
+	if err := os.WriteFile(mdPath, []byte("# Gone\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"add", "gone.md"},
+		{"commit", "-m", "add gone.md"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	os.Remove(mdPath)
+
+	findings, err := CheckNestedFences(dir)
+	if err != nil {
+		t.Fatalf("CheckNestedFences should skip deleted files, got error: %v", err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("expected zero findings, got %d", len(findings))
+	}
+}
+
 // TestCheckNestedFencesCleanDir verifies zero findings on a dir with no markdown.
 func TestCheckNestedFencesCleanDir(t *testing.T) {
 	t.Parallel()

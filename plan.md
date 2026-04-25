@@ -6,9 +6,7 @@ A collection of small CLI utilities written in Go. Each utility is a single-purp
 
 ## Ideas To Explore
 
-Pre-rubric ideas captured for future discussion. Prefix each with `IE<N>:` (sequential N) for stable references. These are not commitments and have not passed the objective-fit rubric in `AGENTS.md`. Remove entries when promoted to an AC, completed, or no longer interesting; this section is pre-rubric staging, not a historical record.
-
-Per the `IE-as-pointer` Local Rule in `docs/development-cycle.md`, IE entries in this repo may also persist as pointers to stub ACs that have been drafted but not yet scoped — those entries are removed only when the referenced AC ships or is deleted.
+Ideas captured for future reference. Prefix each with `IE<N>:` (sequential N) for stable references. Entries come in two shapes: (a) **pre-rubric idea** — `IE<N>: <one-liner>` awaiting director discussion and the objective-fit rubric (see `AGENTS.md` Approval Boundaries); (b) **pointer to a drafted AC stub** not yet scoped through the critique cycle — `IE<N>: <one-liner> → docs/ac<N>-<slug>.md`. A shape (a) entry that clears the rubric converts to shape (b) at AC-draft time (keeping the same `IE<N>` number) rather than being removed, so the entry persists as a pointer until the pointed-to AC ships. Remove entries when the underlying idea is closed: rejected, retired, or (for AC pointers) the pointed-to AC has shipped and its file has been deleted. This section is not a historical record.
 
 - IE1: Security shell-injection fix in `cmd/fr/main.go` — tracked as `docs/ac11-fr-shell-injection-fix.md`.
 - IE2: Bugfix `dos2unix` wrong `programName` constant — tracked as `docs/ac12-dos2unix-programname-fix.md`.

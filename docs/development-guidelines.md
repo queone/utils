@@ -27,6 +27,7 @@ For workflow, see `development-cycle.md`. For validation, see `build-release.md`
 - When source-of-truth code is duplicated into templates or rendered examples, fixes must propagate to all copies in the same change
 - Grep the full repo for the pattern being changed before considering a fix complete
 - If a template and its rendered output diverge, the template is authoritative
+- Exported functions in template-owned packages (`internal/buildtool`, `internal/reltool`, `internal/color`) carry godoc single-line comments. Consumers that wholesale-adopt these packages inherit a correctly-commented surface.
 
 ## Program Version Declaration
 

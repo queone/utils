@@ -601,6 +601,9 @@ func CheckNestedFences(dir string) ([]string, error) {
 	var findings []string
 	for _, path := range files {
 		content, err := os.ReadFile(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", path, err)
 		}

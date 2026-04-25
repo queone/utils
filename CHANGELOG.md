@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.18.0 | AC20: adopt governa v0.54.1 sync; fix mdcheck skip deleted files |
 | 0.17.0 | AC19: adopt governa v0.47.0 sync; IE dual-use semantics upstream |
 | 0.16.1 | fix: case-insensitive CSV header matching in moneycon |
 | 0.16.0 | AC18: add moneycon financial data consolidation utility |
