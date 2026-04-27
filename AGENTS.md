@@ -2,9 +2,9 @@
 
 ## Governed Sections
 
-`CLAUDE.md` is a symlink to this file; do not edit them independently. This file is the governance contract for this repo and the only doc guaranteed to be loaded every agent session.
+`CLAUDE.md` is a symlink to this file; do not edit them independently.
 
-Detail, rationale, and examples live in `docs/development-guidelines.md`, `docs/build-release.md`, `docs/development-cycle.md`. Those docs are loaded on demand.
+Detail and rationale live in `docs/development-guidelines.md`, `docs/build-release.md`, `docs/development-cycle.md`.
 
 Sections (fixed set):
 
@@ -13,6 +13,7 @@ Sections (fixed set):
 - `Approval Boundaries`
 - `File-Change Discipline`
 - `Review Style`
+- `Base Rules`
 - `Project Rules`
 
 Rules:
@@ -23,12 +24,11 @@ Rules:
 - When updating, name the exact sections to change and keep edits local.
 - Treat this file as a governed config artifact, not freeform prose.
 - Use flat `##` with inline bullets. Avoid `###` sub-subsections — split or extract instead. Exception: documented technical need (e.g., grouped domain rules in Project Rules).
-- Repo-specific rules do **not** add a `## Local Rules` section to this file — the section set above is fixed. Use `## Local Rules` in supplementary docs (e.g., `docs/build-release.md`); see `docs/development-cycle.md` § Local Rules.
-- Project Rules overrides any preceding section when explicit and named. Override declarations must use the format `**<Section Name> override:** ...` so they are greppable and auditable.
 
 ## Interaction Mode
 
-- Default to exploratory discussion. Do not create files or make changes without explicit authorization.
+- Default to exploratory discussion. 
+- Do not create files or make changes without explicit authorization.
 - When authorized, make the smallest change that satisfies the request.
 - Surface assumptions, ambiguities, and missing context before any direction-changing action.
 - **Role assignment** (if `docs/roles/` exists):
@@ -48,7 +48,6 @@ Rules:
 - Do not prepare, execute, publish, deploy, or distribute without explicit user request.
 - Do not start release-prep bookkeeping early. Begin only when the user asks to prep for release.
 - Never run the release command. Present it for the user to run. Follow the Pre-Release Checklist in `docs/build-release.md`.
-- When release prep is explicitly requested, run the documented pre-release checklist, prepare the exact version and a concrete release message derived from the actual changes, and then present only the canonical release command for the user to run or approve. Show the full git sequence only if the user explicitly asks for it.
 - **AC-first workflow** (non-trivial changes):
   - Draft `docs/ac<N>-<slug>.md` before implementation, using `docs/ac-template.md` if available. Define scope, out-of-scope, objective fit, required tests.
   - Objective Fit must answer: (1) what outcome this serves, (2) why this beats competing work, (3) what decisions/constraints it depends on, (4) direct roadmap work or intentional pivot.
@@ -67,10 +66,6 @@ Rules:
 - Every AC doc ends with `## Status`. Valid states: `PENDING`, `IN PROGRESS`, `DEFERRED` (with reason). Use per-phase status for partial completion. Do not set DONE — completed ACs are deleted per the development cycle.
 - Record follow-on improvements in `plan.md` or the repo's planning artifact. If neither exists, note them to the user. Do not expand scope ad hoc.
 - Do not commit personal absolute filesystem paths. Use repo-relative paths or placeholders like `<project-root>`.
-- Keep generated repos self-contained; do not introduce runtime dependence on this template repo.
-- Bootstrap and maintain a root `CHANGELOG.md` for release-bearing repos, following the canonical table specified in `docs/build-release.md` Pre-Release Checklist CHANGELOG step. Do not invent alternative shapes.
-- Version bumps, changelog/release-note updates, tag prep, and publish workflows are release-scoped work, not routine edits.
-- When the user triggers a release or publish flow, update the required release artifacts in the same pass.
 - **Code changes are not complete without accompanying tests. No exceptions for "small" changes, CLI output, or formatting.**
 - **Codify corrections about repo behavior in the appropriate governance doc — not in agent-local memory. Refine existing rules in place; add new ones to the best-fit section. Agent memory is not a shadow governance system.**
 
@@ -84,7 +79,7 @@ Rules:
 - Do not note skipped checks unless the omission is unusual or affects confidence.
 - Architectural decisions to the director: present two bounded options plus a recommendation. One viable option → state as recommendation. More than two → name the best two, note the rest in one sentence.
 
-## Project Rules
+## Base Rules
 
 - Use the repo's canonical build command (`./build.sh` or equivalent). Never run individual tool commands directly. See `docs/build-release.md`.
 - For single-utility smoke tests, use `go run ./cmd/<tool>/` or `go build -o /tmp/<name> ./cmd/<tool>/`. Do not `go build ./cmd/<tool>/` from repo root — drops a stray binary.
@@ -95,4 +90,9 @@ Rules:
 - Every AC labels each acceptance test `[Automated]` or `[Manual]`. See `docs/ac-template.md`.
 - New CLI flags pair a one-letter short form (standard, leads help output) with a long-form alias. Migrate existing flags when their code is next touched.
 - Follow existing repo patterns unless an approved improvement says otherwise.
+- Comment public functions.
+- Prefer dedicated tools: `fd` (files), `rg` (text), `jq` (JSON), `pup` (HTML), `sd` (in-place replace), `sqlite-utils` (SQLite), `ast-grep` (structural). Batch independent shell calls. Do not re-read files already in context.
+
+## Project Rules
+
 - Adding a new utility: add its entry to the `README.md` utility list in alphabetical order.
