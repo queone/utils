@@ -1193,7 +1193,7 @@ PROBLEM
   Claude Code stores configuration across multiple layers, each with
   different portability characteristics:
 
-  Layer 1: Repo governance (AGENTS.md, docs/roles/, etc.)
+  Layer 1: Repo governance (AGENTS.md, docs/role-*.md, etc.)
     - Lives in git, fully portable, agent-agnostic.
     - Any agent on any machine gets the same governance contract.
     - Managed by governa (or manually).

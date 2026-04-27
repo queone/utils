@@ -1,54 +1,40 @@
 # Build and Release
 
-## Build and Test Rules
+Reference for this repo's build pipeline, pre-release checklist, and acceptance test conventions. The enforceable one-liners live in `AGENTS.md`; this document explains the pipeline, the steps, and the rationale.
 
-- use one canonical local build command and keep this document current
-- run formatting, static checks, tests, and packaging through that command or documented sequence
-- do not trigger release work during routine implementation
+## Build
 
-This repo is Go-based and keeps the real implementation in:
+This repo has a single canonical build/test workflow: `./build.sh`.
 
-- `cmd/build/main.go`
-- `cmd/rel/main.go`
+`./build.sh` is a thin Bash dispatcher. The real implementation lives in `go run ./cmd/build` (build/test) and `go run ./cmd/rel` (release). Both `cmd/build` and `cmd/rel` are `go run` entrypoints — they are intentionally not installed as binaries.
 
-The root `build.sh` script is a convenience wrapper for Unix, Linux, and Git-Bash environments.
+The build pipeline runs these steps in order, fail-hard on each:
 
-## Minimum Validation
+1. `mdcheck` — **fail-hard.** Scans tracked markdown files for nested-fence bugs (3-backtick outer fence containing a tagged 3-backtick inner opener). The fix is to widen the outer fence to 4+ backticks or switch to `~~~`.
+2. `go mod tidy` — ensure `go.mod` and `go.sum` are consistent
+3. `go fmt ./...` — **fail-hard.** If `go fmt` rewrote any file (non-empty stdout), the build fails. Re-run after committing the formatting fix.
+4. `go fix ./...` — advisory; output is logged but does not break the build
+5. `go vet ./...` — **fail-hard**
+6. Test suite with coverage — fail-hard on any test failure
+7. `staticcheck ./...` — **fail-hard.** Ensured available (installed via `go install` if not on PATH).
+8. Binary build — installs utilities to `$GOPATH/bin`
 
-- formatting passes
-- static checks pass
-- automated tests pass
-- changed docs match actual behavior
+To scope the run to selected packages, pass target names: `./build.sh build rel`. Validation (vet, fmt, test, staticcheck) runs only against those packages. Targets named `build` or `rel` are validated but not installed as binaries — run them with `go run` instead.
 
-## Canonical Build Commands
-
-```bash
-go run ./cmd/build
-```
-
-Convenience wrapper:
-
-```bash
-./build.sh
-```
-
-To scope the run to selected commands:
-
-```bash
-go run ./cmd/build build rel
-```
-
-or:
-
-```bash
-./build.sh build rel
-```
-
-If you pass `build` or `rel` as targets, the command will validate those entrypoints but will not install binaries for them.
+Invoking individual Go tools directly skips the tidy/fmt/lint pipeline above. A "passing" direct invocation can still produce a build that `./build.sh` would reject. The wrapper guarantees that what passes locally is what would pass in CI.
 
 ## Sandboxed Execution
 
 Under sandboxed execution that blocks Go's build cache (look for `writing stat cache ... operation not permitted`), `staticcheck` may print a `matched no packages` warning even though it ran cleanly. Treat as advisory unless real findings appear; an unrestricted rerun confirms.
+
+## Acceptance Tests
+
+Every AT in an AC document must be labeled `[Automated]` or `[Manual]`.
+
+- **Automated** — The result can be verified from CLI output, test assertions, or file inspection. Automated ATs are run during implementation and re-run as part of the pre-release checklist.
+- **Manual** — Requires a live end-to-end action and must be confirmed by the user. The agent cannot self-verify these.
+
+Default to Automated whenever the result is verifiable without a live external service. Manual ATs add friction to the release flow, so reserve them for behaviors that genuinely cannot be checked any other way.
 
 ## Pre-Release Checklist
 

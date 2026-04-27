@@ -4,6 +4,8 @@ Engineering guidance for any agent or contributor working in this repo.
 These are durable coding practices, not workflow or process rules.
 For workflow, see `development-cycle.md`. For validation, see `build-release.md`.
 
+utils is a collection of small, single-purpose CLI utilities written in Go — each installable as a standalone binary via `go install`. The repo prioritizes correctness, stability, and low-friction install/use over feature breadth. See `plan.md` for product direction.
+
 ## Identifier Strategy
 
 - Choose a primary key strategy early and document it in `arch.md`
@@ -29,17 +31,32 @@ For workflow, see `development-cycle.md`. For validation, see `build-release.md`
 - If a template and its rendered output diverge, the template is authoritative
 - Exported functions in shared packages (`internal/buildtool`, `internal/reltool`, `internal/color`) carry godoc single-line comments to keep the public surface self-documenting.
 
+The convention is "what it does, not how" — the *how* changes with refactors and the comment goes stale; the *what* is the contract.
+
 ## Program Version Declaration
 
 - Every installable `cmd/<name>/main.go` must declare a non-empty `const programVersion` string literal
 - Script-only helper entrypoints (`build`, `rel`) are exempt
 - The build tool validates this before compiling installable binaries; missing or empty declarations fail the build
 
+### Semver application
+
+| Bump  | When                                                                                  |
+|-------|---------------------------------------------------------------------------------------|
+| PATCH | Bug fixes, tests, internal refactors, tooling — anything invisible to users at the CLI level. Batch when possible. |
+| MINOR | User-visible features, new commands, new flags, behavioral changes, governance/template/docs scaffolding adoption. Reset patch to 0. |
+| MAJOR | Not applicable before 1.0.                                                            |
+
+The "would a user notice this in `--help`?" test catches most ambiguous cases. New flags, renamed flags, new commands, changed output formats — all MINOR. Internal refactors, dependency bumps that don't change behavior, additional tests, build-tooling changes — all PATCH. The "batch when possible" guidance for PATCH means you can accumulate several small fixes into one PATCH release rather than tagging each one.
+
 ## Error Handling And Validation
 
 - Validate at system boundaries (user input, external APIs, file I/O); trust internal code
 - Fail explicitly rather than silently degrading — a clear error is better than wrong output
 - Static analysis and linting errors are build failures, not warnings
+- Wrap user-facing errors with operation context and recovery guidance — bare `return err` at command boundaries is unacceptable
+
+The user sees the error message verbatim, and Go errors from the standard library or third-party packages have no actionable context. Wrapping with `fmt.Errorf("operation: %w (recovery hint)", err)` gives the user a fighting chance to fix the problem themselves.
 
 ## Testing Expectations
 
@@ -47,6 +64,8 @@ For workflow, see `development-cycle.md`. For validation, see `build-release.md`
 - Every new function and error path should have a test before the work is presented as complete
 - If a code path cannot be tested without mocking infrastructure that is out of scope, document the coverage gap explicitly rather than silently skipping it
 - Label tests that require live systems or manual verification as `[Manual]`
+
+When refactoring, treat existing tests as load-bearing assertions. They encode behavior that someone thought was worth pinning down. If a test is genuinely obsolete, delete it explicitly with a note in the commit; don't let it rot.
 
 ## Dependency And Import Hygiene
 
@@ -67,4 +86,4 @@ For workflow, see `development-cycle.md`. For validation, see `build-release.md`
 
 - Docs ship with the code change that introduces the behavior
 - If a doc references a function, flag, or file path, verify it still exists before publishing
-- Architecture docs (`arch.md`) reflect what is built, not what is planned
+- Architecture docs (`arch.md`) reflect what is built, not what is planned; `plan.md` is forward-looking only

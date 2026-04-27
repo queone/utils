@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.21.0 | AC23: doc alignment (build-release, dev-guidelines, roles flatten) |
 | 0.20.1 | align build-release.md prep appendix with governa |
 | 0.20.0 | AC22: purge governa sync traces, retire Local Rules, relocate AT labeling |
 | 0.19.0 | AC21: governance contract consolidation (9 sections to 6, prep.sh removal) |
