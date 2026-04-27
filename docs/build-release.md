@@ -50,29 +50,20 @@ If you pass `build` or `rel` as targets, the command will validate those entrypo
 
 Under sandboxed execution that blocks Go's build cache (look for `writing stat cache ... operation not permitted`), `staticcheck` may print a `matched no packages` warning even though it ran cleanly. Treat as advisory unless real findings appear; an unrestricted rerun confirms.
 
-## Acceptance Tests
-
-This repo uses a labeled-AT convention adopted with the AC-first workflow. Every AT in an AC document must be labeled `[Automated]` or `[Manual]`.
-
-- **Automated** — The result can be verified from CLI output, test assertions, or file inspection. Automated ATs are run during implementation and re-run as part of the pre-release checklist.
-- **Manual** — Requires a live end-to-end action and must be confirmed by the user. The agent cannot self-verify these.
-
-Default to Automated whenever the result is verifiable without a live external service. Manual ATs add friction to the release flow, so reserve them for behaviors that genuinely cannot be checked any other way.
-
 ## Pre-Release Checklist
 
-Do not begin this checklist until the user explicitly asks to prep for release or equivalent. This is gated by the release-prep trigger rule in `AGENTS.md` (Release Or Publish Triggers).
+Do not begin this checklist until the user explicitly asks to prep for release or equivalent. This is gated by the release-prep trigger rule in `AGENTS.md` (Approval Boundaries).
 
 The operator flow is two steps:
 
-1. **Run `./prep.sh vX.Y.Z "message"`.** Stages version bumps, inserts the CHANGELOG row, deletes completed AC files (plus `-critique.md` and `-dispositions.md` companions), runs validation builds before and after, and prints the canonical release command. The agent determines the version (semver classification from the AC's scope) and drafts the release message (≤ 80 characters) before invoking prep.
+1. **Run `go run ./cmd/prep/ vX.Y.Z "message"`.** Stages version bumps, inserts the CHANGELOG row, deletes completed AC files (plus `-critique.md` and `-dispositions.md` companions), runs validation builds before and after, and prints the canonical release command. The agent determines the version (semver classification from the AC's scope) and drafts the release message (≤ 80 characters) before invoking prep.
 2. **Run the printed release command (`./build.sh vX.Y.Z "message"`).** `cmd/rel` shows `git status --short`, lists every git step it will execute, and prompts for interactive confirmation. On approval it orchestrates `git add → commit → tag → push tag → push branch`. Optional: run `git diff` between the two steps if you want to inspect the CHANGELOG row wording and version-string values before committing — `cmd/rel`'s own status preview is sufficient to catch wrong-file inclusions or deletions.
 
 Present only the release command after prep; do not add trailing commentary about wrapper routing or prompts. The director already knows.
 
 ### Appendix: what prep does
 
-`./prep.sh` runs nine phases internally so the operator flow above stays short:
+`go run ./cmd/prep/` runs nine phases internally so the operator flow above stays short:
 
 1. **Validate inputs.** Semver pattern (`vX.Y.Z`), message non-empty and ≤ 80 characters.
 2. **Validate git state.** Inside a git work tree, target tag does not exist yet, HEAD is not at the latest tag with a clean working tree.
@@ -93,18 +84,7 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 - When motivated by consumer sync feedback, credit the consumer: `(addresses <consumer> feedback from vX.Y.Z sync)`.
 - When an AC closes a consumer-tracked IE, include `closes <consumer>:IE<N>` so sync can advise the consumer to retire the entry.
 
-Flags: `--dry-run` (or `-n`) prints intended writes without touching the working tree; `--no-build` skips phases 3 and 8. Both are for power users or tests — the common path is plain `./prep.sh vX.Y.Z "message"`.
-
-## Template Upgrade
-
-This repo was generated from a governa governance template. To check for template updates:
-
-1. Run `governa sync` to generate a review document with per-file recommendations. This also updates `TEMPLATE_VERSION` to the current template version.
-2. Compare `TEMPLATE_VERSION` in this repo against the template's current version. `TEMPLATE_VERSION` reflects the last template version this repo was evaluated against, not the original bootstrap version.
-3. `.governa/manifest`, if present, records SHA-256 checksums of each file at bootstrap time. This enables comparison to distinguish your customizations from stale template content.
-4. When a file should remain a stable repo-specific carve-out after review, record that decision with `governa ack <path> --reason "..."` so future syncs move it into `## Acknowledged Drift` instead of re-flagging it in `## Adoption Items`.
-
-Template refresh is operator-driven. The governa tool proposes; the repo maintainer decides what to adopt.
+Flags: `--dry-run` (or `-n`) prints intended writes without touching the working tree; `--no-build` skips phases 3 and 8. Both are for power users or tests — the common path is plain `go run ./cmd/prep/ vX.Y.Z "message"`.
 
 ## Local Rules
 

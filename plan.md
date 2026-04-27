@@ -16,3 +16,7 @@ Ideas captured for future reference. Prefix each with `IE<N>:` (sequential N) fo
 - IE6: `cmd/cash5/main.go` refactor — split ~956 lines into `main.go` / `fetch.go` / `display.go` / `stats.go` / `model.go` — tracked as `docs/ac16-cash5-refactor.md`.
 - IE7: CLI framework standardization policy (manual / go-arg / cobra) — tracked as `docs/ac17-cli-framework-policy.md`.
 - IE8: Replace cash5 WINNING GEOMETRIES with just the WINNING CIRCLE
+- IE9: Remove dead governa bookkeeping artifacts (`.governa/manifest`, `TEMPLATE_VERSION`, `.governa/sync-review.md`)
+- IE10: Fix ac-template.md `governa sync` → `governa apply` reference
+- IE11: Adopt new Project Rules bullets from governa template ("Comment public functions", "Prefer dedicated tools")
+- IE12: Evaluate remaining governa template improvements (development-guidelines.md, development-cycle.md divergence)
