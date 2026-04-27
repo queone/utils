@@ -1067,12 +1067,12 @@ func TestAT26_AgentsMdFlagConventionRule(t *testing.T) {
 	if !bytes.Contains(data, []byte(wantPhrase)) {
 		t.Errorf("AGENTS.md missing flag-convention rule (%q)", wantPhrase)
 	}
-	// Must be under Project Rules section.
+	// Must be under Base Rules section.
 	content := string(data)
-	projIdx := strings.Index(content, "## Project Rules")
+	projIdx := strings.Index(content, "## Base Rules")
 	phraseIdx := strings.Index(content, wantPhrase)
 	if projIdx < 0 || phraseIdx < 0 || phraseIdx < projIdx {
-		t.Errorf("flag-convention rule not in Project Rules section")
+		t.Errorf("flag-convention rule not in Base Rules section")
 	}
 }
 

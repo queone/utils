@@ -1,6 +1,0 @@
-governa-manifest-v1
-template-version: 0.54.1
-repo-name: utils
-purpose: A collection of small CLI utilities written in Go.
-type: CODE
-stack: Go

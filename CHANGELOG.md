@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.20.0 | AC22: purge governa sync traces, retire Local Rules, relocate AT labeling |
 | 0.19.0 | AC21: governance contract consolidation (9 sections to 6, prep.sh removal) |
 | 0.18.0 | AC20: adopt governa v0.54.1 sync; fix mdcheck skip deleted files |
 | 0.17.0 | AC19: adopt governa v0.47.0 sync; IE dual-use semantics upstream |

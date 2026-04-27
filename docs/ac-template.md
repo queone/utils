@@ -55,12 +55,7 @@ List things the AC explicitly does **not** do. This is as important as the In Sc
 
 ## Acceptance Tests
 
-Every AT must be labeled `[Automated]` or `[Manual]`:
-
-- **Automated** — The result can be verified from CLI output, test assertions, or file inspection. Automated ATs are run during implementation and re-run as part of the pre-release checklist.
-- **Manual** — Requires a live end-to-end action and must be confirmed by the user. The agent cannot self-verify these.
-
-Default to Automated whenever the result is verifiable without a live external service. Manual ATs add friction to the release flow, so reserve them for behaviors that genuinely cannot be checked any other way.
+Every AT must be labeled `[Automated]` or `[Manual]` (see `docs/build-release.md` for the labeling convention).
 
 **AT1** [Automated] — One-line description of what is verified, with the exact check (file existence, grep pattern, SQL query, or CLI output).
 
@@ -74,7 +69,7 @@ List the docs that must be updated as part of this AC. If a change touches code 
 
 - `arch.md` — what section
 - `README.md` — what section
-- `CHANGELOG.md` — the release row is added at release prep time, not during implementation (the file itself is created by `governa sync` as a stub)
+- `CHANGELOG.md` — the release row is added at release prep time, not during implementation (the file itself is created by `governa apply` as a stub)
 
 ## Director Review
 
