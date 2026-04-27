@@ -63,12 +63,12 @@ Present only the release command after prep; do not add trailing commentary abou
 
 ### Appendix: what prep does
 
-`go run ./cmd/prep/` runs nine phases internally so the operator flow above stays short:
+`go run ./cmd/prep/` runs nine phases internally so the operator flow above stays short. Each phase has a clear failure mode:
 
 1. **Validate inputs.** Semver pattern (`vX.Y.Z`), message non-empty and ≤ 80 characters.
 2. **Validate git state.** Inside a git work tree, target tag does not exist yet, HEAD is not at the latest tag with a clean working tree.
 3. **Pre-check build.** `./build.sh` run before any writes; skipped with `--no-build` or `--dry-run`.
-4. **Detect version targets.** Scans `cmd/*/main.go` for `programVersion`, plus `TEMPLATE_VERSION` and `internal/templates/version.go` when present (both presence-gated). Multi-binary repos are picked up automatically.
+4. **Detect version targets.** Scans `cmd/*/main.go` for `programVersion`, `TEMPLATE_VERSION` and `internal/templates/version.go` (each presence-gated). Multi-binary repos are picked up automatically.
 5. **Detect CHANGELOG targets + fail-fast idempotency guard.** Root `CHANGELOG.md` and `internal/templates/CHANGELOG.md` (template-repo case). If any target already contains a row for the target version, prep exits with a fatal error before any writes.
 6. **Parse AC refs.** `AC[0-9]+` scan on the release message; composites like `AC60+AC61` yield multiple refs.
 7. **Apply writes.** Version bumps (per-file idempotent no-op when the file already has the target value); CHANGELOG row insertion under `| Unreleased | |`; AC file deletions plus `-critique.md` companion deletions. Skipped when `--dry-run`.
@@ -81,13 +81,5 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 - Summaries are single-line, ≤ 500 characters; lead with the AC reference if any.
 - Versions are unprefixed (`0.29.0`, not `v0.29.0`).
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
+
 Flags: `--dry-run` (or `-n`) prints intended writes without touching the working tree; `--no-build` skips phases 3 and 8. Both are for power users or tests — the common path is plain `go run ./cmd/prep/ vX.Y.Z "message"`.
-
-## Acceptance Test Labeling
-
-Every AT must be labeled `[Automated]` or `[Manual]`:
-
-- **Automated** — The result can be verified from CLI output, test assertions, or file inspection. Automated ATs are run during implementation and re-run as part of the pre-release checklist.
-- **Manual** — Requires a live end-to-end action and must be confirmed by the user. The agent cannot self-verify these.
-
-Default to Automated whenever the result is verifiable without a live external service. Manual ATs add friction to the release flow, so reserve them for behaviors that genuinely cannot be checked any other way.
