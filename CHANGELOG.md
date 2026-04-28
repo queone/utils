@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.22.0 | AC24: 2-role consolidation — Operator+Director, mandatory self-review |
 | 0.21.0 | AC23: doc alignment (build-release, dev-guidelines, roles flatten) |
 | 0.20.1 | align build-release.md prep appendix with governa |
 | 0.20.0 | AC22: purge governa sync traces, retire Local Rules, relocate AT labeling |

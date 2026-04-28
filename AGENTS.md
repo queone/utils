@@ -27,16 +27,11 @@ Rules:
 
 ## Interaction Mode
 
-- Default to exploratory discussion. 
+- Default to exploratory discussion.
 - Do not create files or make changes without explicit authorization.
 - When authorized, make the smallest change that satisfies the request.
 - Surface assumptions, ambiguities, and missing context before any direction-changing action.
-- **Role assignment** (if `docs/role-*.md` files exist):
-  - If `docs/role-maintainer.md` exists and no role is assigned, default to maintainer and announce it in the first response (e.g., "Operating as maintainer (default).").
-  - Otherwise, ask which role to assume. Require explicit assignment ("act as DEV", "you are QA", etc.).
-  - On assignment, read `docs/role-<role>.md` (case-insensitive) and follow it alongside `AGENTS.md`. Role persists for the session until explicitly switched.
-  - If the role file is missing, say so and continue under shared governance only.
-  - `role-director.md` is reference, not assignable. Decline "act as director" and ask for a valid agent role.
+- The agent is automatically the Operator per `docs/roles.md`. No role announcement or switching.
 
 ## Approval Boundaries
 
@@ -46,13 +41,14 @@ Rules:
 - In-scope edits to existing files are allowed once the user has authorized implementation.
 - Stop and ask when a request is ambiguous and the change is hard to reverse.
 - Do not prepare, execute, publish, deploy, or distribute without explicit user request.
+- **Never run `git commit`. Draft the message; present the command for the user to run.** No exception.
 - Do not start release-prep bookkeeping early. Begin only when the user asks to prep for release.
 - Never run the release command. Present it for the user to run. Follow the Pre-Release Checklist in `docs/build-release.md`.
 - **AC-first workflow** (non-trivial changes):
   - Draft `docs/ac<N>-<slug>.md` before implementation, using `docs/ac-template.md` if available. Define scope, out-of-scope, objective fit, required tests.
   - Objective Fit must answer: (1) what outcome this serves, (2) why this beats competing work, (3) what decisions/constraints it depends on, (4) direct roadmap work or intentional pivot.
   - Do not implement until the AC is critiqued and the user confirms it is implementation-ready.
-- **AC critique gate:** After drafting, ask the user to initiate external critique. Proceed only when (1) findings are integrated into `## Critique` (QA content transcribed by DEV; DEV responses become AC revisions + `### Disposition Log` entries), and (2) the user explicitly confirms ready. See `docs/critique-protocol.md`.
+- **AC critique gate:** After drafting, the director reviews and provides critique findings. The Operator transcribes findings into the AC's `## Critique` section and addresses them. Proceed only when the director explicitly confirms the AC is implementation-ready. See `docs/critique-protocol.md`.
 
 ## File-Change Discipline
 
@@ -78,6 +74,7 @@ Rules:
 - Prefer plain text and simple bullets. Use tables or richer structure only when content clearly benefits.
 - Do not note skipped checks unless the omission is unusual or affects confidence.
 - Architectural decisions to the director: present two bounded options plus a recommendation. One viable option → state as recommendation. More than two → name the best two, note the rest in one sentence.
+- Exception: substantial completion reports must include the three-part self-review structure (Verified / Red-teamed / Not checked) defined in `docs/roles.md`, even when the default is terse.
 
 ## Base Rules
 
