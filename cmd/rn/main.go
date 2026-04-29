@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	icolor "github.com/queone/utils/internal/color"
+	icolor "github.com/queone/governa-color"
 )
 
 const (

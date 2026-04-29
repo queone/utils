@@ -657,23 +657,24 @@ func TestMoveFeedbackCompanionMissingSource(t *testing.T) {
 	}
 }
 
-// AC26 guard: utils' cmd/*/main.go uses the grouped const form
+// AC26 guard (permanent): utils' cmd/*/main.go uses the grouped const form
 // (programName + programVersion in const ( ... )). The current programVersionRe
 // matches only the inline form, so detectVersionTargets returns zero
 // programVersion-kind targets and prep silently skips per-utility bumps. That
-// silent-skip is correct-by-accident for utils — the canonical fix lives in
-// governa-preptool (designed under governa AC96, shipped via the downstream
-// preptool-extraction AC). This test arms the trap: if anyone broadens
-// programVersionRe to match the grouped form, detectVersionTargets returns a
-// target, applyVersionBump rewrites the file, bytes diverge, and this test
-// fails. Assertion direction is "values must NOT change" — bytes-equal
+// silent-skip is correct-by-accident for utils. The bug was resolved upstream
+// by governa AC100 via an in-place broaden + safe auto-detect filter (1 target
+// → bump; >1 → skip with warning); preptool stays a template (convention-
+// coupling test rejected library extraction), so no governa-preptool ships.
+// utils chose this doctrine+guard pattern over porting AC100's source patch.
+// This test arms the trap: if anyone broadens programVersionRe to match the
+// grouped form without also porting the auto-detect filter, detectVersionTargets
+// returns a target, applyVersionBump rewrites the file, bytes diverge, and this
+// test fails. Assertion direction is "values must NOT change" — bytes-equal
 // end-to-end after running detect → apply with sentinel target version 9.9.9.
 //
-// On migration to governa-preptool, delete this test along with the rest of
-// the local preptool copy. See:
+// See:
 //   - docs/build-release.md "Per-Utility programVersion Doctrine"
-//   - governa's advisory archive: docs/advisories/program-version-bump.md (upstream)
-//   - plan.md IE10 (migration trigger: governa-preptool ships)
+//   - upstream advisory archive (RESOLVED): governa's docs/advisories/program-version-bump.md
 func TestAC26_GroupedConstFormNotBumped(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "cmd", "foo", "main.go")
@@ -707,10 +708,11 @@ func TestAC26_GroupedConstFormNotBumped(t *testing.T) {
 	}
 	if !bytes.Equal(before, after) {
 		t.Fatalf("AC26 guard tripped: cmd/foo/main.go bytes changed after detect+apply.\n"+
-			"programVersionRe was broadened to match the grouped const form. Broadening\n"+
-			"without first selecting per-utility-vs-repo-tracked semantics in a successor\n"+
-			"toolchain triggers a mass downgrade of every utility to the release version.\n"+
-			"See docs/advisory-program-version-bump.md before proceeding.\n\n"+
+			"programVersionRe was broadened to match the grouped const form without\n"+
+			"also porting governa AC100's safe auto-detect filter (1 target → bump;\n"+
+			">1 → skip with warning). Broadening without that filter triggers a mass\n"+
+			"downgrade of every utility to the release version.\n"+
+			"See governa's docs/advisories/program-version-bump.md before proceeding.\n\n"+
 			"before:\n%s\nafter:\n%s", string(before), string(after))
 	}
 }

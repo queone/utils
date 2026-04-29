@@ -1,10 +1,15 @@
+// Thin wrapper. Logic lives in github.com/queone/governa-reltool. Kept in-tree
+// (not extracted to the library's cmd/) because build.sh invokes via
+// `go run ./cmd/rel` — extraction would move version pinning into build.sh,
+// a worse propagation surface than ~20 lines of inert boilerplate. See governa
+// AC102 reasoning.
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/queone/utils/internal/reltool"
+	"github.com/queone/governa-reltool"
 )
 
 func main() {

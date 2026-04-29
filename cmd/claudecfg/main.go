@@ -18,7 +18,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/queone/utils/internal/color"
+	"github.com/queone/governa-color"
 )
 
 const (

@@ -15,4 +15,3 @@ Ideas captured for future reference. Prefix each with `IE<N>:` (sequential N) fo
 - IE5: Audit of `init()` no-op suppressor functions across `cmd/*/main.go` — tracked as `docs/ac15-init-noop-suppressor-audit.md`.
 - IE6: `cmd/cash5/main.go` refactor — split ~956 lines into `main.go` / `fetch.go` / `display.go` / `stats.go` / `model.go` — tracked as `docs/ac16-cash5-refactor.md`.
 - IE7: CLI framework standardization policy (manual / go-arg / cobra) — tracked as `docs/ac17-cli-framework-policy.md`.
-- IE10: Migrate `utils` from local `internal/preptool` copy to imported `governa-preptool` once the library ships (governed by AC96 library policy and landed via the downstream preptool-extraction AC; trigger is library shipping, not AC96 alone); reconcile per-utility-vs-repo-tracked mode selection at adoption.

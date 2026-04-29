@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/queone/utils/internal/color"
+	"github.com/queone/governa-color"
 )
 
 const (

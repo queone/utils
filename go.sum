@@ -66,6 +66,12 @@ github.com/muesli/termenv v0.15.2 h1:GohcuySI0QmI3wN8Ok9PtKGkgkFIk7y6Vpb5PvrY+Wo
 github.com/muesli/termenv v0.15.2/go.mod h1:Epx+iuz8sNs7mNKhxzH4fWXGNpZwUaJKRS1noLXviQ8=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/queone/governa-buildtool v0.1.0 h1:NAv5jMr8eDB6zcBTZlnTbBmybbfUpQ0lVUE9PrD/r70=
+github.com/queone/governa-buildtool v0.1.0/go.mod h1:Joix/tV0qwPUK55Ko+T/n5L1Rl13lWYf2uLz5GtytfI=
+github.com/queone/governa-color v0.1.2 h1:6dYRRCRcyUKtP1aeAupaJ4J7cqMX8PAqGVzYnR8ztVY=
+github.com/queone/governa-color v0.1.2/go.mod h1:hQRFFa1Ko11gJl8iUe2EzFG75cfWBCSSb+aoTUAy9UY=
+github.com/queone/governa-reltool v0.1.0 h1:BrbPlLfbL4Tpq/aw4iNF6wilnEgYW5HFcccLP0nn0XM=
+github.com/queone/governa-reltool v0.1.0/go.mod h1:ArIs5nhKRcUPeY3ag+87vfdOYGw7SA+mDUAVOb7olw4=
 github.com/queone/utl v1.4.0 h1:wd68bjYirsrYpOvONM95/E4qq3HqfHbVozFidfecbic=
 github.com/queone/utl v1.4.0/go.mod h1:T3W8U/BhiMWwGg0QyXsD+k106YqYr3+Kb/Y4INzMh0U=
 github.com/rivo/uniseg v0.1.0/go.mod h1:J6wj4VEh+S6ZtnVlnTBMWIodfgj8LQOQFoIToxlJtxc=

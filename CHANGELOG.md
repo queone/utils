@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.25.0 | AC27: import governa-color/reltool/buildtool; preptool doctrine cleanup |
 | 0.24.0 | AC26: programVersion doctrine + preptool guard, advisory archived |
 | 0.23.0 | AC25: cash5 circle-only display, drop -g flag and ASCII grids |
 | 0.22.0 | AC24: 2-role consolidation — Operator+Director, mandatory self-review |

@@ -11,7 +11,7 @@ import (
 	goyaml "github.com/goccy/go-yaml"
 	"github.com/gookit/color"
 	"github.com/mattn/go-isatty"
-	icolor "github.com/queone/utils/internal/color"
+	icolor "github.com/queone/governa-color"
 	"github.com/queone/utl"
 	"gopkg.in/yaml.v3"
 )

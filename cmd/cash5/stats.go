@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/queone/utils/internal/color"
+	"github.com/queone/governa-color"
 )
 
 func displayStatistics(draws []Draw) error {

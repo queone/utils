@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/queone/utils/internal/color"
+	"github.com/queone/governa-color"
 
 	"golang.org/x/net/html"
 )

@@ -9,7 +9,7 @@ import (
 
 	"github.com/gookit/color"
 	"github.com/mattn/go-isatty"
-	icolor "github.com/queone/utils/internal/color"
+	icolor "github.com/queone/governa-color"
 )
 
 const (
