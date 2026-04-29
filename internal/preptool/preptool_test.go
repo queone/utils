@@ -656,3 +656,61 @@ func TestMoveFeedbackCompanionMissingSource(t *testing.T) {
 		t.Error("expected error on missing source, got nil")
 	}
 }
+
+// AC26 guard: utils' cmd/*/main.go uses the grouped const form
+// (programName + programVersion in const ( ... )). The current programVersionRe
+// matches only the inline form, so detectVersionTargets returns zero
+// programVersion-kind targets and prep silently skips per-utility bumps. That
+// silent-skip is correct-by-accident for utils — the canonical fix lives in
+// governa-preptool (designed under governa AC96, shipped via the downstream
+// preptool-extraction AC). This test arms the trap: if anyone broadens
+// programVersionRe to match the grouped form, detectVersionTargets returns a
+// target, applyVersionBump rewrites the file, bytes diverge, and this test
+// fails. Assertion direction is "values must NOT change" — bytes-equal
+// end-to-end after running detect → apply with sentinel target version 9.9.9.
+//
+// On migration to governa-preptool, delete this test along with the rest of
+// the local preptool copy. See:
+//   - docs/build-release.md "Per-Utility programVersion Doctrine"
+//   - governa's advisory archive: docs/advisories/program-version-bump.md (upstream)
+//   - plan.md IE10 (migration trigger: governa-preptool ships)
+func TestAC26_GroupedConstFormNotBumped(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "cmd", "foo", "main.go")
+	groupedSrc := "package main\n\nconst (\n" +
+		"\tprogramName    = \"foo\"\n" +
+		"\tprogramVersion = \"1.0.0\"\n" +
+		")\n\nfunc main() {}\n"
+	mustWrite(t, mainPath, groupedSrc)
+
+	before, err := os.ReadFile(mainPath)
+	if err != nil {
+		t.Fatalf("read fixture before: %v", err)
+	}
+
+	targets, err := detectVersionTargets(dir)
+	if err != nil {
+		t.Fatalf("detectVersionTargets: %v", err)
+	}
+	for _, tgt := range targets {
+		if tgt.kind != "programVersion" {
+			continue
+		}
+		if err := applyVersionBump(tgt, "9.9.9"); err != nil {
+			t.Fatalf("applyVersionBump %s: %v", tgt.path, err)
+		}
+	}
+
+	after, err := os.ReadFile(mainPath)
+	if err != nil {
+		t.Fatalf("read fixture after: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("AC26 guard tripped: cmd/foo/main.go bytes changed after detect+apply.\n"+
+			"programVersionRe was broadened to match the grouped const form. Broadening\n"+
+			"without first selecting per-utility-vs-repo-tracked semantics in a successor\n"+
+			"toolchain triggers a mass downgrade of every utility to the release version.\n"+
+			"See docs/advisory-program-version-bump.md before proceeding.\n\n"+
+			"before:\n%s\nafter:\n%s", string(before), string(after))
+	}
+}

@@ -69,3 +69,11 @@ CHANGELOG row shape (enforced by prep's insertion code and by convention):
 - Do not backfill historical tags or invent alternative shapes (Keep-a-Changelog, sectioned `## vX.Y.Z`, etc.).
 
 Flags: `--dry-run` (or `-n`) prints intended writes without touching the working tree; `--no-build` skips phases 3 and 8. Both are for power users or tests — the common path is plain `go run ./cmd/prep/ vX.Y.Z "message"`.
+
+## Per-Utility programVersion Doctrine
+
+Per-utility `programVersion` constants in `cmd/*/main.go` are independent of the repo release version. Per-utility bumps live in the AC that changes the utility — never applied by `cmd/prep`. Utilities have already diverged into meaningful per-utility SemVers (e.g., `brew-update` 1.3.5, `pgen` 1.2.3, `dl` 2.0.0); aligning them to the repo tag would discard real per-utility evolution surfaced through `--version` output.
+
+The `programVersionRe` regex in `internal/preptool/preptool.go` matches only the inline form `const programVersion = "x.y.z"` and intentionally does **not** match the grouped form `const ( ... programVersion = "x.y.z" ... )` used by every utility in this repo. As a result, phase 4 of prep iterates `cmd/*/main.go` but yields zero `programVersion`-kind targets, and phase 7 writes nothing under `cmd/`. This silent-skip is correct for utils. **Broadening the regex to match the grouped form, without first selecting per-utility-vs-repo-tracked semantics in a successor toolchain, will trigger a mass downgrade of every utility to the release version.**
+
+The canonical fix is the `governa-preptool` library, designed under governa AC96 (library policy) and shipped via a downstream preptool-extraction AC. Until the library ships, utils carries doctrine plus a guard test (`TestAC26_GroupedConstFormNotBumped` in `internal/preptool/preptool_test.go`) that fails immediately if the regex is broadened. The full advisory is archived upstream in governa at `docs/advisories/program-version-bump.md`. See `plan.md` IE10 for the local migration tracker.
