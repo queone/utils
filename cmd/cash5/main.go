@@ -16,7 +16,7 @@ import (
 
 const (
 	programName     = "cash5"
-	programVersion  = "0.9.4"
+	programVersion  = "0.10.0"
 	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit 😀"
 )
 
@@ -179,9 +179,11 @@ func runDailyWithRand() error {
 	}
 	fmt.Println()
 
-	// Winning geometries — side-by-side grids with winners highlighted
-	fmt.Printf("  %s:\n", color.Blu("WINNING GEOMETRIES"))
-	displayGeometricGridSideBySide(lwn, "  ")
+	// Winning circle — inline image with winners highlighted (iTerm2 only)
+	if isITerm2() {
+		fmt.Printf("  %s:\n", color.Blu("WINNING CIRCLE"))
+		displayCircleImage(lwn, "  ")
+	}
 
 	// Closest matches to LWN (3+ matching numbers)
 	type closeMatch struct {
@@ -364,7 +366,6 @@ func printUsage() {
 		"  -f             Fetch new draws since last run (within last year)\n"+
 		"  -a             Display all previous drawings\n"+
 		"  -s             Show statistics about historical data\n"+
-		"  -g             Display geometric number grids\n"+
 		"  -m             Show closest-match analysis for all drawings\n"+
 		"  -o [N]         Show odds table for 1 to N combos played (default: 30)\n"+
 		"  -d DATE        Show raw JSON for draws on DATE (format: 2026-02-06)\n"+
@@ -394,14 +395,6 @@ func runCLI() {
 	for _, arg := range os.Args[1:] {
 		if arg == "-?" || arg == "-h" || arg == "--help" {
 			printUsage()
-			return
-		}
-	}
-
-	// Handle -g before cobra
-	for _, arg := range os.Args[1:] {
-		if arg == "-g" {
-			displayGeometricGridSideBySide(nil, "  ")
 			return
 		}
 	}

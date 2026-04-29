@@ -15,4 +15,4 @@ Ideas captured for future reference. Prefix each with `IE<N>:` (sequential N) fo
 - IE5: Audit of `init()` no-op suppressor functions across `cmd/*/main.go` — tracked as `docs/ac15-init-noop-suppressor-audit.md`.
 - IE6: `cmd/cash5/main.go` refactor — split ~956 lines into `main.go` / `fetch.go` / `display.go` / `stats.go` / `model.go` — tracked as `docs/ac16-cash5-refactor.md`.
 - IE7: CLI framework standardization policy (manual / go-arg / cobra) — tracked as `docs/ac17-cli-framework-policy.md`.
-- IE8: Replace cash5 WINNING GEOMETRIES with just the WINNING CIRCLE
+- IE9: Decide preptool `programVersion` bump semantics (per-utility vs repo-version tracking) and fix the `programVersionRe` regex accordingly. Current regex `const\s+programVersion` doesn't match the grouped `const ( ... )` form every utility in this repo uses, so prep silently skips per-utility version bumps. Naive regex fix would clobber all utilities to the release version (causing downgrades, e.g. `brew-update` 1.3.5 → 0.23.0). Surfaced during AC25 release prep on 2026-04-28.

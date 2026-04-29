@@ -141,7 +141,9 @@ func displayMatchAnalysis(draws []Draw) error {
 				color.Grn(mNumStr), color.Gra(m.date),
 				color.Gra(fmt.Sprintf("(%d/5 match, %d days prior)", m.matches, m.daysDelta)))
 		}
-		displayGeometricGridSideBySide(current.nums, "    ")
+		if isITerm2() {
+			displayCircleImage(current.nums, "    ")
+		}
 		fmt.Println()
 
 		// Count all candidates per recency bucket (for normalization)

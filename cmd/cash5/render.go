@@ -20,7 +20,6 @@ import (
 // palette
 var (
 	colBg      = color.RGBA{0x14, 0x14, 0x14, 0xff}
-	colBorder  = color.RGBA{0x3c, 0x3c, 0x3c, 0xff}
 	colText    = color.RGBA{0xcc, 0xcc, 0xcc, 0xff}
 	colWinText = color.RGBA{0x0d, 0x0d, 0x0d, 0xff} // dark text on green bg
 	colWinBg   = color.RGBA{0x3a, 0xd5, 0x68, 0xff} // bright green background
@@ -29,18 +28,16 @@ var (
 )
 
 const (
-	cellW      = 54
-	cellH      = 36
-	bw         = 1   // border width in px
-	gridGap    = 18  // gap between grids in px
 	circleSize = 450 // circle geometry image is always this square
 	fontSize   = 13.5
 )
 
+// isITerm2 reports whether the current terminal is iTerm2.
 func isITerm2() bool {
 	return os.Getenv("TERM_PROGRAM") == "iTerm.app"
 }
 
+// emitITerm2Image writes an inline image escape sequence for iTerm2.
 func emitITerm2Image(img image.Image) {
 	var buf bytes.Buffer
 	_ = png.Encode(&buf, img)
@@ -48,6 +45,7 @@ func emitITerm2Image(img image.Image) {
 	fmt.Printf("\033]1337;File=inline=1;preserveAspectRatio=1:%s\a\n", b64)
 }
 
+// newFace returns a gomono font face at the given point size.
 func newFace(size float64) (font.Face, error) {
 	f, err := opentype.Parse(gomono.TTF)
 	if err != nil {
@@ -103,73 +101,6 @@ func drawRing(img *image.RGBA, cx, cy, r int, c color.RGBA) {
 	}
 }
 
-// renderBoxGrid renders a rows×cols numbered grid (numbers start at 1).
-func renderBoxGrid(rows, cols int, hl map[int]bool, face font.Face) *image.RGBA {
-	imgW := cols*(cellW+bw) + bw
-	imgH := rows*(cellH+bw) + bw
-	img := image.NewRGBA(image.Rect(0, 0, imgW, imgH))
-	// Fill with border color; cell interiors will overwrite with bg.
-	draw.Draw(img, img.Bounds(), &image.Uniform{colBorder}, image.Point{}, draw.Src)
-	for r := range rows {
-		for c := range cols {
-			n := r*cols + c + 1
-			cx := bw + c*(cellW+bw)
-			cy := bw + r*(cellH+bw)
-			bg, tc := colBg, colText
-			if hl[n] {
-				bg, tc = colWinBg, colWinText
-			}
-			fillRect(img, cx, cy, cellW, cellH, bg)
-			textAt(img, face, fmt.Sprintf("%02d", n), cx+cellW/2, cy+cellH/2, tc)
-		}
-	}
-	return img
-}
-
-// renderHexGrid renders the shield-shaped grid.
-// Rows 0 and 6 hold 5 cells (offset by 1 column); rows 1–5 hold 7 cells.
-// Per-row border strips are drawn before cell interiors so the "corners" of
-// the short rows remain as background, giving the shield silhouette.
-func renderHexGrid(hl map[int]bool, face font.Face) *image.RGBA {
-	imgW := 7*(cellW+bw) + bw
-	imgH := 7*(cellH+bw) + bw
-	img := image.NewRGBA(image.Rect(0, 0, imgW, imgH))
-	draw.Draw(img, img.Bounds(), &image.Uniform{colBg}, image.Point{}, draw.Src)
-
-	type rowDef struct {
-		nums []int
-		off  int // column offset (0 or 1)
-	}
-	layout := []rowDef{
-		{[]int{1, 2, 3, 4, 5}, 1},
-		{[]int{6, 7, 8, 9, 10, 11, 12}, 0},
-		{[]int{13, 14, 15, 16, 17, 18, 19}, 0},
-		{[]int{20, 21, 22, 23, 24, 25, 26}, 0},
-		{[]int{27, 28, 29, 30, 31, 32, 33}, 0},
-		{[]int{34, 35, 36, 37, 38, 39, 40}, 0},
-		{[]int{41, 42, 43, 44, 45}, 1},
-	}
-	for r, row := range layout {
-		// Draw border strip spanning this row's cells.
-		x0 := row.off * (cellW + bw)
-		rowW := len(row.nums)*(cellW+bw) + bw
-		y0 := r * (cellH + bw)
-		fillRect(img, x0, y0, rowW, cellH+2*bw, colBorder)
-		// Draw cell interiors.
-		for ci, n := range row.nums {
-			cx := bw + (ci+row.off)*(cellW+bw)
-			cy := bw + r*(cellH+bw)
-			bg, tc := colBg, colText
-			if hl[n] {
-				bg, tc = colWinBg, colWinText
-			}
-			fillRect(img, cx, cy, cellW, cellH, bg)
-			textAt(img, face, fmt.Sprintf("%02d", n), cx+cellW/2, cy+cellH/2, tc)
-		}
-	}
-	return img
-}
-
 // renderCircle places numbers 1–45 evenly around a circle (8° apart,
 // starting at 12 o'clock). Winning numbers get a green spoke from the center.
 func renderCircle(hl map[int]bool, face font.Face) *image.RGBA {
@@ -207,11 +138,12 @@ func renderCircle(hl map[int]bool, face font.Face) *image.RGBA {
 	return img
 }
 
-// renderGeometries composes all four geometries into one wide image.
-func renderGeometries(winners []int) (*image.RGBA, error) {
+// displayCircleImage renders the winning-circle inline image for iTerm2.
+// No-op outside iTerm2 — callers gate on isITerm2() before calling.
+func displayCircleImage(winners []int, indent string) {
 	face, err := newFace(fontSize)
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer face.Close()
 
@@ -220,40 +152,7 @@ func renderGeometries(winners []int) (*image.RGBA, error) {
 		hl[n] = true
 	}
 
-	grids := []image.Image{
-		renderBoxGrid(5, 9, hl, face),
-		renderBoxGrid(9, 5, hl, face),
-		renderHexGrid(hl, face),
-		renderCircle(hl, face),
-	}
-
-	maxH := 0
-	totalW := gridGap * (len(grids) - 1)
-	for _, g := range grids {
-		if g.Bounds().Dy() > maxH {
-			maxH = g.Bounds().Dy()
-		}
-		totalW += g.Bounds().Dx()
-	}
-
-	out := image.NewRGBA(image.Rect(0, 0, totalW, maxH))
-	draw.Draw(out, out.Bounds(), &image.Uniform{colBg}, image.Point{}, draw.Src)
-
-	x := 0
-	for _, g := range grids {
-		yOff := (maxH - g.Bounds().Dy()) / 2
-		r := image.Rect(x, yOff, x+g.Bounds().Dx(), yOff+g.Bounds().Dy())
-		draw.Draw(out, r, g, image.Point{}, draw.Src)
-		x += g.Bounds().Dx() + gridGap
-	}
-	return out, nil
-}
-
-func displayGeometriesImage(winners []int, indent string) {
-	img, err := renderGeometries(winners)
-	if err != nil {
-		return
-	}
+	img := renderCircle(hl, face)
 	fmt.Print(indent)
 	emitITerm2Image(img)
 }
