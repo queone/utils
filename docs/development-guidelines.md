@@ -90,6 +90,23 @@ New CLI tools pick a flag-parsing approach by complexity. Existing stable comman
 - **`github.com/alexflint/go-arg`** — for moderate-complexity tools (struct-tag-driven flags, multiple positional args, validation). Used by `cmd/web`.
 - **`github.com/spf13/cobra`** — for multi-command UX (`tool sub1 ...`, `tool sub2 ...`). Used by `cmd/cash5`.
 
+## Configuration And State Storage
+
+Utilities that persist data to disk follow the XDG Base Directory Specification. Each kind of data has one canonical home:
+
+- **Config** (user-edited settings): `${XDG_CONFIG_HOME:-$HOME/.config}/<util>/config.<ext>`
+- **State** (mutable runtime data the user expects to persist across runs): `${XDG_STATE_HOME:-$HOME/.local/state}/<util>/`
+- **Cache** (regenerable data; safe to delete): `${XDG_CACHE_HOME:-$HOME/.cache}/<util>/`
+
+Rules:
+
+- Honor the `XDG_*` env vars when set to an absolute path; treat empty or non-absolute values as unset and fall back to the documented default (per XDG spec). Use `os.UserHomeDir()` to resolve `$HOME`, not `os.Getenv("HOME")`.
+- File name is `config.<ext>` where `<ext>` matches the format (`ini`, `toml`, `json`, `yaml`). Do not use `<util>rc` — that convention is a legacy of single-dotfile-in-`$HOME` storage.
+- Never write to `$HOME` root. The `$HOME/.<util>rc` pattern is retired.
+- Config files containing secrets (API keys, tokens) are created `0600`.
+- When changing a utility's storage location, auto-migrate lazily on the first call to the path resolver (not at startup): if the old path is a regular file and the new path does not exist, `os.Rename` (or copy+delete on `EXDEV`) and emit a one-line `<util>: migrated <old> -> <new>` notice to stderr. If both exist, prefer the new path and warn — do not auto-delete the old file. If the old path is a symlink, skip migration and warn.
+- Externally-fixed paths (e.g., a third-party tool's own dir) are not in scope of this rule. Document the constraint in the utility's README.
+
 ## Documentation Alignment
 
 - Docs ship with the code change that introduces the behavior

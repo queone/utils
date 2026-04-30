@@ -470,10 +470,11 @@ func fetchCurrentJackpot() (int64, error) {
 	return 0, fmt.Errorf("no draws found")
 }
 
-// saveDrawsCallback persists draws to $HOME/.config/cash5/draws.json
+// saveDrawsCallback persists draws to the canonical XDG state path resolved
+// by configPath() (defaults to $HOME/.local/state/cash5/draws.json).
 func saveDrawsCallback(draws []Draw) error {
-	path := fmt.Sprintf("%s/.config/cash5/draws.json", os.Getenv("HOME"))
-	if err := os.MkdirAll(fmt.Sprintf("%s/.config/cash5", os.Getenv("HOME")), 0755); err != nil {
+	path, err := configPath()
+	if err != nil {
 		return err
 	}
 

@@ -9,9 +9,9 @@ Run with the 2 obvious arguments (cellphone number & the actual message):
 
 ```bash
 $ sms
-SMS CLI utility 1.1.0
+SMS CLI utility 1.3.0
 sms <CellPhoneNum> <Message>
-sms -y Create skeleton ~/.smsrc file
+sms -y Create skeleton ~/.config/sms/config.ini file
 Visit https://textbelt.com for more info.
 
 sms 2015554444 "Hello world"

@@ -16,7 +16,7 @@ import (
 
 const (
 	programName     = "cash5"
-	programVersion  = "0.10.0"
+	programVersion  = "0.11.0"
 	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit 😀"
 )
 

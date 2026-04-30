@@ -18,54 +18,152 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/vaughan0/go-ini"
 )
 
 const (
 	programName    = "sms"
-	programVersion = "1.2.0"
+	programVersion = "1.3.0"
 )
 
 // Global variables
 var (
-	cfgfile = "" // func processConfigFile sets it to $HOME/.${ programName} + "rc"
-	svckey  = "textbelt"
-	svcurl  = "https://textbelt.com/text"
+	svckey = "textbelt"
+	svcurl = "https://textbelt.com/text"
 )
+
+// usageText returns the help message body. Pure function so tests can
+// inspect output without intercepting stdout or hitting os.Exit.
+func usageText() string {
+	return fmt.Sprintf(
+		"SMS CLI utility %s\n%s <CellPhoneNum> <Message>\n%s -v | --version\n%s -y Create skeleton ~/.config/%s/config.ini file\nVisit https://textbelt.com for more info.\n",
+		programVersion, programName, programName, programName, programName,
+	)
+}
 
 // Print usage information
 func printUsage() {
-	fmt.Printf("SMS CLI utility %s\n", programVersion)
-	fmt.Printf("%s <CellPhoneNum> <Message>\n", programName)
-	fmt.Printf("%s -v | --version\n", programName)
-	fmt.Printf("%s -y Create skeleton ~/.%src file\n", programName, programName)
-	fmt.Println("Visit https://textbelt.com for more info.")
-	// n := utl.Whi2(programName)
-	// v := programVersion
-	// usageHeader := fmt.Sprintf("%s v%s\n"+
-	// 	"Memorable password generator - https://github.com/queone/utils/blob/main/cmd/pgen/README.md\n"+
-	// 	"%s\n"+
-	// 	"  %s [option]\n\n"+
-	// 	"%s\n"+
-	// 	"                     Without arguments it generates a 3-word memorable password phrase\n"+
-	// 	"  NUMBER             Generates a NUMBER-word memorable password phrase\n"+
-	// 	"                     For example, if NUMBER is '6' it generates a 6-word phrase\n"+
-	// 	"                     Minimum is 1, maximum is 9\n"+
-	// 	"  -?, -h, --help     Print this usage page\n",
-	// 	n, v, utl.Whi2("Usage"), n, utl.Whi2("Options"))
-	// fmt.Print(usageHeader)
+	fmt.Print(usageText())
 	os.Exit(0)
+}
+
+// xdgConfigDir returns the user's XDG config directory, honoring
+// XDG_CONFIG_HOME when set to an absolute path and falling back to
+// $HOME/.config otherwise.
+func xdgConfigDir() (string, error) {
+	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" && filepath.IsAbs(v) {
+		return v, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config"), nil
+}
+
+// configPath returns the canonical config file path for sms, performing a
+// one-shot lazy migration from the legacy $HOME/.smsrc location on first call.
+// Returns the new XDG path in all cases (after migration if applicable).
+func configPath() (string, error) {
+	cfgDir, err := xdgConfigDir()
+	if err != nil {
+		return "", err
+	}
+	newPath := filepath.Join(cfgDir, programName, "config.ini")
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	oldPath := filepath.Join(home, "."+programName+"rc")
+
+	if err := migrateIfNeeded(oldPath, newPath, 0600); err != nil {
+		fmt.Fprintf(os.Stderr, "%s: migration warning: %v\n", programName, err)
+	}
+	return newPath, nil
+}
+
+// migrateIfNeeded moves oldPath to newPath when oldPath is a regular file and
+// newPath does not exist. Symlinks at oldPath are preserved with a warning.
+// When both paths exist, the new path is preferred and a warning is emitted.
+// On successful migration the destination is chmod'd to mode.
+func migrateIfNeeded(oldPath, newPath string, mode os.FileMode) error {
+	oldInfo, oldErr := os.Lstat(oldPath)
+	_, newErr := os.Stat(newPath)
+	newExists := newErr == nil
+
+	if oldErr != nil {
+		return nil // nothing to migrate
+	}
+
+	if oldInfo.Mode()&os.ModeSymlink != 0 {
+		fmt.Fprintf(os.Stderr, "%s: %s is a symlink; skipping auto-migration. Move it to %s manually.\n", programName, oldPath, newPath)
+		return nil
+	}
+
+	if newExists {
+		fmt.Fprintf(os.Stderr, "%s: both %s and %s exist; using %s. Delete the old file when ready.\n", programName, oldPath, newPath, newPath)
+		return nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+
+	if err := os.Rename(oldPath, newPath); err != nil {
+		// Cross-device rename (EXDEV) — fall back to copy + delete.
+		if linkErr, ok := err.(*os.LinkError); ok && linkErr.Err == syscall.EXDEV {
+			if err := copyFile(oldPath, newPath); err != nil {
+				return fmt.Errorf("cross-device migration copy: %w", err)
+			}
+			if err := os.Remove(oldPath); err != nil {
+				return fmt.Errorf("cross-device migration cleanup: %w", err)
+			}
+		} else {
+			return fmt.Errorf("rename: %w", err)
+		}
+	}
+
+	if err := os.Chmod(newPath, mode); err != nil {
+		return fmt.Errorf("chmod: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "%s: migrated %s -> %s\n", programName, oldPath, newPath)
+	return nil
+}
+
+// copyFile copies src to dst (used as EXDEV fallback for os.Rename).
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Set up global variables as per values in configuration file
 func processConfigFile() {
-	// Read config file
-	cfgfile = filepath.Join(os.Getenv("HOME"), "."+programName+"rc")
+	cfgfile, err := configPath()
+	if err != nil {
+		fmt.Printf("Error. Cannot resolve config path: %v\n", err)
+		os.Exit(1)
+	}
 	if _, err := os.Stat(cfgfile); os.IsNotExist(err) {
 		fmt.Printf("Error. Missing '%s' file. Run '%s -y' to create a new one.\n", cfgfile, programName)
 		os.Exit(1)
@@ -89,14 +187,21 @@ func processConfigFile() {
 
 // Create a skeleton configuration file with default hard-coded values
 func createSkeletonConfigFile() {
-	cfgfile := filepath.Join(os.Getenv("HOME"), "."+programName+"rc")
+	cfgfile, err := configPath()
+	if err != nil {
+		fmt.Printf("Error. Cannot resolve config path: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Check if file already exists
 	if _, err := os.Stat(cfgfile); err == nil {
 		fmt.Printf("There's already a '%s' file.\n", cfgfile)
 		return
 	} else if !os.IsNotExist(err) {
-		// Some unexpected error
+		panic(err.Error())
+	}
+
+	if err := os.MkdirAll(filepath.Dir(cfgfile), 0755); err != nil {
 		panic(err.Error())
 	}
 
@@ -106,14 +211,13 @@ func createSkeletonConfigFile() {
 	content += "svcurl = https://textbelt.com/text\n"
 	content += "svckey = textbelt\n"
 
-	// Create the file
-	f, err := os.Create(cfgfile)
+	// Create the file with 0600 (holds an API key)
+	f, err := os.OpenFile(cfgfile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		panic(err.Error())
 	}
 	defer f.Close()
 
-	// Write the contents
 	if _, err := f.Write([]byte(content)); err != nil {
 		panic(err.Error())
 	}

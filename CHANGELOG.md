@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.27.0 | AC29: XDG config/state paths; sms + cash5 auto-migrate |
 | 0.26.0 | AC28: IE retirements, README relinks, CLI framework policy |
 | 0.25.0 | AC27: import governa-color/reltool/buildtool; preptool doctrine cleanup |
 | 0.24.0 | AC26: programVersion doctrine + preptool guard, advisory archived |
