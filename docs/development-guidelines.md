@@ -82,6 +82,14 @@ When refactoring, treat existing tests as load-bearing assertions. They encode b
 - Short and long flag forms are combined on one line (e.g. `-v, --verbose`)
 - When adding new flags, add the entry to the shared usage formatter — do not rely on framework defaults
 
+## CLI Flag-Parsing Framework
+
+New CLI tools pick a flag-parsing approach by complexity. Existing stable commands are not migrated for consistency alone — if a command's complexity grows beyond its current framework's natural fit, that's an independent AC, not a sweeping migration.
+
+- **Manual `os.Args` switch** — for tiny tools (≤ 3 flags, no subcommands). Lowest dependency footprint; matches the bulk of utils' existing utilities.
+- **`github.com/alexflint/go-arg`** — for moderate-complexity tools (struct-tag-driven flags, multiple positional args, validation). Used by `cmd/web`.
+- **`github.com/spf13/cobra`** — for multi-command UX (`tool sub1 ...`, `tool sub2 ...`). Used by `cmd/cash5`.
+
 ## Documentation Alignment
 
 - Docs ship with the code change that introduces the behavior

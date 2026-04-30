@@ -6,28 +6,28 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 
 ## Utilities
 
-- [`bak`](cmd/bak/README.md): Create dated backups of files or directories.
-- [`brew-update`](cmd/brew-update/README.md): Update, upgrade, and clean up Homebrew packages.
-- [`cash5`](cmd/cash5/README.md): Analyze historical Cash5 draws and generate number recommendations.
-- [`certgen`](cmd/certgen/README.md): Generate self-signed TLS certificates for local testing.
-- [`certls`](cmd/certls/README.md): Show SSL/TLS certificate details for a host and port.
+- [`bak`](cmd/bak/main.go): Create dated backups of files or directories.
+- [`brew-update`](cmd/brew-update/main.go): Update, upgrade, and clean up Homebrew packages.
+- [`cash5`](cmd/cash5/main.go): Analyze historical Cash5 draws and generate number recommendations.
+- [`certgen`](cmd/certgen/main.go): Generate self-signed TLS certificates for local testing.
+- [`certls`](cmd/certls/main.go): Show SSL/TLS certificate details for a host and port.
 - [`claudecfg`](cmd/claudecfg/main.go): Manage Claude Code config — iCloud-backed memory portability and project permissions seeding/auditing.
 - [`days`](cmd/days/README.md): A CLI calendar days calculator.
 - [`decolor`](cmd/decolor/README.md): A utility that removes shell color escape codes from input stream or given file.
-- [`dl`](cmd/dl/README.md): Download online videos using `yt-dlp` with a target filename.
-- [`dos2unix`](cmd/dos2unix/README.md): Preview or convert CRLF line endings to LF.
+- [`dl`](cmd/dl/main.go): Download online videos using `yt-dlp` with a target filename.
+- [`dos2unix`](cmd/dos2unix/main.go): Preview or convert CRLF line endings to LF.
 - [`fr`](cmd/fr/README.md): A simple find/replace utility.
-- [`git-cloneall`](cmd/git-cloneall/README.md): Clone all repositories from a GitHub user or organization.
-- [`git-pullall`](cmd/git-pullall/README.md): Pull updates across all local Git repositories in a directory.
-- [`git-remotev`](cmd/git-remotev/README.md): Print each local repository with its `origin` remote URL.
-- [`git-statall`](cmd/git-statall/README.md): Show git status across local repositories.
+- [`git-cloneall`](cmd/git-cloneall/main.go): Clone all repositories from a GitHub user or organization.
+- [`git-pullall`](cmd/git-pullall/main.go): Pull updates across all local Git repositories in a directory.
+- [`git-remotev`](cmd/git-remotev/main.go): Print each local repository with its `origin` remote URL.
+- [`git-statall`](cmd/git-statall/main.go): Show git status across local repositories.
 - [`jy`](cmd/jy/README.md): A lightweight JSON and YAML converter utility.
 - [`moneycon`](cmd/moneycon/README.md): Financial data consolidation — reads CSV or aligned text, outputs aligned summary with totals.
 - [`pgen`](cmd/pgen/README.md): A simple generator of memorable passwords.
-- [`pman`](cmd/pman/README.md): Run authenticated Microsoft Graph and Azure REST API requests.
+- [`pman`](cmd/pman/main.go): Run authenticated Microsoft Graph and Azure REST API requests.
 - [`rn`](cmd/rn/README.md): A bulk file re-namer.
-- [`rncap`](cmd/rncap/README.md): Rename files by capitalizing each word in filenames.
-- [`rnlower`](cmd/rnlower/README.md): Rename files by converting filenames to lowercase.
+- [`rncap`](cmd/rncap/main.go): Rename files by capitalizing each word in filenames.
+- [`rnlower`](cmd/rnlower/main.go): Rename files by converting filenames to lowercase.
 - [`sms`](cmd/sms/README.md): Send SMS messages using Twilio credentials from a local config file.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
 - [`web`](cmd/web/README.md): Search DuckDuckGo and open results with an interactive selector.
