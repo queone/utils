@@ -40,14 +40,14 @@ func yamlToBytes(yamlObject any) (yamlBytes []byte, err error) {
 	return yamlBytes, err
 }
 
-// Print YAML object
-func printYaml(yamlObject any) {
+// Print YAML object. Returns an error if the encode fails.
+func printYaml(yamlObject any) error {
 	yamlBytes, err := yamlToBytes(yamlObject)
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return err
 	}
 	fmt.Println(string(yamlBytes))
+	return nil
 }
 
 // Colorize given token. Internal helper function.
@@ -76,14 +76,14 @@ func colorizeString(tk *token.Token, src string) string {
 	return str
 }
 
-// Print YAML object (that don't usually include comments) in color
-func printYamlColor(yamlObject any) {
+// Print YAML object (that don't usually include comments) in color. Returns an error if the encode fails.
+func printYamlColor(yamlObject any) error {
 	yamlBytes, err := yamlToBytes(yamlObject)
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return err
 	}
 	printYamlBytesColor(yamlBytes)
+	return nil
 }
 
 // Print YAML bytes in color, includes comments

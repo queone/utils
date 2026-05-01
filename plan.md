@@ -12,4 +12,3 @@ Ideas captured for future reference. Prefix each with `IE<N>:` (sequential N) fo
 - IE11: Migrate `azm` off `queone/utl` (placeholder; relocate to `azm/plan.md` once azm adopts governa).
 - IE12: Evaluate replacing iq's `internal/color` with `queone/governa-color`.
 - IE14: Consolidate `utils` on `queone/governa-color`; enhance governa-color with the colors / helpers (e.g. `ClearCode`, syntax-highlight palette) consumers need to drop direct `gookit/color` use.
-- IE15: Tighten jy error handling — replace ported `panic`-on-bad-input helpers with error returns + `Die` at the call site, and fix the existing `_ = json.Unmarshal(...)` silent-ignore pattern in `cmd/jy/main.go`.

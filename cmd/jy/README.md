@@ -16,7 +16,7 @@ This utility is part of a collection of Go utilities. To compile and install fol
 ### Usage
 
 ```bash
-jy v1.5.0
+jy v1.6.0
 JSON / YAML converter - https://github.com/queone/utils/blob/main/cmd/jy/README.md
 Usage
   jy [options] [file]

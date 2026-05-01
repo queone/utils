@@ -153,12 +153,56 @@ func TestPrintYamlBytesColorAnsi(t *testing.T) {
 }
 
 func TestPrintYamlNoAnsi(t *testing.T) {
-	out := captureStdout(t, func() { printYaml(map[string]int{"x": 1}) })
+	var err error
+	out := captureStdout(t, func() { err = printYaml(map[string]int{"x": 1}) })
+	if err != nil {
+		t.Fatalf("printYaml: %v", err)
+	}
 	if strings.Contains(out, "\x1b[") {
 		t.Errorf("printYaml emitted ANSI escapes: %q", out)
 	}
 	if !strings.Contains(out, "x: 1") {
 		t.Errorf("printYaml output missing %q: %q", "x: 1", out)
+	}
+}
+
+func TestPrintYamlColorReturnsNil(t *testing.T) {
+	color.ForceColor()
+	defer color.ResetOptions()
+	var err error
+	out := captureStdout(t, func() { err = printYamlColor(map[string]int{"x": 1}) })
+	if err != nil {
+		t.Fatalf("printYamlColor: %v", err)
+	}
+	if !strings.Contains(out, "\x1b[") {
+		t.Errorf("printYamlColor produced no ANSI escapes: %q", out)
+	}
+}
+
+func TestNoSilentIgnoreInMain(t *testing.T) {
+	body, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	for _, pat := range []string{"_ = json.", "_ = yaml.", "_ = goyaml."} {
+		if strings.Contains(string(body), pat) {
+			t.Errorf("main.go still contains silent-ignore pattern %q", pat)
+		}
+	}
+}
+
+func TestNoPanicOrSwallowedErrPrint(t *testing.T) {
+	for _, f := range []string{"main.go", "json.go", "yaml.go"} {
+		body, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		if strings.Contains(string(body), "panic(") {
+			t.Errorf("%s contains panic()", f)
+		}
+		if strings.Contains(string(body), "fmt.Println(err.Error()") {
+			t.Errorf("%s contains swallowed-error print", f)
+		}
 	}
 }
 

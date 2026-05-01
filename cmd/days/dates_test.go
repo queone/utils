@@ -57,14 +57,14 @@ func TestGetDaysSinceOrTo(t *testing.T) {
 	fiveDaysFuture := now.AddDate(0, 0, 5).Format("2006-01-02")
 	today := now.Format("2006-01-02")
 
-	if got := getDaysSinceOrTo(fiveDaysAgo); got != -5 {
-		t.Errorf("getDaysSinceOrTo(%q) = %d, want -5", fiveDaysAgo, got)
+	if got, err := getDaysSinceOrTo(fiveDaysAgo); err != nil || got != -5 {
+		t.Errorf("getDaysSinceOrTo(%q) = (%d, %v), want (-5, nil)", fiveDaysAgo, got, err)
 	}
-	if got := getDaysSinceOrTo(fiveDaysFuture); got != 5 {
-		t.Errorf("getDaysSinceOrTo(%q) = %d, want 5", fiveDaysFuture, got)
+	if got, err := getDaysSinceOrTo(fiveDaysFuture); err != nil || got != 5 {
+		t.Errorf("getDaysSinceOrTo(%q) = (%d, %v), want (5, nil)", fiveDaysFuture, got, err)
 	}
-	if got := getDaysSinceOrTo(today); got != 0 {
-		t.Errorf("getDaysSinceOrTo(%q) = %d, want 0", today, got)
+	if got, err := getDaysSinceOrTo(today); err != nil || got != 0 {
+		t.Errorf("getDaysSinceOrTo(%q) = (%d, %v), want (0, nil)", today, got, err)
 	}
 }
 
@@ -73,20 +73,60 @@ func TestGetDateInDaysOffsets(t *testing.T) {
 	wantPlus := now.AddDate(0, 0, 5).Format("2006-01-02")
 	wantMinus := now.AddDate(0, 0, -3).Format("2006-01-02")
 
-	if got := getDateInDays("+5").Format("2006-01-02"); got != wantPlus {
-		t.Errorf("getDateInDays(\"+5\") = %s, want %s", got, wantPlus)
+	gotPlus, err := getDateInDays("+5")
+	if err != nil {
+		t.Fatalf("getDateInDays(\"+5\"): %v", err)
 	}
-	if got := getDateInDays("-3").Format("2006-01-02"); got != wantMinus {
-		t.Errorf("getDateInDays(\"-3\") = %s, want %s", got, wantMinus)
+	if formatted := gotPlus.Format("2006-01-02"); formatted != wantPlus {
+		t.Errorf("getDateInDays(\"+5\") = %s, want %s", formatted, wantPlus)
+	}
+
+	gotMinus, err := getDateInDays("-3")
+	if err != nil {
+		t.Fatalf("getDateInDays(\"-3\"): %v", err)
+	}
+	if formatted := gotMinus.Format("2006-01-02"); formatted != wantMinus {
+		t.Errorf("getDateInDays(\"-3\") = %s, want %s", formatted, wantMinus)
 	}
 }
 
 func TestGetDaysBetweenLeapYear(t *testing.T) {
-	if got := getDaysBetween("2024-01-01", "2024-12-31"); got != 365 {
-		t.Errorf("getDaysBetween(2024-01-01, 2024-12-31) = %d, want 365", got)
+	if got, err := getDaysBetween("2024-01-01", "2024-12-31"); err != nil || got != 365 {
+		t.Errorf("getDaysBetween(2024-01-01, 2024-12-31) = (%d, %v), want (365, nil)", got, err)
 	}
-	if got := getDaysBetween("2024-12-31", "2024-01-01"); got != 365 {
-		t.Errorf("getDaysBetween reversed = %d, want 365 (unsigned)", got)
+	if got, err := getDaysBetween("2024-12-31", "2024-01-01"); err != nil || got != 365 {
+		t.Errorf("getDaysBetween reversed = (%d, %v), want (365, nil)", got, err)
+	}
+}
+
+func TestGetDateInDaysBadInput(t *testing.T) {
+	if _, err := getDateInDays("not-a-number"); err == nil {
+		t.Errorf("getDateInDays(\"not-a-number\") returned nil err")
+	}
+}
+
+func TestGetDaysSinceOrToBadInput(t *testing.T) {
+	if _, err := getDaysSinceOrTo("not-a-date"); err == nil {
+		t.Errorf("getDaysSinceOrTo(\"not-a-date\") returned nil err")
+	}
+}
+
+func TestGetDaysBetweenBadInput(t *testing.T) {
+	if _, err := getDaysBetween("bad", "2026-01-01"); err == nil {
+		t.Errorf("getDaysBetween(\"bad\", \"2026-01-01\") returned nil err")
+	}
+	if _, err := getDaysBetween("2026-01-01", "bad"); err == nil {
+		t.Errorf("getDaysBetween(\"2026-01-01\", \"bad\") returned nil err")
+	}
+}
+
+func TestNoPanicsInDates(t *testing.T) {
+	body, err := os.ReadFile("dates.go")
+	if err != nil {
+		t.Fatalf("read dates.go: %v", err)
+	}
+	if strings.Contains(string(body), "panic(") {
+		t.Errorf("dates.go still contains panic()")
 	}
 }
 

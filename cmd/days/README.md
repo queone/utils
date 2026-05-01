@@ -37,7 +37,7 @@ This utility is part of a collection of Go utilities. To compile and install fol
 
 ```bash
 $ days
-days v1.0.8
+days v1.1.0
 Calendar days calculator — https://github.com/queone/utils/blob/main/cmd/days/README.md
 Overview
   This utility works with calendar dates expressed as YYYY-MM-DD (or the equivalent

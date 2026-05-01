@@ -17,7 +17,7 @@ import (
 
 const (
 	programName    = "jy"
-	programVersion = "1.5.0"
+	programVersion = "1.6.0"
 )
 
 // die prints an error message to stderr and exits with status 1.
@@ -116,29 +116,42 @@ func printOut(rawBytes []byte, option string) {
 	// Check if raw bytes are either a JSON or YAML object
 	// JSON must be checked first because it is a subset of the YAML standard
 	var rawObject any
-	_ = json.Unmarshal(rawBytes, &rawObject) // Is it JSON?
-	if rawObject == nil {
-		// Is it YAML?
-		_ = yaml.Unmarshal(rawBytes, &rawObject)
-		if rawObject == nil {
-			die("Not JSON nor YAML\n")
-		}
-		// It is YAML, print in JSON
-		jsonBytes, _ := goyaml.YAMLToJSON(rawBytes)
-		jsonBytes2, _ := jsonBytesReindent(jsonBytes, 2) // Two space indent
-		if option == "decolor_output" {
-			jsonObj, _ := jsonBytesToJsonObj(jsonBytes2)
-			printJson(jsonObj)
-		} else {
-			printJsonBytesColor(jsonBytes2)
-		}
-	} else {
+	if err := json.Unmarshal(rawBytes, &rawObject); err == nil && rawObject != nil {
 		// It is JSON, print in YAML
 		if option == "decolor_output" {
-			printYaml(rawObject)
+			if err := printYaml(rawObject); err != nil {
+				die("yaml encode: %v\n", err)
+			}
 		} else {
-			printYamlColor(rawObject)
+			if err := printYamlColor(rawObject); err != nil {
+				die("yaml encode: %v\n", err)
+			}
 		}
+		return
+	}
+
+	// Try YAML
+	rawObject = nil
+	if err := yaml.Unmarshal(rawBytes, &rawObject); err != nil || rawObject == nil {
+		die("Not JSON nor YAML\n")
+	}
+	// It is YAML, print in JSON
+	jsonBytes, err := goyaml.YAMLToJSON(rawBytes)
+	if err != nil {
+		die("yaml→json: %v\n", err)
+	}
+	jsonBytes2, err := jsonBytesReindent(jsonBytes, 2) // Two space indent
+	if err != nil {
+		die("json reindent: %v\n", err)
+	}
+	if option == "decolor_output" {
+		jsonObj, err := jsonBytesToJsonObj(jsonBytes2)
+		if err != nil {
+			die("json decode: %v\n", err)
+		}
+		printJson(jsonObj)
+	} else {
+		printJsonBytesColor(jsonBytes2)
 	}
 }
 
@@ -146,7 +159,7 @@ func processPipedInput(option string) {
 	// Read piped input and convert to decolorized raw bytes
 	rawBytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error reading from stdin:", err)
+		die("read stdin: %v\n", err)
 	}
 
 	// Remove color codes in piped input

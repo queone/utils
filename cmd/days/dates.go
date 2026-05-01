@@ -110,14 +110,14 @@ func dateStringToEpocInt64(dateString, dateFormat string) (int64, error) {
 }
 
 // getDateInDays returns the time.Time obtained by adding N days (parsed from "±N") to now.
-func getDateInDays(days string) time.Time {
-	now := time.Now().Unix()
+func getDateInDays(days string) (time.Time, error) {
 	daysInt64, err := stringToInt64(days)
 	if err != nil {
-		panic(err.Error())
+		return time.Time{}, err
 	}
+	now := time.Now().Unix()
 	now += daysInt64 * 86400 // 86400 seconds in a day
-	return epocInt64ToTime(now)
+	return epocInt64ToTime(now), nil
 }
 
 // isLeapYear reports whether year is a leap year by the Gregorian rule.
@@ -127,10 +127,10 @@ func isLeapYear(year int64) bool {
 
 // getDaysSinceOrTo returns the signed day offset from today (UTC) to date1.
 // Negative if date1 is in the past, positive if in the future. Leap-year aware.
-func getDaysSinceOrTo(date1 string) int64 {
+func getDaysSinceOrTo(date1 string) (int64, error) {
 	start, err := parseFlexibleDate(date1)
 	if err != nil {
-		panic(err.Error())
+		return 0, err
 	}
 
 	end := time.Now().UTC()
@@ -154,7 +154,7 @@ func getDaysSinceOrTo(date1 string) int64 {
 		}
 	}
 
-	return sign * days
+	return sign * days, nil
 }
 
 // printDays prints the integer day count, also broken out as "years + days" when the magnitude
@@ -185,15 +185,15 @@ func printDays(days int64) {
 }
 
 // getDaysBetween returns the unsigned number of calendar days between two dates.
-func getDaysBetween(date1, date2 string) int64 {
+func getDaysBetween(date1, date2 string) (int64, error) {
 	epoc1, err := dateStringToEpocInt64(date1, "2006-01-02")
 	if err != nil {
-		panic(err.Error())
+		return 0, err
 	}
 	epoc2, err := dateStringToEpocInt64(date2, "2006-01-02")
 	if err != nil {
-		panic(err.Error())
+		return 0, err
 	}
 
-	return int64Abs(epoc1-epoc2) / 86400
+	return int64Abs(epoc1-epoc2) / 86400, nil
 }

@@ -1,5 +1,13 @@
 ## Releases
 
+### 1.6.0
+Release Date: 2026-may-01
+- Tightened error handling: `printOut` now uses explicit error checks instead of silent `_ = json.Unmarshal` / `_ = yaml.Unmarshal` probes; marshaling failures (`goyaml.YAMLToJSON`, `jsonBytesReindent`, `jsonBytesToJsonObj`) now exit with a one-line stderr message instead of producing partial output.
+- `processPipedInput` now exits cleanly on stdin read errors instead of continuing with partial bytes.
+- `printYaml` and `printYamlColor` return `error` instead of swallowing encode failures with `fmt.Println`.
+
+---
+
 ### 1.5.0
 Release Date: 2026-may-01
 - Internalized `queone/utl` json/yaml/file helpers into `cmd/jy/json.go` and `cmd/jy/yaml.go`; main.go gains local `die`/`fileUsable`/`loadFileText`/`loadFileYamlBytes`. `die` now writes to stderr.

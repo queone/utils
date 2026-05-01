@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.29.0 | AC32: tighten error handling in days + jy (drop panics, silent-ignores) |
 | 0.28.0 | AC31: jy internalizes queone/utl helpers; module removed |
 | 0.27.1 | AC30: days internalizes queone/utl date helpers |
 | 0.27.0 | AC29: XDG config/state paths; sms + cash5 auto-migrate |
