@@ -37,26 +37,17 @@ This utility is part of a collection of Go utilities. To compile and install fol
 
 ```bash
 $ days
-days v1.0.7
+days v1.0.8
 Calendar days calculator — https://github.com/queone/utils/blob/main/cmd/days/README.md
 Overview
   This utility works with calendar dates expressed as YYYY-MM-DD (or the equivalent
   YYYY-MMM-DD format), and reports the relationship between today's date and the supplied
   argument(s). Supported invocations are:
 
-    days -v                       Prints this information screen.
+    days -v, --version            Prints this information screen.
     days -N                       Prints the calendar date N days ago (e.g. -11).
     days +N                       Prints the calendar date N days in the future (e.g. +6 or just 6).
     days YYYY-MM-DD               Prints the number of days between today and the given date (positive
                                   if the date is in the future, negative if it is in the past).
     days YYYY-MM-DD YYYY-MM-DD    Prints the number of days between the two supplied dates.
-
-  Some important information about the code. The heavy lifting is delegated to the third-party package
-  https://github.com/queone/utl, which supplies helpers such as:
-
-    ValidDate(string, layout)         Validates a string against a Go time layout.
-    GetDaysSinceOrTo(string)          Returns the signed day offset between today and the supplied date.
-    GetDateInDays(string)             Parses a “±N” expression and returns the resulting time.Time.
-    GetDaysBetween(string, string)    Computes the signed difference between two dates.
-    PrintDays(int)                    Prints the integer day count in a human-readable form.
 ```

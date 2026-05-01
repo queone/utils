@@ -11,13 +11,12 @@ import (
 	"strconv"
 
 	"github.com/queone/governa-color"
-	"github.com/queone/utl"
 )
 
 const (
 	// Global constants
 	programName    = "days"
-	programVersion = "1.0.7"
+	programVersion = "1.0.8"
 )
 
 func printUsage() {
@@ -35,16 +34,7 @@ func printUsage() {
 		"    days +N                       Prints the calendar date N days in the future (e.g. +6 or just 6).\n"+
 		"    days YYYY-MM-DD               Prints the number of days between today and the given date (positive\n"+
 		"                                  if the date is in the future, negative if it is in the past).\n"+
-		"    days YYYY-MM-DD YYYY-MM-DD    Prints the number of days between the two supplied dates.\n"+
-		"\n"+
-		"  Some important information about the code. The heavy lifting is delegated to the third-party package\n"+
-		"  https://github.com/queone/utl, which supplies helpers such as:\n"+
-		"\n"+
-		"    ValidDate(string, layout)         Validates a string against a Go time layout.\n"+
-		"    GetDaysSinceOrTo(string)          Returns the signed day offset between today and the supplied date.\n"+
-		"    GetDateInDays(string)             Parses a “±N” expression and returns the resulting time.Time.\n"+
-		"    GetDaysBetween(string, string)    Computes the signed difference between two dates.\n"+
-		"    PrintDays(int)                    Prints the integer day count in a human-readable form.\n",
+		"    days YYYY-MM-DD YYYY-MM-DD    Prints the number of days between the two supplied dates.\n",
 		n, v, color.Whi2("Overview"))
 	fmt.Print(usage)
 	os.Exit(0)
@@ -63,24 +53,23 @@ func main() {
 		arg1 := os.Args[1]
 		if arg1 == "-v" || arg1 == "--version" {
 			printUsage()
-		} else if utl.ValidDate(arg1, "2006-01-02") {
-			days := utl.GetDaysSinceOrTo(arg1)
-			utl.PrintDays(days)
+		} else if validDate(arg1, "2006-01-02") {
+			days := getDaysSinceOrTo(arg1)
+			printDays(days)
 		} else if arg1[0:1] == "+" || arg1[0:1] == "-" {
-			dateStr := utl.GetDateInDays(arg1)
-			//fmt.Println(dateStr) // This prints in standard format '2006-01-02 13:50:14 -0500 EST'
+			dateStr := getDateInDays(arg1)
 			fmt.Println(dateStr.Format("2006-01-02"))
 		} else if _, err := strconv.Atoi(arg1); err == nil { // Check if arg1 is a valid number
 			arg1 = "+" + arg1
-			dateStr := utl.GetDateInDays(arg1)
+			dateStr := getDateInDays(arg1)
 			fmt.Println(dateStr.Format("2006-01-02"))
 		}
 	case 2:
 		arg1 := os.Args[1]
 		arg2 := os.Args[2]
-		if utl.ValidDate(arg1, "2006-01-02") && utl.ValidDate(arg2, "2006-01-02") {
-			days := utl.GetDaysBetween(arg1, arg2)
-			utl.PrintDays(days)
+		if validDate(arg1, "2006-01-02") && validDate(arg2, "2006-01-02") {
+			days := getDaysBetween(arg1, arg2)
+			printDays(days)
 		}
 	default:
 		printUsage()
