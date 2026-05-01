@@ -12,14 +12,55 @@ import (
 	"github.com/gookit/color"
 	"github.com/mattn/go-isatty"
 	icolor "github.com/queone/governa-color"
-	"github.com/queone/utl"
 	"gopkg.in/yaml.v3"
 )
 
 const (
 	programName    = "jy"
-	programVersion = "1.4.6"
+	programVersion = "1.5.0"
 )
+
+// die prints an error message to stderr and exits with status 1.
+func die(format string, args ...any) {
+	if len(args) == 0 {
+		fmt.Fprint(os.Stderr, format)
+	} else {
+		fmt.Fprintf(os.Stderr, format, args...)
+	}
+	os.Exit(1)
+}
+
+// fileUsable reports whether filePath exists and has content.
+func fileUsable(filePath string) bool {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return false
+	}
+	return info.Size() > 0
+}
+
+// loadFileText reads filePath into a byte slice.
+func loadFileText(filePath string) (rawBytes []byte, err error) {
+	rawBytes, err = os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	return rawBytes, nil
+}
+
+// loadFileYamlBytes reads filePath as YAML (or JSON) bytes after validating with goccy/go-yaml.
+func loadFileYamlBytes(filePath string) (yamlBytes []byte, err error) {
+	yamlBytes, err = os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	var yamlObject any
+	err = goyaml.Unmarshal(yamlBytes, &yamlObject)
+	if err != nil {
+		return nil, err
+	}
+	return yamlBytes, nil
+}
 
 func printUsage() {
 	n := icolor.Whi2(programName)
@@ -80,23 +121,23 @@ func printOut(rawBytes []byte, option string) {
 		// Is it YAML?
 		_ = yaml.Unmarshal(rawBytes, &rawObject)
 		if rawObject == nil {
-			utl.Die("Not JSON nor YAML\n")
+			die("Not JSON nor YAML\n")
 		}
 		// It is YAML, print in JSON
 		jsonBytes, _ := goyaml.YAMLToJSON(rawBytes)
-		jsonBytes2, _ := utl.JsonBytesReindent(jsonBytes, 2) // Two space indent
+		jsonBytes2, _ := jsonBytesReindent(jsonBytes, 2) // Two space indent
 		if option == "decolor_output" {
-			jsonObj, _ := utl.JsonBytesToJsonObj(jsonBytes2)
-			utl.PrintJson(jsonObj)
+			jsonObj, _ := jsonBytesToJsonObj(jsonBytes2)
+			printJson(jsonObj)
 		} else {
-			utl.PrintJsonBytesColor(jsonBytes2)
+			printJsonBytesColor(jsonBytes2)
 		}
 	} else {
 		// It is JSON, print in YAML
 		if option == "decolor_output" {
-			utl.PrintYaml(rawObject)
+			printYaml(rawObject)
 		} else {
-			utl.PrintYamlColor(rawObject)
+			printYamlColor(rawObject)
 		}
 	}
 }
@@ -117,13 +158,13 @@ func processPipedInput(option string) {
 
 func processFileInput(filePath, option string) {
 	// Read file input and convert to decolorized raw bytes
-	if !utl.FileUsable(filePath) {
-		utl.Die("File is unusable\n")
+	if !fileUsable(filePath) {
+		die("File is unusable\n")
 	}
 
-	rawBytes, err := utl.LoadFileText(filePath)
+	rawBytes, err := loadFileText(filePath)
 	if err != nil {
-		utl.Die("Couln't read file.\n")
+		die("Couln't read file.\n")
 	}
 
 	// Remove color codes in file
@@ -136,16 +177,16 @@ func processFileInput(filePath, option string) {
 func printInColor(filePath string) {
 	// Print given JSON or YAML file in color
 	// JSON must be checked first because it is a subset of the YAML standard
-	jsonBytes, err := utl.LoadFileYamlBytes(filePath)
+	jsonBytes, err := loadFileYamlBytes(filePath)
 	if err == nil {
-		utl.PrintJsonBytesColor(jsonBytes) // Print colorized JSON
+		printJsonBytesColor(jsonBytes) // Print colorized JSON
 	} else {
 		// Load as raw YAML byte slice that can include comments
-		yamlBytes, err := utl.LoadFileYamlBytes(filePath)
+		yamlBytes, err := loadFileYamlBytes(filePath)
 		if err == nil {
-			utl.PrintYamlBytesColor(yamlBytes) // Print colorized YAML
+			printYamlBytesColor(yamlBytes) // Print colorized YAML
 		} else {
-			utl.Die("File is neither JSON nor YAML\n")
+			die("File is neither JSON nor YAML\n")
 		}
 	}
 }

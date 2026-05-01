@@ -8,7 +8,8 @@ A collection of small CLI utilities written in Go. Each utility is a single-purp
 
 Ideas captured for future reference. Prefix each with `IE<N>:` (sequential N) for stable references. Entries come in two shapes: (a) **pre-rubric idea** — `IE<N>: <one-liner>` awaiting director discussion and the objective-fit rubric (see `AGENTS.md` Approval Boundaries); (b) **pointer to a drafted AC stub** not yet scoped through the critique cycle — `IE<N>: <one-liner> → docs/ac<N>-<slug>.md`. A shape (a) entry that clears the rubric converts to shape (b) at AC-draft time (keeping the same `IE<N>` number) rather than being removed, so the entry persists as a pointer until the pointed-to AC ships. Remove entries when the underlying idea is closed: rejected, retired, or (for AC pointers) the pointed-to AC has shipped and its file has been deleted. This section is not a historical record.
 
-- IE9: Migrate `cmd/jy` off `queone/utl` to per-utility helpers (color, json, yaml, files surface).
 - IE10: Migrate `tfe` off `queone/utl` and absorb it into `utils/` as another utility.
 - IE11: Migrate `azm` off `queone/utl` (placeholder; relocate to `azm/plan.md` once azm adopts governa).
 - IE12: Evaluate replacing iq's `internal/color` with `queone/governa-color`.
+- IE14: Consolidate `utils` on `queone/governa-color`; enhance governa-color with the colors / helpers (e.g. `ClearCode`, syntax-highlight palette) consumers need to drop direct `gookit/color` use.
+- IE15: Tighten jy error handling — replace ported `panic`-on-bad-input helpers with error returns + `Die` at the call site, and fix the existing `_ = json.Unmarshal(...)` silent-ignore pattern in `cmd/jy/main.go`.

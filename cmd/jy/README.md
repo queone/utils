@@ -16,7 +16,7 @@ This utility is part of a collection of Go utilities. To compile and install fol
 ### Usage
 
 ```bash
-jy v1.4.6
+jy v1.5.0
 JSON / YAML converter - https://github.com/queone/utils/blob/main/cmd/jy/README.md
 Usage
   jy [options] [file]
@@ -28,6 +28,7 @@ Usage
 Options
   -c                     Colorize the output for the specified file.
   -d                     Decolorize the output for piped input or file.
+  -v, --version          Print version and exit.
   -?, --help, -h         Show this help message and exit.
 
 Examples
