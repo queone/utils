@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.30.1 | AC34: sweep stale AC<N> labels from source comments + error messages |
 | 0.30.0 | AC33: adopt governa v0.115.0 — preptool sync + governance update |
 | 0.29.0 | AC32: tighten error handling in days + jy (drop panics, silent-ignores) |
 | 0.28.0 | AC31: jy internalizes queone/utl helpers; module removed |

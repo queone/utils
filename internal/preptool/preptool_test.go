@@ -502,7 +502,7 @@ func TestPrepACPointerIELineSweep(t *testing.T) {
 		"\n## Other section\n\nlorem ipsum\n"
 	mustWrite(t, planPath, planContent)
 
-	// Find IE lines for AC9.
+	// Find IE lines for the released AC.
 	matches, err := findACPointerIELines(dir, []int{9})
 	if err != nil {
 		t.Fatalf("findACPointerIELines: %v", err)
@@ -733,15 +733,15 @@ func TestChangelogHasRow(t *testing.T) {
 func TestParseACRefs(t *testing.T) {
 	got := parseACRefs("AC60+AC61: bundle")
 	if len(got) != 2 || got[0] != 60 || got[1] != 61 {
-		t.Errorf("AC60+AC61: got %v", got)
+		t.Errorf("composite parse: got %v, want [60 61]", got)
 	}
 	got = parseACRefs("AC60: simple")
 	if len(got) != 1 || got[0] != 60 {
-		t.Errorf("AC60: got %v", got)
+		t.Errorf("simple parse: got %v, want [60]", got)
 	}
 	got = parseACRefs("AC60, AC60 duplicate")
 	if len(got) != 1 || got[0] != 60 {
-		t.Errorf("duplicate AC60: got %v", got)
+		t.Errorf("dedupe: got %v, want [60]", got)
 	}
 	if got := parseACRefs("no refs here"); got != nil {
 		t.Errorf("no refs: got %v", got)

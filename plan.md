@@ -12,4 +12,3 @@ Ideas captured for future reference. Prefix each with `IE<N>:` (sequential N) fo
 - IE11: Migrate `azm` off `queone/utl` (placeholder; relocate to `azm/plan.md` once azm adopts governa).
 - IE12: Evaluate replacing iq's `internal/color` with `queone/governa-color`.
 - IE14: Consolidate `utils` on `queone/governa-color`; enhance governa-color with the colors / helpers (e.g. `ClearCode`, syntax-highlight palette) consumers need to drop direct `gookit/color` use.
-- IE15: Repo-wide sweep for stale `AC<N>` / `Class<N>` labels in source comments, test names, and error messages per the no-AC-labels Base Rule (deferred from AC33). `rg -n 'AC[0-9]+' cmd/ internal/` returns the candidate set; exclude fixture data (filenames `ac<N>-<slug>.md`, `parseACRefs` test inputs, dry-run release-message strings).

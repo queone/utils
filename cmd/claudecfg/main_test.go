@@ -1022,7 +1022,7 @@ func TestAT24_RepoStatePostImpl(t *testing.T) {
 		t.Errorf("cmd/claude-env still exists: err=%v", err)
 	}
 	// (c) grep for live 'claude-env' refs outside CHANGELOG.md, docs/, .git/,
-	// and .claude/ (user-local machine config, per AC24 spirit).
+	// and .claude/ (user-local machine config).
 	thisTestFile := filepath.Join(repo, "cmd", "claudecfg", "main_test.go")
 	_ = filepath.Walk(repo, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
