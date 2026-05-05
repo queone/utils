@@ -1,9 +1,8 @@
 // Package preptool stages a release: bumps version constants, inserts a
-// CHANGELOG row, deletes completed AC files (plus -critique.md and
-// -dispositions.md companions), moves -feedback.md companions to
-// .governa/feedback/, runs validation builds around the write phases, and
+// CHANGELOG row, deletes completed AC files, sweeps matching AC-pointer IE
+// lines from plan.md, runs validation builds around the write phases, and
 // prints the canonical release command. It does not run the release itself;
-// that remains the director's explicit approval via cmd/rel. (AC60)
+// that remains the director's explicit approval via cmd/rel.
 package preptool
 
 import (
@@ -30,12 +29,25 @@ type Config struct {
 
 var (
 	semverTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
-	programVersionRe = regexp.MustCompile(`(const\s+programVersion\s*=\s*)"([^"]+)"`)
+	// programVersionRe matches the `programVersion = "x.y.z"` assignment line
+	// regardless of whether it appears in the inline form (`const programVersion = "..."`)
+	// or the grouped form (`const ( ... programVersion = "..." ... )`). The
+	// preceding `const` keyword is intentionally NOT required by the regex:
+	// the grouped form has it on a different line. preptool only scans
+	// cmd/*/main.go files, where the convention restricts programVersion to a
+	// const declaration in one of those two forms; false positives (e.g. a
+	// `var programVersion` or a string literal containing this pattern) are
+	// vanishingly unlikely in practice.
+	programVersionRe = regexp.MustCompile(`(programVersion\s*(?:string\s*)?=\s*)"([^"]*)"`)
 	templateConstRe  = regexp.MustCompile(`(const\s+TemplateVersion\s*=\s*)"([^"]+)"`)
 	acRefRe          = regexp.MustCompile(`AC[0-9]+`)
 	// acFileRe matches docs/ac<N>-<slug>.md and any companion suffix; we split
 	// the canonical AC file from companions by checking the suffix separately.
 	acFileRe = regexp.MustCompile(`^ac([0-9]+)-[^/]+\.md$`)
+	// iePointerRe matches an AC-pointer in a plan.md IE line. Per the plan.md
+	// convention, an AC-pointer ends in `→ docs/ac<N>-<slug>.md`. The trailing
+	// `-` after the digits disambiguates ac1 from ac10/ac11/etc.
+	iePointerRe = regexp.MustCompile(`→\s+docs/ac([0-9]+)-`)
 )
 
 const maxMessageLen = 80
@@ -103,8 +115,7 @@ func Usage() string {
 	return `prep vX.Y.Z "release message" [--dry-run|-n] [--no-build]
 
 Stages a release by bumping version constants, inserting a CHANGELOG row,
-deleting completed AC files (and moving -feedback.md companions to
-.governa/feedback/), and running validation builds before and after.
+deleting completed AC files, and running validation builds before and after.
 
 Flags:
   -h, -?, --help   show this help
@@ -116,7 +127,7 @@ itself — present the printed command for the director to run.
 `
 }
 
-// Run stages the release per the phases documented in AC60.
+// Run stages the release per the documented phases.
 func Run(cfg Config) error {
 	if cfg.Out == nil {
 		cfg.Out = os.Stdout
@@ -141,9 +152,12 @@ func Run(cfg Config) error {
 	}
 
 	// Phase 4: detect version targets.
-	versionTargets, err := detectVersionTargets(cfg.RepoRoot)
+	versionTargets, multiUtilityWarning, err := detectVersionTargets(cfg.RepoRoot)
 	if err != nil {
 		return fmt.Errorf("prep: detect version targets: %w", err)
+	}
+	if multiUtilityWarning != "" {
+		fmt.Fprintln(cfg.Out, multiUtilityWarning)
 	}
 
 	// Phase 5: detect CHANGELOG targets + fail-fast idempotency guard.
@@ -154,15 +168,19 @@ func Run(cfg Config) error {
 
 	// Phase 6: parse AC refs from message and locate files.
 	acNums := parseACRefs(cfg.Message)
-	acFiles, critiqueFiles, dispFiles, feedbackFiles, err := findACCompanions(cfg.RepoRoot, acNums)
+	acFiles, err := findACFiles(cfg.RepoRoot, acNums)
 	if err != nil {
-		return fmt.Errorf("prep: find AC companions: %w", err)
+		return fmt.Errorf("prep: find AC files: %w", err)
 	}
 
 	versionStripped := strings.TrimPrefix(cfg.Version, "v")
 
 	if cfg.DryRun {
-		printDryRun(cfg.Out, versionTargets, changelogTargets, versionStripped, cfg.Message, acFiles, critiqueFiles, dispFiles, feedbackFiles)
+		ieLines, err := findACPointerIELines(cfg.RepoRoot, acNums)
+		if err != nil {
+			return fmt.Errorf("prep: scan plan.md for AC-pointer IEs: %w", err)
+		}
+		printDryRun(cfg.Out, versionTargets, changelogTargets, versionStripped, cfg.Message, acFiles, ieLines)
 		emitReleaseCommand(cfg.Out, cfg.Version, cfg.Message)
 		return nil
 	}
@@ -181,31 +199,25 @@ func Run(cfg Config) error {
 		}
 	}
 
-	// Phase 7c: delete AC + companion files, move feedback.
+	// Phase 7c: delete AC files. Critique and disposition content lives inline
+	// per docs/critique-protocol.md; no separate companion files exist to delete.
 	for _, path := range acFiles {
 		if err := os.Remove(path); err != nil {
 			return fmt.Errorf("prep: delete %s: %w", path, err)
 		}
 		fmt.Fprintf(cfg.Out, "prep: deleted %s\n", path)
 	}
-	for _, path := range critiqueFiles {
-		if err := os.Remove(path); err != nil {
-			return fmt.Errorf("prep: delete %s: %w", path, err)
-		}
-		fmt.Fprintf(cfg.Out, "prep: deleted %s\n", path)
+
+	// Phase 7d: sweep AC-pointer IE lines from plan.md.
+	ieLines, err := findACPointerIELines(cfg.RepoRoot, acNums)
+	if err != nil {
+		return fmt.Errorf("prep: scan plan.md for AC-pointer IEs: %w", err)
 	}
-	for _, path := range dispFiles {
-		if err := os.Remove(path); err != nil {
-			return fmt.Errorf("prep: delete %s: %w", path, err)
-		}
-		fmt.Fprintf(cfg.Out, "prep: deleted %s\n", path)
+	if err := removeACPointerIELines(cfg.RepoRoot, ieLines); err != nil {
+		return fmt.Errorf("prep: sweep plan.md AC-pointer IEs: %w", err)
 	}
-	for _, path := range feedbackFiles {
-		dest, err := moveFeedbackCompanion(cfg.RepoRoot, path)
-		if err != nil {
-			return fmt.Errorf("prep: move feedback %s: %w", path, err)
-		}
-		fmt.Fprintf(cfg.Out, "prep: moved %s → %s\n", path, dest)
+	for _, line := range ieLines {
+		fmt.Fprintf(cfg.Out, "prep: removed plan.md IE line: %s\n", strings.TrimSpace(line))
 	}
 
 	// Phase 8: post-check build.
@@ -324,11 +336,49 @@ type versionTarget struct {
 	kind string // "programVersion", "TemplateVersion", "TEMPLATE_VERSION"
 }
 
-func detectVersionTargets(repoRoot string) ([]versionTarget, error) {
+// parseModuleBasename returns the basename of the module path declared in
+// repoRoot/go.mod (e.g., "governa" for `module github.com/queone/governa`).
+// Returns "" when go.mod is missing, unreadable, or has no `module` line.
+// Used by detectVersionTargets to apply the primary-cmd convention:
+// cmd/<basename>/main.go is the primary binary and bumps with the repo;
+// other cmd/*/main.go are secondaries with independent versioning.
+func parseModuleBasename(repoRoot string) string {
+	content, err := os.ReadFile(filepath.Join(repoRoot, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	for line := range strings.SplitSeq(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "module ") && !strings.HasPrefix(trimmed, "module\t") {
+			continue
+		}
+		modulePath := strings.TrimSpace(strings.TrimPrefix(trimmed, "module"))
+		if modulePath == "" {
+			return ""
+		}
+		return filepath.Base(modulePath)
+	}
+	return ""
+}
+
+// detectVersionTargets scans the repo for programVersion declarations and
+// template-version targets. The programVersion scan applies a primary-cmd
+// convention: if cmd/<module-basename>/main.go declares programVersion,
+// that file is the primary and is bumped; other cmd/*/main.go are secondaries
+// (independent versioning, never bumped by prep). When no primary exists, fall
+// back to the historical auto-detect: 1 target → bump (single-utility repo);
+// >1 → skip all with multi-utility warning (per-utility-independent default).
+// The skip avoids the clobber risk of bumping every utility to the repo
+// release version.
+func detectVersionTargets(repoRoot string) ([]versionTarget, string, error) {
 	var targets []versionTarget
+	var warning string
 
 	// cmd/*/main.go scan for programVersion. Legitimate in both template and
-	// consumer repos — always scanned.
+	// consumer repos — always scanned. The programVersionRe regex matches
+	// both inline (`const programVersion = "..."`) and grouped
+	// (`const ( ... programVersion = "..." ... )`) forms.
+	var pvTargets []versionTarget
 	cmdDir := filepath.Join(repoRoot, "cmd")
 	entries, err := os.ReadDir(cmdDir)
 	if err == nil {
@@ -342,8 +392,42 @@ func detectVersionTargets(repoRoot string) ([]versionTarget, error) {
 				continue
 			}
 			if programVersionRe.Match(content) {
-				targets = append(targets, versionTarget{path: mainPath, kind: "programVersion"})
+				pvTargets = append(pvTargets, versionTarget{path: mainPath, kind: "programVersion"})
 			}
+		}
+	}
+
+	// Apply primary-cmd convention: if cmd/<module-basename>/main.go is among
+	// the targets, treat it as the primary and drop the rest.
+	moduleBasename := parseModuleBasename(repoRoot)
+	primaryPath := ""
+	if moduleBasename != "" {
+		primaryPath = filepath.Join(cmdDir, moduleBasename, "main.go")
+	}
+	primaryFound := false
+	if primaryPath != "" {
+		for _, t := range pvTargets {
+			if t.path == primaryPath {
+				targets = append(targets, t)
+				primaryFound = true
+				break
+			}
+		}
+	}
+	if !primaryFound {
+		// Safe auto-detect filter. 1 target → bump; >1 → skip with warning.
+		switch len(pvTargets) {
+		case 0:
+			// nothing to add
+		case 1:
+			targets = append(targets, pvTargets[0])
+		default:
+			paths := make([]string, 0, len(pvTargets))
+			for _, t := range pvTargets {
+				paths = append(paths, t.path)
+			}
+			warning = fmt.Sprintf("prep: multi-utility repo detected (%d cmd/*/main.go with programVersion); skipping per-utility bumps. Each utility owns its own version.\n  candidates: %s",
+				len(pvTargets), strings.Join(paths, ", "))
 		}
 	}
 
@@ -351,8 +435,8 @@ func detectVersionTargets(repoRoot string) ([]versionTarget, error) {
 	// are gated on internal/templates/base/ presence. That directory exists only
 	// in governa itself; in consumer repos TEMPLATE_VERSION tracks the governa
 	// baseline the consumer synced from and must NOT change at consumer release
-	// prep. Matches cmd/governa/main.go's detectGovernaCheckout signal. (AC62)
-	if info, err := os.Stat(filepath.Join(repoRoot, "internal", "templates", "base")); err == nil && info.IsDir() {
+	// prep.
+	if info, statErr := os.Stat(filepath.Join(repoRoot, "internal", "templates", "base")); statErr == nil && info.IsDir() {
 		tvPath := filepath.Join(repoRoot, "TEMPLATE_VERSION")
 		if _, err := os.Stat(tvPath); err == nil {
 			targets = append(targets, versionTarget{path: tvPath, kind: "TEMPLATE_VERSION"})
@@ -366,30 +450,25 @@ func detectVersionTargets(repoRoot string) ([]versionTarget, error) {
 	}
 
 	sort.SliceStable(targets, func(i, j int) bool { return targets[i].path < targets[j].path })
-	return targets, nil
+	return targets, warning, nil
 }
 
 func detectChangelogTargets(repoRoot, version string) ([]string, error) {
 	var targets []string
 	versionStripped := strings.TrimPrefix(version, "v")
 
-	candidates := []string{
-		filepath.Join(repoRoot, "CHANGELOG.md"),
-		filepath.Join(repoRoot, "internal", "templates", "CHANGELOG.md"),
-	}
-	for _, path := range candidates {
-		content, err := os.ReadFile(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, fmt.Errorf("read %s: %w", path, err)
+	path := filepath.Join(repoRoot, "CHANGELOG.md")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
 		}
-		if changelogHasRow(string(content), versionStripped) {
-			return nil, fmt.Errorf("%s already has a row for %s (prep is not idempotent on CHANGELOG)", path, versionStripped)
-		}
-		targets = append(targets, path)
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
+	if changelogHasRow(string(content), versionStripped) {
+		return nil, fmt.Errorf("%s already has a row for %s (prep is not idempotent on CHANGELOG)", path, versionStripped)
+	}
+	targets = append(targets, path)
 	return targets, nil
 }
 
@@ -424,25 +503,27 @@ func parseACRefs(message string) []int {
 	return out
 }
 
-// findACCompanions locates per-AC files to act on. For each AC number,
-// finds the main AC file (docs/ac<N>-<slug>.md excluding companion suffixes),
-// its -critique.md, -dispositions.md, and -feedback.md companions.
-func findACCompanions(repoRoot string, acNums []int) (acFiles, critiqueFiles, dispFiles, feedbackFiles []string, err error) {
+// findACFiles locates main AC files (docs/ac<N>-<slug>.md) for the given
+// AC numbers. Companion-suffixed files (-critique.md, -dispositions.md,
+// -feedback.md) are ignored — critique and disposition content lives inline
+// in the AC file per docs/critique-protocol.md.
+func findACFiles(repoRoot string, acNums []int) ([]string, error) {
 	if len(acNums) == 0 {
-		return nil, nil, nil, nil, nil
+		return nil, nil
 	}
 	docsDir := filepath.Join(repoRoot, "docs")
-	entries, readErr := os.ReadDir(docsDir)
-	if readErr != nil {
-		if os.IsNotExist(readErr) {
-			return nil, nil, nil, nil, nil
+	entries, err := os.ReadDir(docsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
 		}
-		return nil, nil, nil, nil, readErr
+		return nil, err
 	}
 	wanted := make(map[int]bool, len(acNums))
 	for _, n := range acNums {
 		wanted[n] = true
 	}
+	var acFiles []string
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -462,23 +543,83 @@ func findACCompanions(repoRoot string, acNums []int) (acFiles, critiqueFiles, di
 		if !wanted[num] {
 			continue
 		}
-		full := filepath.Join(docsDir, name)
-		switch {
-		case strings.HasSuffix(name, "-critique.md"):
-			critiqueFiles = append(critiqueFiles, full)
-		case strings.HasSuffix(name, "-dispositions.md"):
-			dispFiles = append(dispFiles, full)
-		case strings.HasSuffix(name, "-feedback.md"):
-			feedbackFiles = append(feedbackFiles, full)
-		default:
-			acFiles = append(acFiles, full)
+		// Skip companion suffixes; only the canonical AC file is acted on.
+		if strings.HasSuffix(name, "-critique.md") ||
+			strings.HasSuffix(name, "-dispositions.md") ||
+			strings.HasSuffix(name, "-feedback.md") {
+			continue
 		}
+		acFiles = append(acFiles, filepath.Join(docsDir, name))
 	}
 	sort.Strings(acFiles)
-	sort.Strings(critiqueFiles)
-	sort.Strings(dispFiles)
-	sort.Strings(feedbackFiles)
-	return acFiles, critiqueFiles, dispFiles, feedbackFiles, nil
+	return acFiles, nil
+}
+
+// findACPointerIELines reads plan.md and returns IE lines whose AC-pointer
+// matches one of the released ACs in acNums. Per the plan.md convention, an
+// AC-pointer ends in `→ docs/ac<N>-<slug>.md`. Returns nil when plan.md does
+// not exist or no AC numbers were supplied.
+func findACPointerIELines(repoRoot string, acNums []int) ([]string, error) {
+	if len(acNums) == 0 {
+		return nil, nil
+	}
+	planPath := filepath.Join(repoRoot, "plan.md")
+	content, err := os.ReadFile(planPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read %s: %w", planPath, err)
+	}
+	wanted := make(map[int]bool, len(acNums))
+	for _, n := range acNums {
+		wanted[n] = true
+	}
+	var matches []string
+	for line := range strings.SplitSeq(string(content), "\n") {
+		m := iePointerRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		var num int
+		if _, err := fmt.Sscanf(m[1], "%d", &num); err != nil {
+			continue
+		}
+		if !wanted[num] {
+			continue
+		}
+		matches = append(matches, line)
+	}
+	return matches, nil
+}
+
+// removeACPointerIELines strips the given lines from plan.md. Idempotent:
+// lines that no longer exist are ignored. No-op when ieLines is empty or
+// plan.md does not exist.
+func removeACPointerIELines(repoRoot string, ieLines []string) error {
+	if len(ieLines) == 0 {
+		return nil
+	}
+	planPath := filepath.Join(repoRoot, "plan.md")
+	content, err := os.ReadFile(planPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", planPath, err)
+	}
+	drop := make(map[string]bool, len(ieLines))
+	for _, line := range ieLines {
+		drop[line] = true
+	}
+	out := make([]string, 0)
+	for line := range strings.SplitSeq(string(content), "\n") {
+		if drop[line] {
+			continue
+		}
+		out = append(out, line)
+	}
+	return os.WriteFile(planPath, []byte(strings.Join(out, "\n")), 0o644)
 }
 
 func applyVersionBump(t versionTarget, versionStripped string) error {
@@ -544,27 +685,11 @@ func applyChangelogInsert(path, versionStripped, message string) error {
 	return os.WriteFile(path, []byte(strings.Join(updated, "\n")), 0o644)
 }
 
-// moveFeedbackCompanion moves docs/ac<N>-<slug>-feedback.md to
-// .governa/feedback/ac<N>-<slug>.md per AC55. Returns the destination path.
-func moveFeedbackCompanion(repoRoot, feedbackPath string) (string, error) {
-	name := filepath.Base(feedbackPath)
-	destName := strings.TrimSuffix(name, "-feedback.md") + ".md"
-	destDir := filepath.Join(repoRoot, ".governa", "feedback")
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return "", err
-	}
-	destPath := filepath.Join(destDir, destName)
-	if err := os.Rename(feedbackPath, destPath); err != nil {
-		return "", err
-	}
-	return destPath, nil
-}
-
 func emitReleaseCommand(out io.Writer, version, message string) {
 	fmt.Fprintf(out, "\nrelease command:\n  ./build.sh %s %q\n", version, message)
 }
 
-func printDryRun(out io.Writer, versionTargets []versionTarget, changelogTargets []string, versionStripped, message string, acFiles, critiqueFiles, dispFiles, feedbackFiles []string) {
+func printDryRun(out io.Writer, versionTargets []versionTarget, changelogTargets []string, versionStripped, message string, acFiles, ieLines []string) {
 	fmt.Fprintln(out, "\n--- dry run (no writes) ---")
 	fmt.Fprintln(out, "version bumps:")
 	for _, t := range versionTargets {
@@ -578,15 +703,9 @@ func printDryRun(out io.Writer, versionTargets []versionTarget, changelogTargets
 	for _, p := range acFiles {
 		fmt.Fprintf(out, "  delete %s\n", p)
 	}
-	for _, p := range critiqueFiles {
-		fmt.Fprintf(out, "  delete %s (-critique companion)\n", p)
-	}
-	for _, p := range dispFiles {
-		fmt.Fprintf(out, "  delete %s (-dispositions companion)\n", p)
-	}
-	fmt.Fprintln(out, "feedback moves:")
-	for _, p := range feedbackFiles {
-		fmt.Fprintf(out, "  %s → .governa/feedback/\n", p)
+	fmt.Fprintln(out, "plan.md IE-line removals:")
+	for _, line := range ieLines {
+		fmt.Fprintf(out, "  remove: %s\n", strings.TrimSpace(line))
 	}
 	fmt.Fprintln(out, "--- end dry run ---")
 }

@@ -29,7 +29,7 @@ utils is a collection of small, single-purpose CLI utilities written in Go — e
 - When source-of-truth code is duplicated into templates or rendered examples, fixes must propagate to all copies in the same change
 - Grep the full repo for the pattern being changed before considering a fix complete
 - If a template and its rendered output diverge, the template is authoritative
-- Exported functions in shared packages (`internal/buildtool`, `internal/reltool`, `internal/color`) carry godoc single-line comments to keep the public surface self-documenting.
+- Exported functions in shared packages (`internal/preptool`) carry godoc single-line comments to keep the public surface self-documenting.
 
 The convention is "what it does, not how" — the *how* changes with refactors and the comment goes stale; the *what* is the contract.
 

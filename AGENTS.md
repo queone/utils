@@ -24,6 +24,7 @@ Rules:
 - When updating, name the exact sections to change and keep edits local.
 - Treat this file as a governed config artifact, not freeform prose.
 - Use flat `##` with inline bullets. Avoid `###` sub-subsections — split or extract instead. Exception: documented technical need (e.g., grouped domain rules in Project Rules).
+- AGENTS.md is the authoritative source for rules it describes. Overlay templates and other canon files must conform; canon-internal drift on rules AGENTS.md describes is a violation of this contract and is detected by drift-scan's canon-coherence precondition.
 
 ## Interaction Mode
 
@@ -42,14 +43,15 @@ Rules:
 - In-scope edits to existing files are allowed once the user has authorized implementation.
 - Stop and ask when a request is ambiguous and the change is hard to reverse.
 - Do not prepare, execute, publish, deploy, or distribute without explicit user request.
-- **Never run `git commit`. Draft the message; present the command for the user to run.** No exception.
+- **Never run `git commit`. Draft the message; present the command for the user to run.** No EXCEPTION.
 - Do not start release-prep bookkeeping early. Begin only when the user asks to prep for release.
 - Never run the release command. Present it for the user to run. Follow the Pre-Release Checklist in `docs/build-release.md`.
 - **AC-first workflow** (non-trivial changes):
   - Draft `docs/ac<N>-<slug>.md` before implementation, using `docs/ac-template.md` if available. Define scope, out-of-scope, objective fit, required tests.
-  - Objective Fit must answer: (1) what outcome this serves, (2) why this beats competing work, (3) what decisions/constraints it depends on, (4) direct roadmap work or intentional pivot.
+  - Objective Fit must state: (1) **Outcome** — what this delivers, in one sentence; (2) **Priority** — why this over higher-priority work, naming the trade-off if it's an intentional pivot; (3) **Dependencies** — prior ACs or decisions this builds on or contradicts.
   - Do not implement until the AC is critiqued and the user confirms it is implementation-ready.
 - **AC critique gate:** After drafting, the director reviews and provides critique findings. The Operator transcribes findings into the AC's `## Critique` section and addresses them. Proceed only when the director explicitly confirms the AC is implementation-ready. See `docs/critique-protocol.md`.
+- **Pre-implementation verification:** After Director resolves all review questions, run a checklist — not a QA round — confirming each settled decision landed verbatim in the AC, Objective Fit uses the current form, Director Review is `None` with resolutions attributed inline, and ATs match settled wording. List ✓ or flag gaps. Authorize only when clean.
 
 ## File-Change Discipline
 
@@ -85,10 +87,11 @@ Rules:
 - Pin dependencies to explicit versions. Document any reason to stay on an older version.
 - Every feature or logic change includes tests in the same pass.
 - Wrap user-facing errors with operation context and recovery guidance.
-- Every AC labels each acceptance test `[Automated]` or `[Manual]`. See `docs/ac-template.md`.
+- Every AC labels each acceptance test with source axis (`[Automated]` / `[Manual]`) and timing axis (`[Pre-release gate]` default; `[Post-release verification]` explicit). See `docs/ac-template.md`.
 - New CLI flags pair a one-letter short form (standard, leads help output) with a long-form alias. Migrate existing flags when their code is next touched.
 - Follow existing repo patterns unless an approved improvement says otherwise.
 - Comment public functions.
+- Test names describe behavior, not AC numbering. AC files get deleted at release prep; test names outlive the file and become decode-bait. `TestDirectionLineEmittedInDiffs`, not `TestAC123_DirectionLineEmitted`. Same rule applies to per-AC sub-categorization labels like `Class N` / `Class Z` / etc. — once their AC files are gone, the labels are equally undecodable, so neither test names (`TestClassZ_*`) nor source/test comments/error messages should carry them. Same for source comments — describe intent or constraint, not AC or Class labels. AC traceability lives in CHANGELOG rows + commit messages. When an AC or Class reference is purely historical context with no actionable intent (e.g., a retired convention), prefix the comment with `Historical:` or delete entirely if surrounding code is self-explanatory.
 - Prefer dedicated tools: `fd` (files), `rg` (text), `jq` (JSON), `pup` (HTML), `sd` (in-place replace), `sqlite-utils` (SQLite), `ast-grep` (structural). Batch independent shell calls. Do not re-read files already in context.
 
 ## Project Rules

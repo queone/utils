@@ -124,40 +124,152 @@ func TestPrepErrorsOnExistingTag(t *testing.T) {
 	}
 }
 
-// AT5: programVersion detection covers single-binary and multi-binary cases
-// and ignores binaries without a programVersion constant.
+// AT5: programVersion detection covers single-utility, multi-utility, grouped
+// const, and end-to-end bump scenarios.
 func TestPrepDetectsProgramVersionConstants(t *testing.T) {
-	dir := t.TempDir()
-	mustWrite(t, filepath.Join(dir, "cmd", "foo", "main.go"),
-		"package main\n\nconst programVersion = \"0.1.0\"\n\nfunc main() {}\n")
-	mustWrite(t, filepath.Join(dir, "cmd", "bar", "main.go"),
-		"package main\n\nfunc main() {}\n") // no programVersion
-	mustWrite(t, filepath.Join(dir, "cmd", "baz", "main.go"),
-		"package main\n\nconst programVersion = \"0.1.0\"\n\nfunc main() {}\n")
+	t.Run("single utility is bumped", func(t *testing.T) {
+		dir := t.TempDir()
+		mustWrite(t, filepath.Join(dir, "cmd", "foo", "main.go"),
+			"package main\n\nconst programVersion = \"0.1.0\"\n\nfunc main() {}\n")
+		mustWrite(t, filepath.Join(dir, "cmd", "bar", "main.go"),
+			"package main\n\nfunc main() {}\n") // no programVersion
 
-	targets, err := detectVersionTargets(dir)
+		targets, warning, err := detectVersionTargets(dir)
+		if err != nil {
+			t.Fatalf("detectVersionTargets: %v", err)
+		}
+		if warning != "" {
+			t.Errorf("single-utility case: unexpected warning %q", warning)
+		}
+		var paths []string
+		for _, tgt := range targets {
+			if tgt.kind == "programVersion" {
+				paths = append(paths, tgt.path)
+			}
+		}
+		want := []string{filepath.Join(dir, "cmd", "foo", "main.go")}
+		if len(paths) != 1 || paths[0] != want[0] {
+			t.Fatalf("programVersion targets = %v, want %v (bar/main.go must not appear)", paths, want)
+		}
+	})
+
+	t.Run("multi-utility is skipped with warning", func(t *testing.T) {
+		dir := t.TempDir()
+		mustWrite(t, filepath.Join(dir, "cmd", "foo", "main.go"),
+			"package main\n\nconst programVersion = \"0.1.0\"\n\nfunc main() {}\n")
+		mustWrite(t, filepath.Join(dir, "cmd", "baz", "main.go"),
+			"package main\n\nconst programVersion = \"0.2.0\"\n\nfunc main() {}\n")
+
+		targets, warning, err := detectVersionTargets(dir)
+		if err != nil {
+			t.Fatalf("detectVersionTargets: %v", err)
+		}
+		for _, tgt := range targets {
+			if tgt.kind == "programVersion" {
+				t.Errorf("multi-utility case: programVersion target %s leaked through (must be skipped)", tgt.path)
+			}
+		}
+		if !strings.Contains(warning, "multi-utility") {
+			t.Errorf("multi-utility case: warning must mention multi-utility; got %q", warning)
+		}
+	})
+
+	t.Run("grouped const form is matched", func(t *testing.T) {
+		dir := t.TempDir()
+		groupedSrc := "package main\n\nconst (\n" +
+			"\tprogramName    = \"foo\"\n" +
+			"\tprogramVersion = \"1.0.0\"\n" +
+			")\n\nfunc main() {}\n"
+		mustWrite(t, filepath.Join(dir, "cmd", "foo", "main.go"), groupedSrc)
+
+		targets, warning, err := detectVersionTargets(dir)
+		if err != nil {
+			t.Fatalf("detectVersionTargets: %v", err)
+		}
+		if warning != "" {
+			t.Errorf("single-utility grouped form: unexpected warning %q", warning)
+		}
+		var found bool
+		for _, tgt := range targets {
+			if tgt.kind == "programVersion" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("grouped const form: programVersion target not detected (regex must match block form)")
+		}
+	})
+
+	t.Run("grouped const form is bumped end-to-end", func(t *testing.T) {
+		dir := t.TempDir()
+		mainPath := filepath.Join(dir, "cmd", "foo", "main.go")
+		groupedSrc := "package main\n\nconst (\n" +
+			"\tprogramName    = \"foo\"\n" +
+			"\tprogramVersion = \"1.0.0\"\n" +
+			")\n\nfunc main() {}\n"
+		mustWrite(t, mainPath, groupedSrc)
+
+		targets, _, err := detectVersionTargets(dir)
+		if err != nil {
+			t.Fatalf("detectVersionTargets: %v", err)
+		}
+		for _, tgt := range targets {
+			if tgt.kind != "programVersion" {
+				continue
+			}
+			if err := applyVersionBump(tgt, "9.9.9"); err != nil {
+				t.Fatalf("applyVersionBump: %v", err)
+			}
+		}
+		updated, err := os.ReadFile(mainPath)
+		if err != nil {
+			t.Fatalf("read after bump: %v", err)
+		}
+		if !strings.Contains(string(updated), `programVersion = "9.9.9"`) {
+			t.Errorf("grouped const not bumped: %s", string(updated))
+		}
+		if strings.Contains(string(updated), `programVersion = "1.0.0"`) {
+			t.Errorf("old version still present: %s", string(updated))
+		}
+	})
+}
+
+// AT5b: primary-cmd convention — cmd/<module-basename>/main.go is the primary
+// binary; other cmd/*/main.go are secondaries even when multiple have
+// programVersion. Mirrors a single-cmd-with-helpers shape.
+func TestPrepPrimaryCmdConvention(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "go.mod"), "module github.com/queone/governa\n\ngo 1.22\n")
+	mustWrite(t, filepath.Join(dir, "cmd", "governa", "main.go"),
+		"package main\n\nconst programVersion = \"0.1.0\"\n\nfunc main() {}\n")
+	mustWrite(t, filepath.Join(dir, "cmd", "build", "main.go"),
+		"package main\n\nconst programVersion = \"0.0.0\"\n\nfunc main() {}\n")
+	mustWrite(t, filepath.Join(dir, "cmd", "rel", "main.go"),
+		"package main\n\nconst programVersion = \"0.0.0\"\n\nfunc main() {}\n")
+
+	targets, warning, err := detectVersionTargets(dir)
 	if err != nil {
 		t.Fatalf("detectVersionTargets: %v", err)
 	}
-	var paths []string
+	if warning != "" {
+		t.Errorf("primary-cmd case: unexpected warning %q", warning)
+	}
+	var pvPaths []string
 	for _, tgt := range targets {
 		if tgt.kind == "programVersion" {
-			paths = append(paths, tgt.path)
+			pvPaths = append(pvPaths, tgt.path)
 		}
 	}
-	want := []string{
-		filepath.Join(dir, "cmd", "baz", "main.go"),
-		filepath.Join(dir, "cmd", "foo", "main.go"),
-	}
-	if len(paths) != 2 || paths[0] != want[0] || paths[1] != want[1] {
-		t.Fatalf("programVersion targets = %v, want %v (bar/main.go must not appear)", paths, want)
+	want := filepath.Join(dir, "cmd", "governa", "main.go")
+	if len(pvPaths) != 1 || pvPaths[0] != want {
+		t.Fatalf("primary-cmd convention: targets = %v, want only %s", pvPaths, want)
 	}
 }
 
 // AT6: TEMPLATE_VERSION + TemplateVersion detection is presence-gated.
 func TestPrepDetectsTemplateVersionFiles(t *testing.T) {
 	dir := t.TempDir()
-	targets, err := detectVersionTargets(dir)
+	targets, _, err := detectVersionTargets(dir)
 	if err != nil {
 		t.Fatalf("detectVersionTargets (empty): %v", err)
 	}
@@ -168,11 +280,11 @@ func TestPrepDetectsTemplateVersionFiles(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "TEMPLATE_VERSION"), "0.1.0\n")
 	mustWrite(t, filepath.Join(dir, "internal", "templates", "version.go"),
 		"package templates\n\nconst TemplateVersion = \"0.1.0\"\n")
-	// AC62: template-version detection is gated on internal/templates/base/ presence.
-	// This fixture represents the governa-the-template-repo path.
+	// Template-version detection is gated on internal/templates/base/ presence.
+	// This fixture represents the template-repo path.
 	mustWrite(t, filepath.Join(dir, "internal", "templates", "base", "AGENTS.md"), "# AGENTS.md\n")
 
-	targets, err = detectVersionTargets(dir)
+	targets, _, err = detectVersionTargets(dir)
 	if err != nil {
 		t.Fatalf("detectVersionTargets: %v", err)
 	}
@@ -188,9 +300,8 @@ func TestPrepDetectsTemplateVersionFiles(t *testing.T) {
 	}
 }
 
-// AC62 AT1: consumer repo (no internal/templates/base/) — TEMPLATE_VERSION
-// and internal/templates/version.go must NOT be picked up as bump targets.
-// Simulates skout's v0.44.1 release-prep scenario.
+// Consumer repo (no internal/templates/base/) — TEMPLATE_VERSION and
+// internal/templates/version.go must NOT be picked up as bump targets.
 func TestPrepSkipsTemplateVersionOnConsumerRepo(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "TEMPLATE_VERSION"), "0.38.0\n")
@@ -198,7 +309,7 @@ func TestPrepSkipsTemplateVersionOnConsumerRepo(t *testing.T) {
 		"package templates\n\nconst TemplateVersion = \"0.38.0\"\n")
 	// Consumer scenario: no internal/templates/base/ directory.
 
-	targets, err := detectVersionTargets(dir)
+	targets, _, err := detectVersionTargets(dir)
 	if err != nil {
 		t.Fatalf("detectVersionTargets: %v", err)
 	}
@@ -212,8 +323,8 @@ func TestPrepSkipsTemplateVersionOnConsumerRepo(t *testing.T) {
 	}
 }
 
-// AC62 AT2: template repo (internal/templates/base/ present) — both
-// TEMPLATE_VERSION and TemplateVersion are detected. Governa-case regression guard.
+// Template repo (internal/templates/base/ present) — both TEMPLATE_VERSION
+// and TemplateVersion are detected.
 func TestPrepDetectsTemplateVersionOnTemplateRepo(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "TEMPLATE_VERSION"), "0.1.0\n")
@@ -221,7 +332,7 @@ func TestPrepDetectsTemplateVersionOnTemplateRepo(t *testing.T) {
 		"package templates\n\nconst TemplateVersion = \"0.1.0\"\n")
 	mustWrite(t, filepath.Join(dir, "internal", "templates", "base", "AGENTS.md"), "# AGENTS.md\n")
 
-	targets, err := detectVersionTargets(dir)
+	targets, _, err := detectVersionTargets(dir)
 	if err != nil {
 		t.Fatalf("detectVersionTargets: %v", err)
 	}
@@ -237,14 +348,14 @@ func TestPrepDetectsTemplateVersionOnTemplateRepo(t *testing.T) {
 	}
 }
 
-// AC62 AT3: cmd/*/main.go programVersion detection is orthogonal to the
-// template-marker gate — detected in both consumer and template repos.
+// cmd/*/main.go programVersion detection is orthogonal to the template-marker
+// gate — detected in both consumer and template repos.
 func TestPrepDetectsProgramVersionBothRepoKinds(t *testing.T) {
 	t.Run("consumer (no base/)", func(t *testing.T) {
 		dir := t.TempDir()
 		mustWrite(t, filepath.Join(dir, "cmd", "foo", "main.go"),
 			"package main\n\nconst programVersion = \"0.1.0\"\n\nfunc main() {}\n")
-		targets, _ := detectVersionTargets(dir)
+		targets, _, _ := detectVersionTargets(dir)
 		found := false
 		for _, tgt := range targets {
 			if tgt.kind == "programVersion" {
@@ -260,7 +371,7 @@ func TestPrepDetectsProgramVersionBothRepoKinds(t *testing.T) {
 		mustWrite(t, filepath.Join(dir, "cmd", "foo", "main.go"),
 			"package main\n\nconst programVersion = \"0.1.0\"\n\nfunc main() {}\n")
 		mustWrite(t, filepath.Join(dir, "internal", "templates", "base", "AGENTS.md"), "# AGENTS.md\n")
-		targets, _ := detectVersionTargets(dir)
+		targets, _, _ := detectVersionTargets(dir)
 		found := false
 		for _, tgt := range targets {
 			if tgt.kind == "programVersion" {
@@ -283,10 +394,10 @@ func TestPrepBumpsVersionConstants(t *testing.T) {
 		"package main\n\nconst programVersion = \"0.1.0\"\n\nfunc main() {}\n")
 	tvGo := filepath.Join(dir, "internal", "templates", "version.go")
 	mustWrite(t, tvGo, "package templates\n\nconst TemplateVersion = \"0.1.0\"\n")
-	// AC62: template-version detection gated on internal/templates/base/ presence.
+	// Template-version detection gated on internal/templates/base/ presence.
 	mustWrite(t, filepath.Join(dir, "internal", "templates", "base", "AGENTS.md"), "# AGENTS.md\n")
 
-	targets, _ := detectVersionTargets(dir)
+	targets, _, _ := detectVersionTargets(dir)
 	for _, t2 := range targets {
 		if err := applyVersionBump(t2, "0.2.0"); err != nil {
 			t.Fatalf("applyVersionBump %s: %v", t2.path, err)
@@ -340,17 +451,21 @@ func TestPrepInsertsChangelogRow(t *testing.T) {
 }
 
 // AT9: AC files named in the message are deleted; ac-template.md and other
-// AC numbers are untouched.
+// AC numbers are untouched. Companion-suffixed files are ignored.
 func TestPrepDeletesNamedACFiles(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "docs", "ac60-prep-tool.md"), "# AC60\n")
 	mustWrite(t, filepath.Join(dir, "docs", "ac61-other.md"), "# AC61\n")
 	mustWrite(t, filepath.Join(dir, "docs", "ac-template.md"), "# template\n")
+	// Companion-suffixed files for the released AC must be ignored — critique
+	// content lives inline per docs/critique-protocol.md.
+	mustWrite(t, filepath.Join(dir, "docs", "ac60-prep-tool-critique.md"), "crit\n")
+	mustWrite(t, filepath.Join(dir, "docs", "ac60-prep-tool-feedback.md"), "fb\n")
 
 	acNums := parseACRefs("AC60: prep tool")
-	acFiles, _, _, _, err := findACCompanions(dir, acNums)
+	acFiles, err := findACFiles(dir, acNums)
 	if err != nil {
-		t.Fatalf("findACCompanions: %v", err)
+		t.Fatalf("findACFiles: %v", err)
 	}
 	if len(acFiles) != 1 || !strings.HasSuffix(acFiles[0], "ac60-prep-tool.md") {
 		t.Fatalf("single-AC: expected only ac60-prep-tool.md, got %v", acFiles)
@@ -358,9 +473,9 @@ func TestPrepDeletesNamedACFiles(t *testing.T) {
 
 	// Composite message.
 	acNums = parseACRefs("AC60+AC61: bundle")
-	acFiles, _, _, _, err = findACCompanions(dir, acNums)
+	acFiles, err = findACFiles(dir, acNums)
 	if err != nil {
-		t.Fatalf("findACCompanions composite: %v", err)
+		t.Fatalf("findACFiles composite: %v", err)
 	}
 	if len(acFiles) != 2 {
 		t.Fatalf("composite: expected 2 AC files, got %v", acFiles)
@@ -369,64 +484,64 @@ func TestPrepDeletesNamedACFiles(t *testing.T) {
 		if strings.HasSuffix(f, "ac-template.md") {
 			t.Fatalf("ac-template.md must never be included, got %v", acFiles)
 		}
+		if strings.HasSuffix(f, "-critique.md") || strings.HasSuffix(f, "-feedback.md") {
+			t.Fatalf("companion files must not be included, got %v", acFiles)
+		}
 	}
 }
 
-// AT9b: -critique.md and -dispositions.md companions are deleted alongside AC.
-func TestPrepDeletesCritiqueAndDispositionsCompanions(t *testing.T) {
+// AT9b: AC-pointer IE lines in plan.md are detected and removed; unrelated IE
+// lines and non-IE plan.md lines are preserved. Idempotent re-runs are no-ops.
+func TestPrepACPointerIELineSweep(t *testing.T) {
 	dir := t.TempDir()
-	mustWrite(t, filepath.Join(dir, "docs", "ac60-prep-tool.md"), "# AC60\n")
-	mustWrite(t, filepath.Join(dir, "docs", "ac60-prep-tool-critique.md"), "crit\n")
-	mustWrite(t, filepath.Join(dir, "docs", "ac60-prep-tool-dispositions.md"), "disp\n")
+	planPath := filepath.Join(dir, "plan.md")
+	planContent := "# Plan\n\n## Ideas To Explore\n\n" +
+		"- IE9: foo → docs/ac9-foo.md\n" +
+		"- IE10: bar (no AC pointer)\n" +
+		"- IE11: baz → docs/ac11-baz.md\n" +
+		"\n## Other section\n\nlorem ipsum\n"
+	mustWrite(t, planPath, planContent)
 
-	acNums := parseACRefs("AC60: prep")
-	ac, crit, disp, feedback, err := findACCompanions(dir, acNums)
+	// Find IE lines for AC9.
+	matches, err := findACPointerIELines(dir, []int{9})
 	if err != nil {
-		t.Fatalf("findACCompanions: %v", err)
+		t.Fatalf("findACPointerIELines: %v", err)
 	}
-	if len(ac) != 1 {
-		t.Fatalf("ac files = %v", ac)
+	if len(matches) != 1 || !strings.Contains(matches[0], "IE9: foo → docs/ac9-foo.md") {
+		t.Fatalf("expected IE9 match, got %v", matches)
 	}
-	if len(crit) != 1 {
-		t.Fatalf("critique files = %v", crit)
+
+	// Remove them.
+	if err := removeACPointerIELines(dir, matches); err != nil {
+		t.Fatalf("removeACPointerIELines: %v", err)
 	}
-	if len(disp) != 1 {
-		t.Fatalf("dispositions files = %v", disp)
+	updated := string(mustRead(t, planPath))
+	if strings.Contains(updated, "IE9: foo") {
+		t.Errorf("IE9 line still present after removal:\n%s", updated)
 	}
-	if len(feedback) != 0 {
-		t.Fatalf("feedback files should be empty = %v", feedback)
+	if !strings.Contains(updated, "IE10: bar") {
+		t.Errorf("unrelated IE10 line was removed:\n%s", updated)
+	}
+	if !strings.Contains(updated, "IE11: baz → docs/ac11-baz.md") {
+		t.Errorf("unrelated IE11 line was removed:\n%s", updated)
+	}
+	if !strings.Contains(updated, "## Other section") {
+		t.Errorf("non-IE section was modified:\n%s", updated)
+	}
+
+	// Idempotent: removing the same lines again is a no-op (lines no longer present).
+	if err := removeACPointerIELines(dir, matches); err != nil {
+		t.Fatalf("idempotent removeACPointerIELines: %v", err)
 	}
 }
 
-// AT10: -feedback.md moves to .governa/feedback/ac<N>-<slug>.md.
-func TestPrepMovesFeedbackCompanions(t *testing.T) {
-	dir := t.TempDir()
-	feedbackPath := filepath.Join(dir, "docs", "ac60-prep-tool-feedback.md")
-	mustWrite(t, feedbackPath, "feedback\n")
-
-	dest, err := moveFeedbackCompanion(dir, feedbackPath)
-	if err != nil {
-		t.Fatalf("moveFeedbackCompanion: %v", err)
-	}
-	wantDest := filepath.Join(dir, ".governa", "feedback", "ac60-prep-tool.md")
-	if dest != wantDest {
-		t.Fatalf("dest = %s, want %s", dest, wantDest)
-	}
-	if _, err := os.Stat(feedbackPath); !os.IsNotExist(err) {
-		t.Fatalf("source still exists")
-	}
-	if _, err := os.Stat(wantDest); err != nil {
-		t.Fatalf("dest missing: %v", err)
-	}
-}
-
-// AT11: DryRun skips phases 3, 7, 8 and prints the intended writes.
+// AT10: DryRun skips phases 3, 7, 8 and prints the intended writes.
 func TestPrepDryRunWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	gitInitFixture(t, dir)
 	tvPath := filepath.Join(dir, "TEMPLATE_VERSION")
 	mustWrite(t, tvPath, "0.1.0\n")
-	// AC62: TEMPLATE_VERSION detection gated on internal/templates/base/ presence.
+	// Template-version detection gated on internal/templates/base/ presence.
 	mustWrite(t, filepath.Join(dir, "internal", "templates", "base", "AGENTS.md"), "# AGENTS.md\n")
 	chPath := filepath.Join(dir, "CHANGELOG.md")
 	mustWrite(t, chPath, "# Changelog\n\n| Version | Summary |\n|---|---|\n| Unreleased | |\n| 0.1.0 | first |\n")
@@ -459,7 +574,7 @@ func TestPrepDryRunWritesNothing(t *testing.T) {
 	}
 }
 
-// AT12: release command is emitted as the final non-empty lines.
+// AT11: release command is emitted as the final non-empty lines.
 func TestPrepPrintsReleaseCommand(t *testing.T) {
 	var buf bytes.Buffer
 	emitReleaseCommand(&buf, "v0.2.0", "the message")
@@ -469,7 +584,7 @@ func TestPrepPrintsReleaseCommand(t *testing.T) {
 	}
 }
 
-// AT13: --no-build skips phases 3 and 8.
+// AT12: --no-build skips phases 3 and 8.
 func TestPrepNoBuildFlagSkipsBuilds(t *testing.T) {
 	dir := t.TempDir()
 	gitInitFixture(t, dir)
@@ -487,7 +602,7 @@ func TestPrepNoBuildFlagSkipsBuilds(t *testing.T) {
 	}
 }
 
-// AT13b: buildFn is invoked twice on default flags, pre-check error skips phase 7.
+// AT12b: buildFn is invoked twice on default flags, pre-check error skips phase 7.
 func TestPrepBuildFnInvokedAndErrorPropagates(t *testing.T) {
 	// Happy path: buildFn invoked in both phase 3 and phase 8.
 	dir := t.TempDir()
@@ -533,7 +648,7 @@ type prepTestError struct{ msg string }
 
 func (e *prepTestError) Error() string { return e.msg }
 
-// AT13c: CHANGELOG idempotency guard fails fast with zero writes.
+// AT12c: CHANGELOG idempotency guard fails fast with zero writes.
 func TestPrepIdempotencyGuardFailsFast(t *testing.T) {
 	dir := t.TempDir()
 	gitInitFixture(t, dir)
@@ -647,72 +762,40 @@ func TestUsage(t *testing.T) {
 	}
 }
 
-// moveFeedbackCompanion errors when the source path doesn't exist.
-func TestMoveFeedbackCompanionMissingSource(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	_, err := moveFeedbackCompanion(dir, filepath.Join(dir, "docs", "nope-feedback.md"))
-	if err == nil {
-		t.Error("expected error on missing source, got nil")
-	}
-}
-
-// AC26 guard (permanent): utils' cmd/*/main.go uses the grouped const form
-// (programName + programVersion in const ( ... )). The current programVersionRe
-// matches only the inline form, so detectVersionTargets returns zero
-// programVersion-kind targets and prep silently skips per-utility bumps. That
-// silent-skip is correct-by-accident for utils. The bug was resolved upstream
-// by governa AC100 via an in-place broaden + safe auto-detect filter (1 target
-// → bump; >1 → skip with warning); preptool stays a template (convention-
-// coupling test rejected library extraction), so no governa-preptool ships.
-// utils chose this doctrine+guard pattern over porting AC100's source patch.
-// This test arms the trap: if anyone broadens programVersionRe to match the
-// grouped form without also porting the auto-detect filter, detectVersionTargets
-// returns a target, applyVersionBump rewrites the file, bytes diverge, and this
-// test fails. Assertion direction is "values must NOT change" — bytes-equal
-// end-to-end after running detect → apply with sentinel target version 9.9.9.
-//
-// See:
-//   - docs/build-release.md "Per-Utility programVersion Doctrine"
-//   - upstream advisory archive (RESOLVED): governa's docs/advisories/program-version-bump.md
-func TestAC26_GroupedConstFormNotBumped(t *testing.T) {
-	dir := t.TempDir()
-	mainPath := filepath.Join(dir, "cmd", "foo", "main.go")
-	groupedSrc := "package main\n\nconst (\n" +
-		"\tprogramName    = \"foo\"\n" +
-		"\tprogramVersion = \"1.0.0\"\n" +
-		")\n\nfunc main() {}\n"
-	mustWrite(t, mainPath, groupedSrc)
-
-	before, err := os.ReadFile(mainPath)
-	if err != nil {
-		t.Fatalf("read fixture before: %v", err)
-	}
-
-	targets, err := detectVersionTargets(dir)
-	if err != nil {
-		t.Fatalf("detectVersionTargets: %v", err)
-	}
-	for _, tgt := range targets {
-		if tgt.kind != "programVersion" {
-			continue
+// parseModuleBasename edge cases.
+func TestParseModuleBasename(t *testing.T) {
+	t.Run("missing go.mod returns empty", func(t *testing.T) {
+		dir := t.TempDir()
+		if got := parseModuleBasename(dir); got != "" {
+			t.Errorf("missing go.mod: got %q, want \"\"", got)
 		}
-		if err := applyVersionBump(tgt, "9.9.9"); err != nil {
-			t.Fatalf("applyVersionBump %s: %v", tgt.path, err)
+	})
+	t.Run("no module line returns empty", func(t *testing.T) {
+		dir := t.TempDir()
+		mustWrite(t, filepath.Join(dir, "go.mod"), "go 1.22\n")
+		if got := parseModuleBasename(dir); got != "" {
+			t.Errorf("no module line: got %q, want \"\"", got)
 		}
-	}
-
-	after, err := os.ReadFile(mainPath)
-	if err != nil {
-		t.Fatalf("read fixture after: %v", err)
-	}
-	if !bytes.Equal(before, after) {
-		t.Fatalf("AC26 guard tripped: cmd/foo/main.go bytes changed after detect+apply.\n"+
-			"programVersionRe was broadened to match the grouped const form without\n"+
-			"also porting governa AC100's safe auto-detect filter (1 target → bump;\n"+
-			">1 → skip with warning). Broadening without that filter triggers a mass\n"+
-			"downgrade of every utility to the release version.\n"+
-			"See governa's docs/advisories/program-version-bump.md before proceeding.\n\n"+
-			"before:\n%s\nafter:\n%s", string(before), string(after))
-	}
+	})
+	t.Run("single-segment module path", func(t *testing.T) {
+		dir := t.TempDir()
+		mustWrite(t, filepath.Join(dir, "go.mod"), "module utils\n\ngo 1.22\n")
+		if got := parseModuleBasename(dir); got != "utils" {
+			t.Errorf("single-segment: got %q, want %q", got, "utils")
+		}
+	})
+	t.Run("multi-segment module path", func(t *testing.T) {
+		dir := t.TempDir()
+		mustWrite(t, filepath.Join(dir, "go.mod"), "module github.com/queone/governa\n\ngo 1.22\n")
+		if got := parseModuleBasename(dir); got != "governa" {
+			t.Errorf("multi-segment: got %q, want %q", got, "governa")
+		}
+	})
+	t.Run("basename with hyphens", func(t *testing.T) {
+		dir := t.TempDir()
+		mustWrite(t, filepath.Join(dir, "go.mod"), "module github.com/queone/governa-color\n\ngo 1.22\n")
+		if got := parseModuleBasename(dir); got != "governa-color" {
+			t.Errorf("hyphenated basename: got %q, want %q", got, "governa-color")
+		}
+	})
 }
