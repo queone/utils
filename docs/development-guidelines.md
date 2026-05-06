@@ -107,10 +107,6 @@ Rules:
 - When changing a utility's storage location, auto-migrate lazily on the first call to the path resolver (not at startup): if the old path is a regular file and the new path does not exist, `os.Rename` (or copy+delete on `EXDEV`) and emit a one-line `<util>: migrated <old> -> <new>` notice to stderr. If both exist, prefer the new path and warn — do not auto-delete the old file. If the old path is a symlink, skip migration and warn.
 - Externally-fixed paths (e.g., a third-party tool's own dir) are not in scope of this rule. Document the constraint in the utility's README.
 
-## Canon Baseline Sync
-
-utils tracks `governa` template canon for files under its overlay-tracked surface. When governa releases a new minor, the sync AC adopts the new canon as a *whole-file snapshot* for each tracked file rather than hand-merging only the reachable hunks. Rationale: hand-merging only what's behaviorally reachable creates a third utils-local variant that persists as drift across every future sync; whole-file snapshot adoption keeps each file at a clean canon baseline so future syncs are hunk-additive. This is a deliberate choice on top of governa's reachability rule for canon-only branches (documented in governa's `docs/drift-scan.md`), which says host-only branches don't *require* action — utils takes them anyway for operational simplicity. Scope: overlay-tracked files only (the surface drift-scan reports against canon).
-
 ## Documentation Alignment
 
 - Docs ship with the code change that introduces the behavior
