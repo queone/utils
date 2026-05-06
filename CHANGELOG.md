@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.32.1 | AC38: consolidate utils on governa-color v0.2.0; drop gookit + fatih |
 | 0.32.0 | AC37: adopt governa v0.117.0 — canon-cycle.md doctrine + test-naming sync |
 | 0.31.1 | AC36: sweep AT label residue from utils-owned test surfaces |
 | 0.31.0 | AC35: adopt governa v0.116.0 — preptool sync + canon-baseline-sync doctrine |

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gookit/color"
+	icolor "github.com/queone/governa-color"
 )
 
 func captureStdout(t *testing.T, fn func()) string {
@@ -76,11 +76,11 @@ func TestYamlGoDeclaresPortedFunctions(t *testing.T) {
 		"func printYamlColor(",
 		"func printYamlBytesColor(",
 		"func colorizeString(",
-		"blu = color.FgLightBlue.Render",
-		"gre = color.FgGreen.Render",
-		"yel = color.FgYellow.Render",
-		"whi = color.FgWhite.Render",
-		"mag = color.FgLightMagenta.Render",
+		"blu = icolor.Blu",
+		"gre = icolor.Grn",
+		"yel = icolor.Yel",
+		"whi = icolor.Whi",
+		"mag = icolor.Mag",
 	}
 	for _, w := range want {
 		if !strings.Contains(string(body), w) {
@@ -144,8 +144,7 @@ func TestPrintJson(t *testing.T) {
 }
 
 func TestPrintYamlBytesColorAnsi(t *testing.T) {
-	color.ForceColor() // ensure escapes emit even when stdout isn't a tty
-	defer color.ResetOptions()
+	defer icolor.SetEnabled(true)() // ensure escapes emit even when stdout isn't a tty
 	out := captureStdout(t, func() { printYamlBytesColor([]byte("key: value\n")) })
 	if !strings.Contains(out, "\x1b[") {
 		t.Errorf("printYamlBytesColor produced no ANSI escapes: %q", out)
@@ -167,8 +166,7 @@ func TestPrintYamlNoAnsi(t *testing.T) {
 }
 
 func TestPrintYamlColorReturnsNil(t *testing.T) {
-	color.ForceColor()
-	defer color.ResetOptions()
+	defer icolor.SetEnabled(true)()
 	var err error
 	out := captureStdout(t, func() { err = printYamlColor(map[string]int{"x": 1}) })
 	if err != nil {

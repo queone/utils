@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/fatih/color"
 	icolor "github.com/queone/governa-color"
 )
 
@@ -74,12 +73,12 @@ func main() {
 
 	doRename := option == "-f"
 	if !doRename {
-		color.Yellow("DRY RUN: Re-run with '-f' option to execute.\n")
+		fmt.Print(icolor.Yelf("DRY RUN: Re-run with '-f' option to execute.\n"))
 	}
 
 	files, err := os.ReadDir(".")
 	if err != nil {
-		color.Red("Error reading directory: %v\n", err)
+		fmt.Print(icolor.Redf("Error reading directory: %v\n", err))
 		os.Exit(1)
 	}
 
@@ -100,17 +99,17 @@ func main() {
 		if doRename {
 			err := os.Rename(oldName, newName)
 			if err != nil {
-				color.Red("Failed to rename %s -> %s: %v\n", oldName, newName, err)
+				fmt.Print(icolor.Redf("Failed to rename %s -> %s: %v\n", oldName, newName, err))
 				continue
 			}
-			color.Green("\"%s\" -> \"%s\"\n", oldName, newName)
+			fmt.Print(icolor.Grnf("\"%s\" -> \"%s\"\n", oldName, newName))
 		} else {
 			fmt.Printf("%-60s  =>  %s\n", fmt.Sprintf("\"%s\"", oldName), fmt.Sprintf("\"%s\"", newName))
 		}
 	}
 
 	if !found {
-		color.Red("No filename has string '%s'.\n", oldStr)
+		fmt.Print(icolor.Redf("No filename has string '%s'.\n", oldStr))
 		os.Exit(1)
 	}
 

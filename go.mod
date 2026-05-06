@@ -5,14 +5,12 @@ go 1.26.0
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/alexflint/go-arg v1.6.1
-	github.com/fatih/color v1.10.0
 	github.com/goccy/go-yaml v1.11.0
-	github.com/gookit/color v1.5.2
 	github.com/koki-develop/go-fzf v0.15.0
 	github.com/mattn/go-isatty v0.0.19
 	github.com/mattn/go-runewidth v0.0.15
 	github.com/queone/governa-buildtool v0.1.0
-	github.com/queone/governa-color v0.1.2
+	github.com/queone/governa-color v0.2.0
 	github.com/queone/governa-reltool v0.1.0
 	github.com/sethvargo/go-diceware v0.5.0
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
@@ -33,6 +31,7 @@ require (
 	github.com/charmbracelet/bubbletea v0.24.2 // indirect
 	github.com/charmbracelet/lipgloss v0.7.1 // indirect
 	github.com/containerd/console v1.0.4-0.20230313162750-1ae8d489ac81 // indirect
+	github.com/fatih/color v1.10.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
@@ -43,7 +42,6 @@ require (
 	github.com/muesli/termenv v0.15.2 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
-	github.com/xo/terminfo v0.0.0-20210125001918-ca9a967f8778 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.37.0 // indirect

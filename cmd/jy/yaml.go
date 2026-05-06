@@ -7,17 +7,17 @@ import (
 
 	"github.com/goccy/go-yaml/lexer"
 	"github.com/goccy/go-yaml/token"
-	"github.com/gookit/color"
+	icolor "github.com/queone/governa-color"
 	"gopkg.in/yaml.v3"
 )
 
-// Color wrappers ported verbatim from utl/color.go (only the 5 used by colorizeString).
+// Color wrappers used by colorizeString. Sourced from queone/governa-color.
 var (
-	blu = color.FgLightBlue.Render
-	gre = color.FgGreen.Render
-	yel = color.FgYellow.Render
-	whi = color.FgWhite.Render
-	mag = color.FgLightMagenta.Render
+	blu = icolor.Blu
+	gre = icolor.Grn
+	yel = icolor.Yel
+	whi = icolor.Whi
+	mag = icolor.Mag
 )
 
 // Convert YAML interface object to byte slice, with option indent spacing

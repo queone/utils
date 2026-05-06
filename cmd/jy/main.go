@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	goyaml "github.com/goccy/go-yaml"
-	"github.com/gookit/color"
 	"github.com/mattn/go-isatty"
 	icolor "github.com/queone/governa-color"
 	"gopkg.in/yaml.v3"
@@ -163,7 +162,7 @@ func processPipedInput(option string) {
 	}
 
 	// Remove color codes in piped input
-	stringSansColor := color.ClearCode(string(rawBytes))
+	stringSansColor := icolor.ClearCode(string(rawBytes))
 	rawBytes = []byte(stringSansColor)
 
 	printOut(rawBytes, option)
@@ -181,7 +180,7 @@ func processFileInput(filePath, option string) {
 	}
 
 	// Remove color codes in file
-	stringSansColor := color.ClearCode(string(rawBytes))
+	stringSansColor := icolor.ClearCode(string(rawBytes))
 	rawBytes = []byte(stringSansColor)
 
 	printOut(rawBytes, option)

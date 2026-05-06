@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/gookit/color"
 	"github.com/mattn/go-isatty"
 	icolor "github.com/queone/governa-color"
 )
@@ -72,7 +71,7 @@ func loadAndDecolorize(filename string) {
 	}
 
 	// Remove color codes from file content and print
-	decolorizedText := color.ClearCode(string(fileBytes))
+	decolorizedText := icolor.ClearCode(string(fileBytes))
 	fmt.Print(decolorizedText)
 }
 
@@ -95,7 +94,7 @@ func main() {
 		}
 
 		// Remove color escape codes in piped input, then print
-		decolorizedText := color.ClearCode(string(rawBytes))
+		decolorizedText := icolor.ClearCode(string(rawBytes))
 		fmt.Print(decolorizedText)
 	} else {
 		printUsage()
