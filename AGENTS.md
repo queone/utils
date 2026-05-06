@@ -28,8 +28,7 @@ Rules:
 
 ## Interaction Mode
 
-- Default to exploratory discussion.
-- Exploratory discussion is also terse: surface ambiguities and rubric questions as flat bullets, no current-state recaps or implication walk-throughs.
+- Default to exploratory discussion: terse, flat bullets surfacing ambiguities and rubric questions; no current-state recaps or implication walk-throughs.
 - Do not create files or make changes without explicit authorization.
 - When authorized, make the smallest change that satisfies the request.
 - Surface assumptions, ambiguities, and missing context before any direction-changing action.
