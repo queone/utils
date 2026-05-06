@@ -107,9 +107,9 @@ func fileSHA256(t *testing.T, path string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// --- AT1: status mode, healthy env, no perms file ---
+// --- status mode, healthy env, no perms file ---
 
-func TestAT1_StatusAllOK(t *testing.T) {
+func TestStatusAllOK(t *testing.T) {
 	setupHealthyEnv(t)
 	tmpCwd := t.TempDir() // cwd with no .claude/
 	withCwd(t, tmpCwd)
@@ -129,9 +129,9 @@ func TestAT1_StatusAllOK(t *testing.T) {
 	}
 }
 
-// --- AT2: broken env, perms section still renders ---
+// --- broken env, perms section still renders ---
 
-func TestAT2_BrokenEnvPermsRenders(t *testing.T) {
+func TestBrokenEnvPermsRenders(t *testing.T) {
 	tmp := setupHome(t)
 	// Deliberately do NOT create the iCloud symlink — env is broken.
 	_ = tmp
@@ -161,9 +161,9 @@ func TestAT2_BrokenEnvPermsRenders(t *testing.T) {
 	}
 }
 
-// --- AT3: env -c and env --check produce consistent verify-only output ---
+// --- env -c and env --check produce consistent verify-only output ---
 
-func TestAT3_EnvCheckShortAndLong(t *testing.T) {
+func TestEnvCheckShortAndLong(t *testing.T) {
 	setupHealthyEnv(t)
 
 	okRegex := regexp.MustCompile(`^CHECK: environment OK( \(.*\))?$`)
@@ -186,7 +186,7 @@ func TestAT3_EnvCheckShortAndLong(t *testing.T) {
 	}
 }
 
-func TestAT3_EnvCheckBroken(t *testing.T) {
+func TestEnvCheckBroken(t *testing.T) {
 	setupHome(t)
 	for _, form := range []string{"-c", "--check"} {
 		exit, _, _ := runCmd("env", form)
@@ -196,9 +196,9 @@ func TestAT3_EnvCheckBroken(t *testing.T) {
 	}
 }
 
-// --- AT4: env -i and env --info print full design-philosophy text ---
+// --- env -i and env --info print full design-philosophy text ---
 
-func TestAT4_EnvInfo(t *testing.T) {
+func TestEnvInfo(t *testing.T) {
 	uniquePhrases := []string{
 		"PROBLEM",
 		"Layer 1: Repo governance",
@@ -220,9 +220,9 @@ func TestAT4_EnvInfo(t *testing.T) {
 	}
 }
 
-// --- AT5: env setup migrates memory and projects ---
+// --- env setup migrates memory and projects ---
 
-func TestAT5_EnvSetupMigrates(t *testing.T) {
+func TestEnvSetupMigrates(t *testing.T) {
 	tmp := setupHome(t)
 	// iCloud symlink
 	if err := os.Symlink(icloudTarget, cloudBase); err != nil {
@@ -257,9 +257,9 @@ func TestAT5_EnvSetupMigrates(t *testing.T) {
 	_ = tmp
 }
 
-// --- AT5b: idempotence ---
+// --- idempotence ---
 
-func TestAT5b_EnvSetupIdempotent(t *testing.T) {
+func TestEnvSetupIdempotent(t *testing.T) {
 	setupHealthyEnv(t)
 
 	// Snapshot cloud dir entries' modtime + size before.
@@ -304,9 +304,9 @@ func TestAT5b_EnvSetupIdempotent(t *testing.T) {
 	}
 }
 
-// --- AT6: perms init fresh dir ---
+// --- perms init fresh dir ---
 
-func TestAT6_PermsInitFresh(t *testing.T) {
+func TestPermsInitFresh(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -338,9 +338,9 @@ func TestAT6_PermsInitFresh(t *testing.T) {
 	}
 }
 
-// --- AT7: perms init merges preserving other keys + dedup ---
+// --- perms init merges preserving other keys + dedup ---
 
-func TestAT7_PermsInitMerge(t *testing.T) {
+func TestPermsInitMerge(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -394,9 +394,9 @@ func TestAT7_PermsInitMerge(t *testing.T) {
 	}
 }
 
-// --- AT8: perms init unknown profile ---
+// --- perms init unknown profile ---
 
-func TestAT8_PermsInitUnknownProfile(t *testing.T) {
+func TestPermsInitUnknownProfile(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -416,9 +416,9 @@ func TestAT8_PermsInitUnknownProfile(t *testing.T) {
 	}
 }
 
-// --- AT9: perms init dry-run ---
+// --- perms init dry-run ---
 
-func TestAT9_PermsInitDryRun(t *testing.T) {
+func TestPermsInitDryRun(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -437,9 +437,9 @@ func TestAT9_PermsInitDryRun(t *testing.T) {
 	}
 }
 
-// --- AT10: perms list alphabetical + override dir additive ---
+// --- perms list alphabetical + override dir additive ---
 
-func TestAT10_PermsListAlphabetical(t *testing.T) {
+func TestPermsListAlphabetical(t *testing.T) {
 	setupHome(t)
 
 	// No override dir yet.
@@ -464,9 +464,9 @@ func TestAT10_PermsListAlphabetical(t *testing.T) {
 	}
 }
 
-// --- AT11: override shadowing by filename stem ---
+// --- override shadowing by filename stem ---
 
-func TestAT11_OverrideShadowing(t *testing.T) {
+func TestOverrideShadowing(t *testing.T) {
 	setupHome(t)
 	overrideContent := `{"permissions":{"allow":["Bash(OVERRIDE *)"]}}`
 	mustWrite(t, filepath.Join(permsStarters, "go.json"), overrideContent)
@@ -483,9 +483,9 @@ func TestAT11_OverrideShadowing(t *testing.T) {
 	}
 }
 
-// --- AT12: malformed override file skipped with stderr warning ---
+// --- malformed override file skipped with stderr warning ---
 
-func TestAT12_MalformedOverride(t *testing.T) {
+func TestMalformedOverride(t *testing.T) {
 	setupHome(t)
 	mustWrite(t, filepath.Join(permsStarters, "broken.json"), "{not json")
 
@@ -522,9 +522,9 @@ func TestAT12_MalformedOverride(t *testing.T) {
 	}
 }
 
-// --- AT13: perms show go round-trips and contains Bash(go list *) ---
+// --- perms show go round-trips and contains Bash(go list *) ---
 
-func TestAT13_PermsShowGo(t *testing.T) {
+func TestPermsShowGo(t *testing.T) {
 	setupHome(t)
 	exit, stdout, _ := runCmd("perms", "show", "go")
 	if exit != 0 {
@@ -543,9 +543,9 @@ func TestAT13_PermsShowGo(t *testing.T) {
 	}
 }
 
-// --- AT14: WARN on Bash(python3:*) ---
+// --- WARN on Bash(python3:*) ---
 
-func TestAT14_WarnPython3(t *testing.T) {
+func TestWarnPython3(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -571,9 +571,9 @@ func TestAT14_WarnPython3(t *testing.T) {
 	}
 }
 
-// --- AT15: INFO on Bash(ls:*) auto-allow ---
+// --- INFO on Bash(ls:*) auto-allow ---
 
-func TestAT15_InfoLsAutoAllow(t *testing.T) {
+func TestInfoLsAutoAllow(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -601,9 +601,9 @@ func TestAT15_InfoLsAutoAllow(t *testing.T) {
 	}
 }
 
-// --- AT16: INFO for absolute path in body ---
+// --- INFO for absolute path in body ---
 
-func TestAT16_InfoAbsolutePath(t *testing.T) {
+func TestInfoAbsolutePath(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -626,9 +626,9 @@ func TestAT16_InfoAbsolutePath(t *testing.T) {
 	}
 }
 
-// --- AT16b: same offending entry in both files → both lines ---
+// --- same offending entry in both files → both lines ---
 
-func TestAT16b_SourceFileAttributionBothFiles(t *testing.T) {
+func TestSourceFileAttributionBothFiles(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -648,9 +648,9 @@ func TestAT16b_SourceFileAttributionBothFiles(t *testing.T) {
 	}
 }
 
-// --- AT16c: longest-prefix matching across go run, go list, git status ---
+// --- longest-prefix matching across go run, go list, git status ---
 
-func TestAT16c_LongestPrefixMatching(t *testing.T) {
+func TestLongestPrefixMatching(t *testing.T) {
 	cases := []struct {
 		entry     string
 		wantWarn  bool
@@ -686,9 +686,9 @@ func TestAT16c_LongestPrefixMatching(t *testing.T) {
 	}
 }
 
-// --- AT16d: malformed-shape entries pass silently ---
+// --- malformed-shape entries pass silently ---
 
-func TestAT16d_MalformedShapeSilent(t *testing.T) {
+func TestMalformedShapeSilent(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -704,9 +704,9 @@ func TestAT16d_MalformedShapeSilent(t *testing.T) {
 	}
 }
 
-// --- AT17: non-Bash patterns pass silently ---
+// --- non-Bash patterns pass silently ---
 
-func TestAT17_NonBashPatternsSilent(t *testing.T) {
+func TestNonBashPatternsSilent(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -728,9 +728,9 @@ func TestAT17_NonBashPatternsSilent(t *testing.T) {
 	}
 }
 
-// --- AT18: clean Bash-only allowlist produces nothing ---
+// --- clean Bash-only allowlist produces nothing ---
 
-func TestAT18_CleanAllowlistSilent(t *testing.T) {
+func TestCleanAllowlistSilent(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -746,9 +746,9 @@ func TestAT18_CleanAllowlistSilent(t *testing.T) {
 	}
 }
 
-// --- AT19: settings.local.json byte-identical after perms init ---
+// --- settings.local.json byte-identical after perms init ---
 
-func TestAT19_LocalJsonUntouched(t *testing.T) {
+func TestLocalJsonUntouched(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -768,9 +768,9 @@ func TestAT19_LocalJsonUntouched(t *testing.T) {
 	}
 }
 
-// --- AT20: conflict preservation on migration ---
+// --- conflict preservation on migration ---
 
-func TestAT20_ConflictPreservation(t *testing.T) {
+func TestConflictPreservation(t *testing.T) {
 	setupHome(t)
 	if err := os.Symlink(icloudTarget, cloudBase); err != nil {
 		t.Fatal(err)
@@ -801,9 +801,9 @@ func TestAT20_ConflictPreservation(t *testing.T) {
 	}
 }
 
-// --- AT21: env conflicts subcommand ---
+// --- env conflicts subcommand ---
 
-func TestAT21_EnvConflicts(t *testing.T) {
+func TestEnvConflicts(t *testing.T) {
 	setupHealthyEnv(t)
 
 	// Clean state.
@@ -829,9 +829,9 @@ func TestAT21_EnvConflicts(t *testing.T) {
 	}
 }
 
-// --- AT22: platform gate on non-darwin ---
+// --- platform gate on non-darwin ---
 
-func TestAT22_NonDarwinGate(t *testing.T) {
+func TestNonDarwinGate(t *testing.T) {
 	setupHome(t)
 	osName = "linux"
 
@@ -875,9 +875,9 @@ func TestAT22_NonDarwinGate(t *testing.T) {
 	}
 }
 
-// --- AT23: version/help + short-first convention ---
+// --- version/help + short-first convention ---
 
-func TestAT23_VersionAndHelp(t *testing.T) {
+func TestVersionAndHelp(t *testing.T) {
 	setupHome(t)
 
 	for _, form := range []string{"-v", "--version"} {
@@ -919,9 +919,9 @@ func TestAT23_VersionAndHelp(t *testing.T) {
 	}
 }
 
-// --- AT25: every flag has both short and long forms ---
+// --- every flag has both short and long forms ---
 
-func TestAT25_FlagFormsEquivalent(t *testing.T) {
+func TestFlagFormsEquivalent(t *testing.T) {
 	setupHome(t)
 
 	// Find flags in help output of each subcommand, matching the pattern:
@@ -954,9 +954,9 @@ func TestAT25_FlagFormsEquivalent(t *testing.T) {
 	}
 }
 
-// --- AT25b: unknown subcommand/flag routing ---
+// --- unknown subcommand/flag routing ---
 
-func TestAT25b_UnknownCommands(t *testing.T) {
+func TestUnknownCommands(t *testing.T) {
 	setupHome(t)
 	cwd := t.TempDir()
 	withCwd(t, cwd)
@@ -1013,9 +1013,9 @@ func TestAT25b_UnknownCommands(t *testing.T) {
 	}
 }
 
-// --- AT24: repo state post-implementation ---
+// --- repo state post-implementation ---
 
-func TestAT24_RepoStatePostImpl(t *testing.T) {
+func TestRepoStatePostImpl(t *testing.T) {
 	repo := repoRoot(t)
 	// (a) cmd/claude-env/ does not exist
 	if _, err := os.Stat(filepath.Join(repo, "cmd", "claude-env")); !os.IsNotExist(err) {
@@ -1055,9 +1055,9 @@ func TestAT24_RepoStatePostImpl(t *testing.T) {
 	})
 }
 
-// --- AT26: AGENTS.md contains the lifted flag-convention rule ---
+// --- AGENTS.md contains the lifted flag-convention rule ---
 
-func TestAT26_AgentsMdFlagConventionRule(t *testing.T) {
+func TestAgentsMdFlagConventionRule(t *testing.T) {
 	repo := repoRoot(t)
 	data, err := os.ReadFile(filepath.Join(repo, "AGENTS.md"))
 	if err != nil {

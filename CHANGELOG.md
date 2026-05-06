@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.31.1 | AC36: sweep AT label residue from utils-owned test surfaces |
 | 0.31.0 | AC35: adopt governa v0.116.0 — preptool sync + canon-baseline-sync doctrine |
 | 0.30.1 | AC34: sweep stale AC<N> labels from source comments + error messages |
 | 0.30.0 | AC33: adopt governa v0.115.0 — preptool sync + governance update |
