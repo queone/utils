@@ -199,8 +199,7 @@ func Run(cfg Config) error {
 		}
 	}
 
-	// Phase 7c: delete AC files. Critique and disposition content lives inline
-	// per docs/critique-protocol.md; no separate companion files exist to delete.
+	// Phase 7c: delete AC files.
 	for _, path := range acFiles {
 		if err := os.Remove(path); err != nil {
 			return fmt.Errorf("prep: delete %s: %w", path, err)
@@ -208,7 +207,9 @@ func Run(cfg Config) error {
 		fmt.Fprintf(cfg.Out, "prep: deleted %s\n", path)
 	}
 
-	// Phase 7d: sweep AC-pointer IE lines from plan.md.
+	// Phase 7d: sweep AC-pointer IE lines from plan.md. Codifies the AGENTS.md
+	// Project Rule: "Remove AC-pointer IEs when their AC ships and the file is
+	// deleted at release prep — plan.md is not a historical record."
 	ieLines, err := findACPointerIELines(cfg.RepoRoot, acNums)
 	if err != nil {
 		return fmt.Errorf("prep: scan plan.md for AC-pointer IEs: %w", err)
@@ -367,9 +368,9 @@ func parseModuleBasename(repoRoot string) string {
 // that file is the primary and is bumped; other cmd/*/main.go are secondaries
 // (independent versioning, never bumped by prep). When no primary exists, fall
 // back to the historical auto-detect: 1 target → bump (single-utility repo);
-// >1 → skip all with multi-utility warning (per-utility-independent default).
-// The skip avoids the clobber risk of bumping every utility to the repo
-// release version.
+// >1 → skip all with multi-utility warning (utils-style, per-utility-independent
+// default). The skip avoids the clobber risk of bumping every utility to the
+// repo release version.
 func detectVersionTargets(repoRoot string) ([]versionTarget, string, error) {
 	var targets []versionTarget
 	var warning string
@@ -397,46 +398,61 @@ func detectVersionTargets(repoRoot string) ([]versionTarget, string, error) {
 		}
 	}
 
-	// Apply primary-cmd convention: if cmd/<module-basename>/main.go is among
-	// the targets, treat it as the primary and drop the rest.
-	moduleBasename := parseModuleBasename(repoRoot)
-	primaryPath := ""
-	if moduleBasename != "" {
-		primaryPath = filepath.Join(cmdDir, moduleBasename, "main.go")
-	}
-	primaryFound := false
-	if primaryPath != "" {
-		for _, t := range pvTargets {
-			if t.path == primaryPath {
-				targets = append(targets, t)
-				primaryFound = true
-				break
+	// cmd/<module-basename>/main.go is the
+	// primary binary and bumps with the repo. Other cmd/*/main.go are
+	// secondaries — independent versioning, like utils-style multi-utility
+	// repos. Only kicks in when go.mod is parseable AND the primary cmd
+	// has programVersion; otherwise falls through to the historical
+	// auto-detect (1 → bump, >1 → skip-all).
+	basename := parseModuleBasename(repoRoot)
+	var primaryTarget *versionTarget
+	var secondaries []versionTarget
+	if basename != "" {
+		primaryPath := filepath.Join(repoRoot, "cmd", basename, "main.go")
+		for i := range pvTargets {
+			if pvTargets[i].path == primaryPath {
+				t := pvTargets[i]
+				primaryTarget = &t
+			} else {
+				secondaries = append(secondaries, pvTargets[i])
 			}
 		}
 	}
-	if !primaryFound {
-		// Safe auto-detect filter. 1 target → bump; >1 → skip with warning.
-		switch len(pvTargets) {
-		case 0:
-			// nothing to add
-		case 1:
-			targets = append(targets, pvTargets[0])
-		default:
-			paths := make([]string, 0, len(pvTargets))
-			for _, t := range pvTargets {
-				paths = append(paths, t.path)
+
+	switch {
+	case primaryTarget != nil:
+		// Primary-cmd convention applies. Bump the primary; secondaries
+		// are independent and skipped (announced when present).
+		targets = append(targets, *primaryTarget)
+		if len(secondaries) > 0 {
+			paths := make([]string, len(secondaries))
+			for i, t := range secondaries {
+				paths[i] = t.path
 			}
-			warning = fmt.Sprintf("prep: multi-utility repo detected (%d cmd/*/main.go with programVersion); skipping per-utility bumps. Each utility owns its own version.\n  candidates: %s",
-				len(pvTargets), strings.Join(paths, ", "))
+			warning = fmt.Sprintf("primary cmd/%s/main.go bumped; %d secondary programVersion target(s) skipped (independent versioning, each utility owns its own version per its own AC). Skipped: %s",
+				basename, len(secondaries), strings.Join(paths, ", "))
 		}
+	case len(pvTargets) == 1:
+		// Fallback: single utility, repo-tracked. Bump it.
+		targets = append(targets, pvTargets[0])
+	case len(pvTargets) > 1:
+		// Fallback: multi-utility, no primary → skip all + warning.
+		paths := make([]string, len(pvTargets))
+		for i, t := range pvTargets {
+			paths[i] = t.path
+		}
+		primaryHint := "no go.mod-derived primary cmd"
+		if basename != "" {
+			primaryHint = fmt.Sprintf("no primary cmd/%s/main.go", basename)
+		}
+		warning = fmt.Sprintf("multi-utility repo detected (%d programVersion targets, %s): per-utility programVersion bumps skipped (each utility owns its own version per its own AC). Skipped: %s",
+			len(pvTargets), primaryHint, strings.Join(paths, ", "))
 	}
 
 	// Template-version targets (TEMPLATE_VERSION + internal/templates/version.go)
 	// are gated on internal/templates/base/ presence. That directory exists only
-	// in governa itself; in consumer repos TEMPLATE_VERSION tracks the governa
-	// baseline the consumer synced from and must NOT change at consumer release
-	// prep.
-	if info, statErr := os.Stat(filepath.Join(repoRoot, "internal", "templates", "base")); statErr == nil && info.IsDir() {
+	// in governa itself; consumer repos do not have this file.
+	if info, err := os.Stat(filepath.Join(repoRoot, "internal", "templates", "base")); err == nil && info.IsDir() {
 		tvPath := filepath.Join(repoRoot, "TEMPLATE_VERSION")
 		if _, err := os.Stat(tvPath); err == nil {
 			targets = append(targets, versionTarget{path: tvPath, kind: "TEMPLATE_VERSION"})
@@ -457,18 +473,23 @@ func detectChangelogTargets(repoRoot, version string) ([]string, error) {
 	var targets []string
 	versionStripped := strings.TrimPrefix(version, "v")
 
-	path := filepath.Join(repoRoot, "CHANGELOG.md")
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
+	candidates := []string{
+		filepath.Join(repoRoot, "CHANGELOG.md"),
+		filepath.Join(repoRoot, "internal", "templates", "CHANGELOG.md"),
+	}
+	for _, path := range candidates {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("read %s: %w", path, err)
 		}
-		return nil, fmt.Errorf("read %s: %w", path, err)
+		if changelogHasRow(string(content), versionStripped) {
+			return nil, fmt.Errorf("%s already has a row for %s (prep is not idempotent on CHANGELOG)", path, versionStripped)
+		}
+		targets = append(targets, path)
 	}
-	if changelogHasRow(string(content), versionStripped) {
-		return nil, fmt.Errorf("%s already has a row for %s (prep is not idempotent on CHANGELOG)", path, versionStripped)
-	}
-	targets = append(targets, path)
 	return targets, nil
 }
 
@@ -503,21 +524,22 @@ func parseACRefs(message string) []int {
 	return out
 }
 
-// findACFiles locates main AC files (docs/ac<N>-<slug>.md) for the given
-// AC numbers. Companion-suffixed files (-critique.md, -dispositions.md,
-// -feedback.md) are ignored — critique and disposition content lives inline
-// in the AC file per docs/critique-protocol.md.
+// findACFiles locates the main per-AC files to delete: docs/ac<N>-<slug>.md
+// for each AC number named in the release message. Critique and disposition
+// content live inside the AC file (see docs/critique-protocol.md), so there
+// are no separate companion files to enumerate. ac-template.md is always
+// skipped.
 func findACFiles(repoRoot string, acNums []int) ([]string, error) {
 	if len(acNums) == 0 {
 		return nil, nil
 	}
 	docsDir := filepath.Join(repoRoot, "docs")
-	entries, err := os.ReadDir(docsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
+	entries, readErr := os.ReadDir(docsDir)
+	if readErr != nil {
+		if os.IsNotExist(readErr) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, readErr
 	}
 	wanted := make(map[int]bool, len(acNums))
 	for _, n := range acNums {
@@ -543,22 +565,16 @@ func findACFiles(repoRoot string, acNums []int) ([]string, error) {
 		if !wanted[num] {
 			continue
 		}
-		// Skip companion suffixes; only the canonical AC file is acted on.
-		if strings.HasSuffix(name, "-critique.md") ||
-			strings.HasSuffix(name, "-dispositions.md") ||
-			strings.HasSuffix(name, "-feedback.md") {
-			continue
-		}
 		acFiles = append(acFiles, filepath.Join(docsDir, name))
 	}
 	sort.Strings(acFiles)
 	return acFiles, nil
 }
 
-// findACPointerIELines reads plan.md and returns IE lines whose AC-pointer
-// matches one of the released ACs in acNums. Per the plan.md convention, an
-// AC-pointer ends in `→ docs/ac<N>-<slug>.md`. Returns nil when plan.md does
-// not exist or no AC numbers were supplied.
+// findACPointerIELines reads plan.md and returns the IE lines whose
+// AC-pointer arrow targets one of the given AC numbers. Returns (nil, nil)
+// when plan.md is missing (consumer repos may not have one) or when no IE
+// lines match. Read-only: callers use removeACPointerIELines to write.
 func findACPointerIELines(repoRoot string, acNums []int) ([]string, error) {
 	if len(acNums) == 0 {
 		return nil, nil
@@ -569,7 +585,7 @@ func findACPointerIELines(repoRoot string, acNums []int) ([]string, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("read %s: %w", planPath, err)
+		return nil, err
 	}
 	wanted := make(map[int]bool, len(acNums))
 	for _, n := range acNums {
@@ -585,41 +601,41 @@ func findACPointerIELines(repoRoot string, acNums []int) ([]string, error) {
 		if _, err := fmt.Sscanf(m[1], "%d", &num); err != nil {
 			continue
 		}
-		if !wanted[num] {
-			continue
+		if wanted[num] {
+			matches = append(matches, line)
 		}
-		matches = append(matches, line)
 	}
 	return matches, nil
 }
 
-// removeACPointerIELines strips the given lines from plan.md. Idempotent:
-// lines that no longer exist are ignored. No-op when ieLines is empty or
-// plan.md does not exist.
-func removeACPointerIELines(repoRoot string, ieLines []string) error {
-	if len(ieLines) == 0 {
+// removeACPointerIELines re-reads plan.md and writes it back with the given
+// lines removed. No-op when lines is empty. Callers obtain lines via
+// findACPointerIELines, which already returns nil when plan.md is missing,
+// so an empty-lines guard is sufficient — we never reach here without a
+// readable plan.md. Idempotent: re-running with the same lines after the
+// first sweep yields no further removals (matched lines are already gone).
+func removeACPointerIELines(repoRoot string, lines []string) error {
+	if len(lines) == 0 {
 		return nil
 	}
 	planPath := filepath.Join(repoRoot, "plan.md")
 	content, err := os.ReadFile(planPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("read %s: %w", planPath, err)
+		return err
 	}
-	drop := make(map[string]bool, len(ieLines))
-	for _, line := range ieLines {
+	drop := make(map[string]bool, len(lines))
+	for _, line := range lines {
 		drop[line] = true
 	}
-	out := make([]string, 0)
-	for line := range strings.SplitSeq(string(content), "\n") {
+	src := strings.Split(string(content), "\n")
+	keep := make([]string, 0, len(src))
+	for _, line := range src {
 		if drop[line] {
 			continue
 		}
-		out = append(out, line)
+		keep = append(keep, line)
 	}
-	return os.WriteFile(planPath, []byte(strings.Join(out, "\n")), 0o644)
+	return os.WriteFile(planPath, []byte(strings.Join(keep, "\n")), 0o644)
 }
 
 func applyVersionBump(t versionTarget, versionStripped string) error {
@@ -703,7 +719,7 @@ func printDryRun(out io.Writer, versionTargets []versionTarget, changelogTargets
 	for _, p := range acFiles {
 		fmt.Fprintf(out, "  delete %s\n", p)
 	}
-	fmt.Fprintln(out, "plan.md IE-line removals:")
+	fmt.Fprintln(out, "plan.md AC-pointer IE removals:")
 	for _, line := range ieLines {
 		fmt.Fprintf(out, "  remove: %s\n", strings.TrimSpace(line))
 	}
