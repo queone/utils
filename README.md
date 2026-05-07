@@ -11,7 +11,6 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`cash5`](cmd/cash5/main.go): Analyze historical Cash5 draws and generate number recommendations.
 - [`certgen`](cmd/certgen/main.go): Generate self-signed TLS certificates for local testing.
 - [`certls`](cmd/certls/main.go): Show SSL/TLS certificate details for a host and port.
-- [`claudecfg`](cmd/claudecfg/main.go): Manage Claude Code config — iCloud-backed memory portability and project permissions seeding/auditing.
 - [`days`](cmd/days/README.md): A CLI calendar days calculator.
 - [`decolor`](cmd/decolor/README.md): A utility that removes shell color escape codes from input stream or given file.
 - [`dl`](cmd/dl/main.go): Download online videos using `yt-dlp` with a target filename.
