@@ -62,7 +62,7 @@ func loadFileYamlBytes(filePath string) (yamlBytes []byte, err error) {
 }
 
 func printUsage() {
-	n := icolor.Whi2(programName)
+	n := icolor.Whi10(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"JSON / YAML converter - https://github.com/queone/utils/blob/main/cmd/jy/README.md\n"+
@@ -85,7 +85,7 @@ func printUsage() {
 		"  %s /path/to/file -d\n"+
 		"  %s file.yaml -c        Prints a colorized version of the file. Does not convert.\n"+
 		"  %s -h\n",
-		n, v, icolor.Whi2("Usage"), n, icolor.Whi2("Options"), icolor.Whi2("Examples"), n, n, n, n, n)
+		n, v, icolor.Whi10("Usage"), n, icolor.Whi10("Options"), icolor.Whi10("Examples"), n, n, n, n, n)
 	fmt.Print(usage)
 	os.Exit(0)
 }

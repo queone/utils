@@ -23,7 +23,7 @@ const (
 
 // Print usage information
 func printUsage() {
-	n := color.Whi2(programName)
+	n := color.Whi10(programName)
 	v := programVersion
 	usageHeader := fmt.Sprintf("%s v%s\n"+
 		"Memorable password generator - https://github.com/queone/utils/blob/main/cmd/pgen/README.md\n"+
@@ -36,7 +36,7 @@ func printUsage() {
 		"                     Minimum is 1, maximum is 9\n"+
 		"  -v, --version      Print version and exit\n"+
 		"  -?, -h, --help     Print this usage page\n",
-		n, v, color.Whi2("Usage"), n, color.Whi2("Options"))
+		n, v, color.Whi10("Usage"), n, color.Whi10("Options"))
 	fmt.Print(usageHeader)
 	os.Exit(0)
 }

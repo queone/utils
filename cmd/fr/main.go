@@ -57,7 +57,7 @@ func highlightLine(line, pattern string) string {
 		return line // invalid regex
 	}
 	return re.ReplaceAllStringFunc(line, func(m string) string {
-		return color.Red(m)
+		return color.Red5(m)
 	})
 }
 
@@ -134,7 +134,7 @@ func main() {
 			if err := os.Rename(tmp, path); err != nil {
 				return err
 			}
-			fmt.Printf("%s: %d occurrence(s) replaced\n", color.Yel(path), occ)
+			fmt.Printf("%s: %d occurrence(s) replaced\n", color.Yel5(path), occ)
 		} else if singleMode || (!replaceMode && !singleMode) {
 			// ---------------- show-only or single-arg search ----------------
 			scanner := bufio.NewScanner(strings.NewReader(string(orig)))
@@ -144,7 +144,7 @@ func main() {
 				line := scanner.Text()
 				if countMatches([]byte(line), from) > 0 {
 					hl := highlightLine(line, from)
-					fmt.Printf("%s:%d: %s\n", color.Yel(path), lineNum, hl)
+					fmt.Printf("%s:%d: %s\n", color.Yel5(path), lineNum, hl)
 				}
 			}
 		}

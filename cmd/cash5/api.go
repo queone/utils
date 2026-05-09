@@ -537,6 +537,6 @@ func tryBackupFetchers(existing []Draw, dateFrom, dateTo time.Time) []Draw {
 		return existing
 	}
 
-	fmt.Printf("%s\n", color.Red("All backup sources failed — showing cached data"))
+	fmt.Printf("%s\n", color.Red5("All backup sources failed — showing cached data"))
 	return existing
 }

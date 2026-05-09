@@ -30,7 +30,7 @@ func die(format string, args ...any) {
 }
 
 func printUsage() {
-	n := color.Whi2(programName)
+	n := color.Whi10(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Calendar days calculator — https://github.com/queone/utils/blob/main/cmd/days/README.md\n"+
@@ -45,7 +45,7 @@ func printUsage() {
 		"    days YYYY-MM-DD               Prints the number of days between today and the given date (positive\n"+
 		"                                  if the date is in the future, negative if it is in the past).\n"+
 		"    days YYYY-MM-DD YYYY-MM-DD    Prints the number of days between the two supplied dates.\n",
-		n, v, color.Whi2("Overview"))
+		n, v, color.Whi10("Overview"))
 	fmt.Print(usage)
 	os.Exit(0)
 }

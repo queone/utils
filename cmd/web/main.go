@@ -31,7 +31,7 @@ type Options struct {
 }
 
 func printUsage() {
-	n := color.Whi2(programName)
+	n := color.Whi10(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"DuckDuckGo search utility with fuzzy finder\n"+
@@ -51,7 +51,7 @@ func printUsage() {
 		"  %s golang\n"+
 		"  %s -j golang\n"+
 		"  %s -t 10 -b firefox golang\n",
-		n, v, color.Whi2("Usage"), n, color.Whi2("Options"), color.Whi2("Examples"), n, n, n)
+		n, v, color.Whi10("Usage"), n, color.Whi10("Options"), color.Whi10("Examples"), n, n, n)
 	fmt.Print(usage)
 }
 

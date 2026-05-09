@@ -76,11 +76,11 @@ func TestYamlGoDeclaresPortedFunctions(t *testing.T) {
 		"func printYamlColor(",
 		"func printYamlBytesColor(",
 		"func colorizeString(",
-		"blu = icolor.Blu",
-		"gre = icolor.Grn",
-		"yel = icolor.Yel",
-		"whi = icolor.Whi",
-		"mag = icolor.Mag",
+		"blu = icolor.Blu5",
+		"gre = icolor.Grn5",
+		"yel = icolor.Yel5",
+		"whi = icolor.Whi5",
+		"mag = icolor.Mag5",
 	}
 	for _, w := range want {
 		if !strings.Contains(string(body), w) {

@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.35.0 | AC42: migrate utils to governa-color v1.0; bump buildtool+reltool v1.0.1 |
 | 0.34.0 | AC40+AC41: retire cmd/claudecfg → harnesscfg Claude Code skill |
 | 0.33.0 | AC39: adopt governa v0.120.0 — canon-above-local-below structure |
 | 0.32.1 | AC38: consolidate utils on governa-color v0.2.0; drop gookit + fatih |

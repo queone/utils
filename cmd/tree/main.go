@@ -16,7 +16,7 @@ const (
 )
 
 func printUsage() {
-	n := color.Whi2(programName)
+	n := color.Whi10(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Directory tree printer — https://github.com/queone/utils/blob/main/cmd/tree/README.md\n"+
@@ -36,7 +36,7 @@ func printUsage() {
 		"  %s -f /path/to/directory\n"+
 		"  %s /path/to/directory -f\n"+
 		"  %s -h\n",
-		n, v, color.Whi2("Usage"), n, color.Whi2("Options"), color.Whi2("Examples"), n, n, n, n)
+		n, v, color.Whi10("Usage"), n, color.Whi10("Options"), color.Whi10("Examples"), n, n, n, n)
 	fmt.Print(usage)
 	os.Exit(0)
 }
@@ -111,9 +111,9 @@ func printTree(dir string, showFullPath bool) {
 		if e.isLast {
 			mark = "└── "
 		}
-		coloredName := color.Grn(e.name)
+		coloredName := color.Grn5(e.name)
 		if e.isDir {
-			coloredName = color.Blu(e.name)
+			coloredName = color.Blu5(e.name)
 		}
 
 		line := e.prefix + mark + coloredName
@@ -123,7 +123,7 @@ func printTree(dir string, showFullPath bool) {
 			fmt.Println(line)
 		} else {
 			if showFullPath {
-				fmt.Printf("%s%s%s\n", line, strings.Repeat(" ", spacing), color.Cya(e.fullPath))
+				fmt.Printf("%s%s%s\n", line, strings.Repeat(" ", spacing), color.Cya5(e.fullPath))
 			} else {
 				fmt.Println(line)
 			}

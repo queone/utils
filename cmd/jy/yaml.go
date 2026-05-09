@@ -13,11 +13,11 @@ import (
 
 // Color wrappers used by colorizeString. Sourced from queone/governa-color.
 var (
-	blu = icolor.Blu
-	gre = icolor.Grn
-	yel = icolor.Yel
-	whi = icolor.Whi
-	mag = icolor.Mag
+	blu = icolor.Blu5
+	gre = icolor.Grn5
+	yel = icolor.Yel5
+	whi = icolor.Whi5
+	mag = icolor.Mag5
 )
 
 // Convert YAML interface object to byte slice, with option indent spacing

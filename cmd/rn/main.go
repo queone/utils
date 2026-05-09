@@ -14,7 +14,7 @@ const (
 )
 
 func printUsage() {
-	n := icolor.Whi2(programName)
+	n := icolor.Whi10(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"Bulk file re-namer — https://github.com/queone/utils/blob/main/cmd/rn/README.md\n"+
@@ -37,9 +37,9 @@ func printUsage() {
 		"  %s -v                   Print version.\n"+
 		"  %s -h                   Display this help message.\n",
 		n, v,
-		icolor.Whi2("Usage"), n,
-		icolor.Whi2("Options"),
-		icolor.Whi2("Examples"),
+		icolor.Whi10("Usage"), n,
+		icolor.Whi10("Options"),
+		icolor.Whi10("Examples"),
 		n, n, n, n, n)
 	fmt.Print(usage)
 	os.Exit(0)
@@ -73,12 +73,12 @@ func main() {
 
 	doRename := option == "-f"
 	if !doRename {
-		fmt.Print(icolor.Yelf("DRY RUN: Re-run with '-f' option to execute.\n"))
+		fmt.Print(icolor.Yel5("DRY RUN: Re-run with '-f' option to execute.\n"))
 	}
 
 	files, err := os.ReadDir(".")
 	if err != nil {
-		fmt.Print(icolor.Redf("Error reading directory: %v\n", err))
+		fmt.Print(icolor.Red5(fmt.Sprintf("Error reading directory: %v\n", err)))
 		os.Exit(1)
 	}
 
@@ -99,17 +99,17 @@ func main() {
 		if doRename {
 			err := os.Rename(oldName, newName)
 			if err != nil {
-				fmt.Print(icolor.Redf("Failed to rename %s -> %s: %v\n", oldName, newName, err))
+				fmt.Print(icolor.Red5(fmt.Sprintf("Failed to rename %s -> %s: %v\n", oldName, newName, err)))
 				continue
 			}
-			fmt.Print(icolor.Grnf("\"%s\" -> \"%s\"\n", oldName, newName))
+			fmt.Print(icolor.Grn5(fmt.Sprintf("\"%s\" -> \"%s\"\n", oldName, newName)))
 		} else {
 			fmt.Printf("%-60s  =>  %s\n", fmt.Sprintf("\"%s\"", oldName), fmt.Sprintf("\"%s\"", newName))
 		}
 	}
 
 	if !found {
-		fmt.Print(icolor.Redf("No filename has string '%s'.\n", oldStr))
+		fmt.Print(icolor.Red5(fmt.Sprintf("No filename has string '%s'.\n", oldStr)))
 		os.Exit(1)
 	}
 
