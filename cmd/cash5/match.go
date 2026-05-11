@@ -23,7 +23,7 @@ func quintile(n int) int {
 	return (n - 1) / 9
 }
 
-func displayMatchAnalysis(draws []Draw) error {
+func displayMatchAnalysis(draws []Draw, n int) error {
 	if len(draws) == 0 {
 		fmt.Println("No draws found")
 		return nil
@@ -67,9 +67,18 @@ func displayMatchAnalysis(draws []Draw) error {
 		return nil
 	}
 
+	// Window the per-draw display loop to the last n entries (entry 0 is
+	// always skipped — no prior draw to compare). Pattern analysis below
+	// still aggregates across the full parsed slice.
+	displayStart := max(1, len(parsed)-n)
+
 	printTimestamp()
 	fmt.Println("=== MATCH ANALYSIS ===")
-	fmt.Printf("Analyzing %d drawings for closest historical matches...\n\n", len(parsed))
+	if n < len(parsed) {
+		fmt.Printf("Analyzing %d drawings (of %d total) for closest historical matches...\n\n", len(parsed)-displayStart, len(parsed))
+	} else {
+		fmt.Printf("Analyzing %d drawings for closest historical matches...\n\n", len(parsed))
+	}
 
 	// Track number frequency across all top matches
 	matchNumFreq := make(map[int]int)
@@ -128,23 +137,26 @@ func displayMatchAnalysis(draws []Draw) error {
 		limit := min(len(matches), 10)
 		topMatches := matches[:limit]
 
-		// Display this draw's matches
-		payout := formatWinner(uniqueDraws, current.draw)
-		numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
-			current.nums[0], current.nums[1], current.nums[2], current.nums[3], current.nums[4])
-		fmt.Printf("%s  %s  5/5 %s\n", color.Grn5(current.date), color.Grn5(numStr), color.Gra5(payout))
+		// Display this draw's matches — windowed to last n drawings.
+		// Pattern accumulation below still runs for every i.
+		if i >= displayStart {
+			payout := formatWinner(uniqueDraws, current.draw)
+			numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
+				current.nums[0], current.nums[1], current.nums[2], current.nums[3], current.nums[4])
+			fmt.Printf("%s  %s  5/5 %s\n", color.Grn3(current.date), color.Grn3(numStr), color.Gra5(payout))
 
-		for _, m := range topMatches {
-			mNumStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
-				m.nums[0], m.nums[1], m.nums[2], m.nums[3], m.nums[4])
-			fmt.Printf("    %s  %s  %s\n",
-				color.Grn5(mNumStr), color.Gra5(m.date),
-				color.Gra5(fmt.Sprintf("(%d/5 match, %d days prior)", m.matches, m.daysDelta)))
+			for _, m := range topMatches {
+				mNumStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
+					m.nums[0], m.nums[1], m.nums[2], m.nums[3], m.nums[4])
+				fmt.Printf("    %s  %s  %s\n",
+					color.Grn3(mNumStr), color.Gra5(m.date),
+					color.Gra5(fmt.Sprintf("(%d/5 match, %d days prior)", m.matches, m.daysDelta)))
+			}
+			if isITerm2() {
+				displayCircleImage(current.nums, "    ")
+			}
+			fmt.Println()
 		}
-		if isITerm2() {
-			displayCircleImage(current.nums, "    ")
-		}
-		fmt.Println()
 
 		// Count all candidates per recency bucket (for normalization)
 		for j := range i {
@@ -231,7 +243,7 @@ func displayMatchAnalysis(draws []Draw) error {
 	pe := detectPoolExpansion(uniqueDraws, parsedOverallFreq)
 
 	// 1. Number frequency in top matches vs pool-expansion-adjusted baseline
-	fmt.Printf("%s:\n", color.Blu5("Number Frequency in Top Matches (Pool-Adjusted Baseline)"))
+	fmt.Printf("%s:\n", color.Blu7("Number Frequency in Top Matches (Pool-Adjusted Baseline)"))
 
 	totalMatchNums := totalMatchEntries * 5
 
@@ -243,7 +255,7 @@ func displayMatchAnalysis(draws []Draw) error {
 		sort.Ints(lateNums)
 		expandDate := narrativeDate(time.UnixMilli(parsed[pe.expansionIdx].draw.DrawTime))
 		fmt.Printf("  %s: %v at draw #%d (%s), pool %d → %d\n",
-			color.Blu5("Pool expansion"),
+			color.Blu7("Pool expansion"),
 			lateNums, pe.expansionIdx+1, expandDate, pe.prePoolSize, pe.postPoolSize)
 	}
 
@@ -290,10 +302,10 @@ func displayMatchAnalysis(draws []Draw) error {
 	sort.Slice(overRep, func(i, j int) bool { return overRep[i].count > overRep[j].count })
 	sort.Slice(underRep, func(i, j int) bool { return underRep[i].count < underRep[j].count })
 
-	fmt.Printf("  %s: %.1f\n", color.Blu5("Adjusted std dev"), stddev)
+	fmt.Printf("  %s: %.1f\n", color.Blu7("Adjusted std dev"), stddev)
 
 	if len(overRep) > 0 {
-		fmt.Printf("  %s:\n", color.Blu5("Over-represented (>2σ above adjusted expected)"))
+		fmt.Printf("  %s:\n", color.Blu7("Over-represented (>2σ above adjusted expected)"))
 		for _, nc := range overRep {
 			var exp float64
 			for _, e := range adjEntries {
@@ -303,15 +315,15 @@ func displayMatchAnalysis(draws []Draw) error {
 				}
 			}
 			fmt.Printf("    %s: %s  %s\n",
-				color.Grn5(fmt.Sprintf("%02d", nc.num)),
-				color.Grn5(fmt.Sprintf("%d times", nc.count)),
+				color.Grn3(fmt.Sprintf("%02d", nc.num)),
+				color.Grn3(fmt.Sprintf("%d times", nc.count)),
 				color.Gra5(fmt.Sprintf("(adjusted expected ~%.0f)", exp)))
 		}
 	} else {
 		fmt.Printf("  %s\n", color.Gra5("No numbers significantly over-represented"))
 	}
 	if len(underRep) > 0 {
-		fmt.Printf("  %s:\n", color.Blu5("Under-represented (>2σ below adjusted expected)"))
+		fmt.Printf("  %s:\n", color.Blu7("Under-represented (>2σ below adjusted expected)"))
 		for _, nc := range underRep {
 			var exp float64
 			for _, e := range adjEntries {
@@ -321,8 +333,8 @@ func displayMatchAnalysis(draws []Draw) error {
 				}
 			}
 			fmt.Printf("    %s: %s  %s\n",
-				color.Grn5(fmt.Sprintf("%02d", nc.num)),
-				color.Grn5(fmt.Sprintf("%d times", nc.count)),
+				color.Grn3(fmt.Sprintf("%02d", nc.num)),
+				color.Grn3(fmt.Sprintf("%d times", nc.count)),
 				color.Gra5(fmt.Sprintf("(adjusted expected ~%.0f)", exp)))
 		}
 	} else {
@@ -330,7 +342,7 @@ func displayMatchAnalysis(draws []Draw) error {
 	}
 
 	// 2. Value-range quintile clustering
-	fmt.Printf("\n%s:\n", color.Blu5("Value-Range Clustering (Quintile Analysis)"))
+	fmt.Printf("\n%s:\n", color.Blu7("Value-Range Clustering (Quintile Analysis)"))
 	fmt.Printf("  %s\n", color.Gra5("How often do matched numbers fall in the same quintile of the pool range?"))
 	fmt.Printf("  %s\n", color.Gra5("Quintiles: 1-9, 10-18, 19-27, 28-36, 37-45"))
 
@@ -339,21 +351,21 @@ func displayMatchAnalysis(draws []Draw) error {
 		// Under uniform random, P(same quintile for a pair) = 5*(9/45)^2 = 5*(1/5)^2 = 1/5 = 20%
 		expectedRate := 20.0
 		fmt.Printf("    %s: %s  %s\n",
-			color.Blu5("Same-quintile pair rate"),
-			color.Grn5(fmt.Sprintf("%.1f%%", sameRate)),
+			color.Blu7("Same-quintile pair rate"),
+			color.Grn3(fmt.Sprintf("%.1f%%", sameRate)),
 			color.Gra5(fmt.Sprintf("(%d/%d pairs)", quintileMatchSame, quintileMatchTotal)))
 		fmt.Printf("    %s: %s\n",
-			color.Blu5("Expected if random"),
-			color.Grn5(fmt.Sprintf("%.1f%%", expectedRate)))
+			color.Blu7("Expected if random"),
+			color.Grn3(fmt.Sprintf("%.1f%%", expectedRate)))
 		deviation := sameRate - expectedRate
 		if math.Abs(deviation) < 3.0 {
-			fmt.Printf("    %s: %s\n", color.Blu5("Assessment"),
-				color.Grn5(fmt.Sprintf("Within expected range (%.1f%% deviation)", deviation)))
+			fmt.Printf("    %s: %s\n", color.Blu7("Assessment"),
+				color.Grn3(fmt.Sprintf("Within expected range (%.1f%% deviation)", deviation)))
 		} else if deviation > 0 {
-			fmt.Printf("    %s: %s\n", color.Blu5("Assessment"),
+			fmt.Printf("    %s: %s\n", color.Blu7("Assessment"),
 				color.Gra5(fmt.Sprintf("Matched numbers cluster in same value range (+%.1f%%)", deviation)))
 		} else {
-			fmt.Printf("    %s: %s\n", color.Blu5("Assessment"),
+			fmt.Printf("    %s: %s\n", color.Blu7("Assessment"),
 				color.Gra5(fmt.Sprintf("Matched numbers spread across value ranges (%.1f%%)", deviation)))
 		}
 	} else {
@@ -361,7 +373,7 @@ func displayMatchAnalysis(draws []Draw) error {
 	}
 
 	// 3. Recency weighting (density-normalized)
-	fmt.Printf("\n%s:\n", color.Blu5("Recency Weighting (Density-Normalized)"))
+	fmt.Printf("\n%s:\n", color.Blu7("Recency Weighting (Density-Normalized)"))
 	fmt.Printf("  %s\n", color.Gra5("Match density = matches per candidate draw in each time window"))
 	bucketOrder := []string{"0-90 days", "91-365 days", "1-3 years", "3+ years"}
 	for _, bucket := range bucketOrder {
@@ -371,14 +383,14 @@ func displayMatchAnalysis(draws []Draw) error {
 			density = float64(rd.matches) / float64(rd.candidates) * 1000 // per 1000 candidates
 		}
 		fmt.Printf("    %s: %s  %s  %s\n",
-			color.Blu5(fmt.Sprintf("%-13s", bucket)),
-			color.Grn5(fmt.Sprintf("%d matches", rd.matches)),
+			color.Blu7(fmt.Sprintf("%-13s", bucket)),
+			color.Grn3(fmt.Sprintf("%d matches", rd.matches)),
 			color.Gra5(fmt.Sprintf("/ %d candidates", rd.candidates)),
-			color.Grn5(fmt.Sprintf("(%.2f per 1k)", density)))
+			color.Grn3(fmt.Sprintf("(%.2f per 1k)", density)))
 	}
 
 	// 4. Match distribution shift over time
-	fmt.Printf("\n%s:\n", color.Blu5("Match Distribution Shift Over Time"))
+	fmt.Printf("\n%s:\n", color.Blu7("Match Distribution Shift Over Time"))
 	fmt.Printf("  %s\n", color.Gra5("How top-10 match overlap changes as the candidate pool grows"))
 	fmt.Printf("  %s\n", color.Gra5("(first half of dataset vs second half)"))
 
@@ -400,8 +412,8 @@ func displayMatchAnalysis(draws []Draw) error {
 		}
 		fmt.Printf("    %d/5    %s  %s\n",
 			k,
-			color.Grn5(fmt.Sprintf("%5d (%5.1f%%)", firstHalfDist[k], fp)),
-			color.Grn5(fmt.Sprintf("%5d (%5.1f%%)", secondHalfDist[k], sp)))
+			color.Grn3(fmt.Sprintf("%5d (%5.1f%%)", firstHalfDist[k], fp)),
+			color.Grn3(fmt.Sprintf("%5d (%5.1f%%)", secondHalfDist[k], sp)))
 	}
 	if firstTotal > 0 && secondTotal > 0 {
 		firstAvg := 0.0
@@ -413,7 +425,7 @@ func displayMatchAnalysis(draws []Draw) error {
 		firstAvg /= float64(firstTotal)
 		secondAvg /= float64(secondTotal)
 		fmt.Printf("    %s: %.3f → %.3f\n",
-			color.Blu5("Avg match count"),
+			color.Blu7("Avg match count"),
 			firstAvg, secondAvg)
 		if secondAvg > firstAvg+0.05 {
 			fmt.Printf("    %s\n", color.Gra5("Higher overlap in second half — larger pool yields closer matches"))
@@ -425,7 +437,7 @@ func displayMatchAnalysis(draws []Draw) error {
 	}
 
 	// 5. Top pairs with lift score (PMI)
-	fmt.Printf("\n%s:\n", color.Blu5("Top Pairs in Closest Matches (Lift-Adjusted)"))
+	fmt.Printf("\n%s:\n", color.Blu7("Top Pairs in Closest Matches (Lift-Adjusted)"))
 	fmt.Printf("  %s\n", color.Gra5("Lift = observed co-occurrence / expected from individual frequencies"))
 
 	type pairLift struct {
@@ -465,10 +477,10 @@ func displayMatchAnalysis(draws []Draw) error {
 			continue // skip low-count noise
 		}
 		fmt.Printf("    %s: %s  %s  %s\n",
-			color.Grn5(pl.pair),
-			color.Grn5(fmt.Sprintf("%d times", pl.count)),
+			color.Grn3(pl.pair),
+			color.Grn3(fmt.Sprintf("%d times", pl.count)),
 			color.Gra5(fmt.Sprintf("(expected %.1f)", pl.expected)),
-			color.Grn5(fmt.Sprintf("lift %.2fx", pl.lift)))
+			color.Grn3(fmt.Sprintf("lift %.2fx", pl.lift)))
 		shown++
 		if shown >= 10 {
 			break

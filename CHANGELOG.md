@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.36.0 | AC43: cash5 -m [N] windowed default 30; cash5 palette → Blu7/Grn3/Red3/Whi5; bump governa-buildtool v1.0.1 → v1.1.0 (build palette → Yel7/Grn3/Cya3/Red3) |
 | 0.35.0 | AC42: migrate utils to governa-color v1.0; bump buildtool+reltool v1.0.1 |
 | 0.34.0 | AC40+AC41: retire cmd/claudecfg → harnesscfg Claude Code skill |
 | 0.33.0 | AC39: adopt governa v0.120.0 — canon-above-local-below structure |

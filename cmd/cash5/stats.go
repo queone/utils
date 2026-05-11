@@ -35,13 +35,13 @@ func displayStatistics(draws []Draw) error {
 	fmt.Println()
 
 	// Total drawings
-	fmt.Printf("%s: %s\n", color.Blu5("Total Drawings"), color.Grn5(len(uniqueDraws)))
+	fmt.Printf("%s: %s\n", color.Blu7("Total Drawings"), color.Grn3(len(uniqueDraws)))
 
 	// Date range
 	earliest := time.UnixMilli(uniqueDraws[0].DrawTime)
 	latest := time.UnixMilli(uniqueDraws[len(uniqueDraws)-1].DrawTime)
-	fmt.Printf("%s: %s\n", color.Blu5("Earliest Drawing"), color.Grn5(earliest.Format("2006-01-02")))
-	fmt.Printf("%s: %s\n", color.Blu5("Latest Drawing"), color.Grn5(latest.Format("2006-01-02")))
+	fmt.Printf("%s: %s\n", color.Blu7("Earliest Drawing"), color.Grn3(earliest.Format("2006-01-02")))
+	fmt.Printf("%s: %s\n", color.Blu7("Latest Drawing"), color.Grn3(latest.Format("2006-01-02")))
 
 	// Find biggest and smallest recorded prizes
 	var smallestPayout int64 = 999999999999
@@ -133,14 +133,14 @@ func displayStatistics(draws []Draw) error {
 		}
 		sort.Ints(lateNums)
 		fmt.Printf("\n%s: %v first eligible at draw #%d (%s)\n",
-			color.Blu5("Pool expansion detected"), lateNums, pe.expansionIdx+1, expandDate)
-		fmt.Printf("  %s: %d → %d\n", color.Blu5("Pool size change"), pe.prePoolSize, pe.postPoolSize)
+			color.Blu7("Pool expansion detected"), lateNums, pe.expansionIdx+1, expandDate)
+		fmt.Printf("  %s: %d → %d\n", color.Blu7("Pool size change"), pe.prePoolSize, pe.postPoolSize)
 	}
 
-	fmt.Printf("\n%s: %s\n", color.Blu5("Winners (5/5 Match)"), color.Grn5(winnersCount))
+	fmt.Printf("\n%s: %s\n", color.Blu7("Winners (5/5 Match)"), color.Grn3(winnersCount))
 
 	// Check for duplicate winning combinations
-	fmt.Printf("\n%s:\n", color.Blu5("Duplicate Combination Check"))
+	fmt.Printf("\n%s:\n", color.Blu7("Duplicate Combination Check"))
 
 	combinationMap := make(map[string][]string) // combo -> list of dates
 	for i := range uniqueDraws {
@@ -175,31 +175,31 @@ func displayStatistics(draws []Draw) error {
 	observedDups := len(duplicates)
 
 	fmt.Printf("  %s: %s  %s\n",
-		color.Blu5("Observed duplicates"), color.Grn5(observedDups),
+		color.Blu7("Observed duplicates"), color.Grn3(observedDups),
 		color.Gra5(fmt.Sprintf("(expected ~%.1f ± %.1f from birthday paradox)", expectedDups, dupStdDev)))
 
 	if observedDups == 0 {
-		fmt.Printf("  %s: %s\n", color.Blu5("Status"),
-			color.Grn5(fmt.Sprintf("✓ No duplicates (%d unique combinations in %d draws)", len(combinationMap), len(uniqueDraws))))
+		fmt.Printf("  %s: %s\n", color.Blu7("Status"),
+			color.Grn3(fmt.Sprintf("✓ No duplicates (%d unique combinations in %d draws)", len(combinationMap), len(uniqueDraws))))
 	} else {
 		zScore := 0.0
 		if dupStdDev > 0 {
 			zScore = (float64(observedDups) - expectedDups) / dupStdDev
 		}
 		if zScore > 2.0 {
-			fmt.Printf("  %s: %s\n", color.Blu5("Status"),
+			fmt.Printf("  %s: %s\n", color.Blu7("Status"),
 				color.Gra5(fmt.Sprintf("⚠ %d duplicates exceeds expectation (z=%.1f)", observedDups, zScore)))
 		} else {
-			fmt.Printf("  %s: %s\n", color.Blu5("Status"),
-				color.Grn5(fmt.Sprintf("✓ %d duplicates is consistent with random chance (z=%.1f)", observedDups, zScore)))
+			fmt.Printf("  %s: %s\n", color.Blu7("Status"),
+				color.Grn3(fmt.Sprintf("✓ %d duplicates is consistent with random chance (z=%.1f)", observedDups, zScore)))
 		}
 
-		fmt.Printf("\n  %s:\n", color.Blu5("Duplicate Details"))
+		fmt.Printf("\n  %s:\n", color.Blu7("Duplicate Details"))
 		for _, dup := range duplicates {
-			fmt.Printf("    %s: %s\n", color.Blu5("Combination"), color.Grn5(dup.combo))
+			fmt.Printf("    %s: %s\n", color.Blu7("Combination"), color.Grn3(dup.combo))
 			// Check for close-in-time pairs that warrant scrutiny
 			for i, d1 := range dup.dates {
-				label := color.Grn5(d1)
+				label := color.Grn3(d1)
 				if i > 0 {
 					t1, _ := time.Parse("2006-01-02", dup.dates[i-1])
 					t2, _ := time.Parse("2006-01-02", d1)
@@ -221,20 +221,20 @@ func displayStatistics(draws []Draw) error {
 		if len(allWinners) < topN {
 			topN = len(allWinners)
 		}
-		fmt.Printf("\n%s:\n", color.Blu5("Biggest Prizes"))
+		fmt.Printf("\n%s:\n", color.Blu7("Biggest Prizes"))
 		fmt.Printf("  %s  %s  %s\n",
-			color.Blu5(fmt.Sprintf("%-14s", "Numbers")),
-			color.Blu5(fmt.Sprintf("%-10s", "Date")),
-			color.Blu5("Prize"))
+			color.Blu7(fmt.Sprintf("%-14s", "Numbers")),
+			color.Blu7(fmt.Sprintf("%-10s", "Date")),
+			color.Blu7("Prize"))
 		for i := 0; i < topN; i++ {
 			w := allWinners[i]
 			nums, _ := extractPrimaryFive(w.draw)
 			drawDate := time.UnixMilli(w.draw.DrawTime).Format("2006-01-02")
 			numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d", nums[0], nums[1], nums[2], nums[3], nums[4])
 			fmt.Printf("  %s  %s  %s\n",
-				color.Grn5(numStr),
-				color.Grn5(drawDate),
-				color.Grn5(formatCurrency(w.payout/100)))
+				color.Grn3(numStr),
+				color.Grn3(drawDate),
+				color.Grn3(formatCurrency(w.payout/100)))
 		}
 	}
 
@@ -242,9 +242,9 @@ func displayStatistics(draws []Draw) error {
 		nums, _ := extractPrimaryFive(smallestDraw)
 		drawDate := time.UnixMilli(smallestDraw.DrawTime).Format("2006-01-02")
 		numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d", nums[0], nums[1], nums[2], nums[3], nums[4])
-		fmt.Printf("\n%s: %s\n", color.Blu5("Smallest Prize"), color.Grn5(formatCurrency(smallestPayout/100)))
-		fmt.Printf("  %s: %s\n", color.Blu5("Date"), color.Grn5(drawDate))
-		fmt.Printf("  %s: %s\n", color.Blu5("Numbers"), color.Grn5(numStr))
+		fmt.Printf("\n%s: %s\n", color.Blu7("Smallest Prize"), color.Grn3(formatCurrency(smallestPayout/100)))
+		fmt.Printf("  %s: %s\n", color.Blu7("Date"), color.Grn3(drawDate))
+		fmt.Printf("  %s: %s\n", color.Blu7("Numbers"), color.Grn3(numStr))
 	}
 
 	// Winner streak analysis
@@ -268,14 +268,14 @@ func displayStatistics(draws []Draw) error {
 		}
 		avgDays := float64(sum) / float64(len(daysBetween))
 
-		fmt.Printf("\n%s:\n", color.Blu5("Jackpot Win Frequency"))
-		fmt.Printf("  %s: %s\n", color.Blu5("Average days between"), color.Grn5(fmt.Sprintf("%.1f days", avgDays)))
-		fmt.Printf("  %s: %s\n", color.Blu5("Longest streak"), color.Grn5(fmt.Sprintf("%d days", longestStreak)))
+		fmt.Printf("\n%s:\n", color.Blu7("Jackpot Win Frequency"))
+		fmt.Printf("  %s: %s\n", color.Blu7("Average days between"), color.Grn3(fmt.Sprintf("%.1f days", avgDays)))
+		fmt.Printf("  %s: %s\n", color.Blu7("Longest streak"), color.Grn3(fmt.Sprintf("%d days", longestStreak)))
 
 		// Days since last winner
 		if len(winnerDates) > 0 {
 			daysSinceWin := int(latest.Sub(winnerDates[len(winnerDates)-1]).Hours() / 24)
-			fmt.Printf("  %s: %s\n", color.Blu5("Days since last win"), color.Grn5(fmt.Sprintf("%d days", daysSinceWin)))
+			fmt.Printf("  %s: %s\n", color.Blu7("Days since last win"), color.Grn3(fmt.Sprintf("%d days", daysSinceWin)))
 		}
 	}
 
@@ -286,12 +286,12 @@ func displayStatistics(draws []Draw) error {
 	mostCommonFourth := findMostCommon(pos4Freq)
 	mostCommonLast := findMostCommon(lastNumFreq)
 
-	fmt.Printf("\n%s:\n", color.Blu5("Most Common by Position"))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("First position"), color.Grn5(fmt.Sprintf("%02d", mostCommonFirst.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonFirst.count)))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("Second position"), color.Grn5(fmt.Sprintf("%02d", mostCommonSecond.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonSecond.count)))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("Third position"), color.Grn5(fmt.Sprintf("%02d", mostCommonMiddle.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonMiddle.count)))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("Fourth position"), color.Grn5(fmt.Sprintf("%02d", mostCommonFourth.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonFourth.count)))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("Fifth position"), color.Grn5(fmt.Sprintf("%02d", mostCommonLast.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonLast.count)))
+	fmt.Printf("\n%s:\n", color.Blu7("Most Common by Position"))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("First position"), color.Grn3(fmt.Sprintf("%02d", mostCommonFirst.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonFirst.count)))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("Second position"), color.Grn3(fmt.Sprintf("%02d", mostCommonSecond.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonSecond.count)))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("Third position"), color.Grn3(fmt.Sprintf("%02d", mostCommonMiddle.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonMiddle.count)))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("Fourth position"), color.Grn3(fmt.Sprintf("%02d", mostCommonFourth.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonFourth.count)))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("Fifth position"), color.Grn3(fmt.Sprintf("%02d", mostCommonLast.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", mostCommonLast.count)))
 
 	// Least common numbers by position
 	leastCommonFirst := findLeastCommon(firstNumFreq)
@@ -300,73 +300,73 @@ func displayStatistics(draws []Draw) error {
 	leastCommonFourth := findLeastCommon(pos4Freq)
 	leastCommonLast := findLeastCommon(lastNumFreq)
 
-	fmt.Printf("\n%s:\n", color.Blu5("Least Common by Position"))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("First position"), color.Grn5(fmt.Sprintf("%02d", leastCommonFirst.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonFirst.count)))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("Second position"), color.Grn5(fmt.Sprintf("%02d", leastCommonSecond.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonSecond.count)))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("Third position"), color.Grn5(fmt.Sprintf("%02d", leastCommonMiddle.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonMiddle.count)))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("Fourth position"), color.Grn5(fmt.Sprintf("%02d", leastCommonFourth.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonFourth.count)))
-	fmt.Printf("  %s: %s  %s\n", color.Blu5("Fifth position"), color.Grn5(fmt.Sprintf("%02d", leastCommonLast.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonLast.count)))
+	fmt.Printf("\n%s:\n", color.Blu7("Least Common by Position"))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("First position"), color.Grn3(fmt.Sprintf("%02d", leastCommonFirst.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonFirst.count)))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("Second position"), color.Grn3(fmt.Sprintf("%02d", leastCommonSecond.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonSecond.count)))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("Third position"), color.Grn3(fmt.Sprintf("%02d", leastCommonMiddle.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonMiddle.count)))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("Fourth position"), color.Grn3(fmt.Sprintf("%02d", leastCommonFourth.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonFourth.count)))
+	fmt.Printf("  %s: %s  %s\n", color.Blu7("Fifth position"), color.Grn3(fmt.Sprintf("%02d", leastCommonLast.num)), color.Gra5(fmt.Sprintf("(appeared %d times)", leastCommonLast.count)))
 
 	// Most frequently drawn overall
 	topOverall := findTopN(overallFreq, 5)
-	fmt.Printf("\n%s:\n", color.Blu5("Most Frequently Drawn (All Positions)"))
+	fmt.Printf("\n%s:\n", color.Blu7("Most Frequently Drawn (All Positions)"))
 	for i, nc := range topOverall {
-		fmt.Printf("  %s. %s %s:  %s\n", color.Grn5(i+1), color.Blu5("Number"), color.Grn5(fmt.Sprintf("%02d", nc.num)), color.Grn5(fmt.Sprintf("%d times", nc.count)))
+		fmt.Printf("  %s. %s %s:  %s\n", color.Grn3(i+1), color.Blu7("Number"), color.Grn3(fmt.Sprintf("%02d", nc.num)), color.Grn3(fmt.Sprintf("%d times", nc.count)))
 	}
 
 	// Least frequently drawn overall
 	bottomOverall := findBottomN(overallFreq, 5)
-	fmt.Printf("\n%s:\n", color.Blu5("Least Frequently Drawn (All Positions)"))
+	fmt.Printf("\n%s:\n", color.Blu7("Least Frequently Drawn (All Positions)"))
 	for i, nc := range bottomOverall {
-		fmt.Printf("  %s. %s %s:  %s\n", color.Grn5(i+1), color.Blu5("Number"), color.Grn5(fmt.Sprintf("%02d", nc.num)), color.Grn5(fmt.Sprintf("%d times", nc.count)))
+		fmt.Printf("  %s. %s %s:  %s\n", color.Grn3(i+1), color.Blu7("Number"), color.Grn3(fmt.Sprintf("%02d", nc.num)), color.Grn3(fmt.Sprintf("%d times", nc.count)))
 	}
 
 	// Hot numbers (last 30 days)
 	if len(freq30) > 0 {
 		hot30 := findTopN(freq30, 5)
-		fmt.Printf("\n%s:\n", color.Blu5("Hot Numbers (Last 30 Days)"))
+		fmt.Printf("\n%s:\n", color.Blu7("Hot Numbers (Last 30 Days)"))
 		for i, nc := range hot30 {
-			fmt.Printf("  %s. %s %s:  %s\n", color.Grn5(i+1), color.Blu5("Number"), color.Grn5(fmt.Sprintf("%02d", nc.num)), color.Grn5(fmt.Sprintf("%d times", nc.count)))
+			fmt.Printf("  %s. %s %s:  %s\n", color.Grn3(i+1), color.Blu7("Number"), color.Grn3(fmt.Sprintf("%02d", nc.num)), color.Grn3(fmt.Sprintf("%d times", nc.count)))
 		}
 	}
 
 	// Cold numbers (last 90 days)
 	if len(freq90) > 0 {
 		cold90 := findBottomN(freq90, 5)
-		fmt.Printf("\n%s:\n", color.Blu5("Cold Numbers (Last 90 Days)"))
+		fmt.Printf("\n%s:\n", color.Blu7("Cold Numbers (Last 90 Days)"))
 		for i, nc := range cold90 {
-			fmt.Printf("  %s. %s %s:  %s\n", color.Grn5(i+1), color.Blu5("Number"), color.Grn5(fmt.Sprintf("%02d", nc.num)), color.Grn5(fmt.Sprintf("%d times", nc.count)))
+			fmt.Printf("  %s. %s %s:  %s\n", color.Grn3(i+1), color.Blu7("Number"), color.Grn3(fmt.Sprintf("%02d", nc.num)), color.Grn3(fmt.Sprintf("%d times", nc.count)))
 		}
 	}
 
 	// Most common pairs
 	topPairs := findTopNPairs(pairFreq, 5)
-	fmt.Printf("\n%s:\n", color.Blu5("Most Common Number Pairs"))
+	fmt.Printf("\n%s:\n", color.Blu7("Most Common Number Pairs"))
 	for i, pc := range topPairs {
-		fmt.Printf("  %s. %s:  %s\n", color.Grn5(i+1), color.Grn5(pc.pair), color.Grn5(fmt.Sprintf("%d times", pc.count)))
+		fmt.Printf("  %s. %s:  %s\n", color.Grn3(i+1), color.Grn3(pc.pair), color.Grn3(fmt.Sprintf("%d times", pc.count)))
 	}
 
 	// Chi-squared uniformity analysis
 	chiSquared := calculateChiSquared(overallFreq, len(uniqueDraws)*5)
-	fmt.Printf("\n%s:\n", color.Blu5("χ² Uniformity Analysis"))
-	fmt.Printf("  %s: %s\n", color.Blu5("χ² statistic"), color.Grn5(fmt.Sprintf("%.2f", chiSquared)))
-	fmt.Printf("  %s: %s\n", color.Blu5("Degrees of freedom"), color.Grn5("44 (45 numbers - 1)"))
+	fmt.Printf("\n%s:\n", color.Blu7("χ² Uniformity Analysis"))
+	fmt.Printf("  %s: %s\n", color.Blu7("χ² statistic"), color.Grn3(fmt.Sprintf("%.2f", chiSquared)))
+	fmt.Printf("  %s: %s\n", color.Blu7("Degrees of freedom"), color.Grn3("44 (45 numbers - 1)"))
 
 	// Critical values for χ² with 44 df:
 	// p=0.05: 60.48, p=0.01: 66.77
 	if chiSquared < 60.48 {
-		fmt.Printf("  %s: %s\n", color.Blu5("Result"), color.Grn5("Uniform distribution (p > 0.05)"))
-		fmt.Printf("  %s: %s\n", color.Blu5("Interpretation"), color.Gra5("Numbers appear randomly distributed"))
+		fmt.Printf("  %s: %s\n", color.Blu7("Result"), color.Grn3("Uniform distribution (p > 0.05)"))
+		fmt.Printf("  %s: %s\n", color.Blu7("Interpretation"), color.Gra5("Numbers appear randomly distributed"))
 	} else if chiSquared < 66.77 {
-		fmt.Printf("  %s: %s\n", color.Blu5("Result"), color.Grn5("Possibly non-uniform (0.01 < p < 0.05)"))
-		fmt.Printf("  %s: %s\n", color.Blu5("Interpretation"), color.Gra5("Slight deviation from randomness"))
+		fmt.Printf("  %s: %s\n", color.Blu7("Result"), color.Grn3("Possibly non-uniform (0.01 < p < 0.05)"))
+		fmt.Printf("  %s: %s\n", color.Blu7("Interpretation"), color.Gra5("Slight deviation from randomness"))
 	} else {
-		fmt.Printf("  %s: %s\n", color.Blu5("Result"), color.Grn5("Non-uniform distribution (p < 0.01)"))
-		fmt.Printf("  %s: %s\n", color.Blu5("Interpretation"), color.Gra5("Significant bias detected"))
+		fmt.Printf("  %s: %s\n", color.Blu7("Result"), color.Grn3("Non-uniform distribution (p < 0.01)"))
+		fmt.Printf("  %s: %s\n", color.Blu7("Interpretation"), color.Gra5("Significant bias detected"))
 	}
 
 	// Full χ² Frequency Analysis
-	fmt.Printf("\n%s:\n", color.Blu5("Full χ² Frequency Analysis Over History"))
+	fmt.Printf("\n%s:\n", color.Blu7("Full χ² Frequency Analysis Over History"))
 
 	// Build frequency maps for all positions
 	pos1Freq := firstNumFreq
@@ -384,7 +384,7 @@ func displayStatistics(draws []Draw) error {
 	}
 
 	// 1. Per-position uniformity tests
-	fmt.Printf("\n  %s:\n", color.Blu5("Position-Specific Uniformity Tests"))
+	fmt.Printf("\n  %s:\n", color.Blu7("Position-Specific Uniformity Tests"))
 
 	positionNames := []string{"First", "Second", "Third", "Fourth", "Fifth"}
 	positionFreqs := []map[int]int{pos1Freq, pos2FreqChi, pos3Freq, pos4FreqChi, pos5Freq}
@@ -397,23 +397,23 @@ func displayStatistics(draws []Draw) error {
 			allPositionsUniform = false
 		}
 
-		statusStr := color.Grn5("✓ Uniform")
+		statusStr := color.Grn3("✓ Uniform")
 		if !isUniform {
 			statusStr = color.Gra5("⚠ Non-uniform")
 		}
 		fmt.Printf("    %s %s: χ²=%s  %s\n",
-			color.Blu5(positionNames[i]), color.Blu5("position"),
-			color.Grn5(fmt.Sprintf("%.2f", chiSq)), statusStr)
+			color.Blu7(positionNames[i]), color.Blu7("position"),
+			color.Grn3(fmt.Sprintf("%.2f", chiSq)), statusStr)
 	}
 
 	if allPositionsUniform {
-		fmt.Printf("  %s: %s\n", color.Blu5("Overall"), color.Gra5("All positions show uniform distribution"))
+		fmt.Printf("  %s: %s\n", color.Blu7("Overall"), color.Gra5("All positions show uniform distribution"))
 	} else {
-		fmt.Printf("  %s: %s\n", color.Blu5("Overall"), color.Gra5("Some positions show non-uniform distribution"))
+		fmt.Printf("  %s: %s\n", color.Blu7("Overall"), color.Gra5("Some positions show non-uniform distribution"))
 	}
 
 	// 2. Temporal uniformity (monthly/yearly trends)
-	fmt.Printf("\n  %s:\n", color.Blu5("Temporal Uniformity Analysis"))
+	fmt.Printf("\n  %s:\n", color.Blu7("Temporal Uniformity Analysis"))
 
 	// Group by year
 	yearlyFreqs := make(map[int]map[int]int)
@@ -437,7 +437,7 @@ func displayStatistics(draws []Draw) error {
 	}
 	sort.Ints(years)
 
-	fmt.Printf("    %s:\n", color.Blu5("Year-by-Year Analysis (pool-size adjusted)"))
+	fmt.Printf("    %s:\n", color.Blu7("Year-by-Year Analysis (pool-size adjusted)"))
 	for _, year := range years {
 		yearDraws := 0
 		for i := range uniqueDraws {
@@ -453,23 +453,23 @@ func displayStatistics(draws []Draw) error {
 			critical := chiSquaredCritical(df)
 			isUniform := chiSq < critical
 
-			statusStr := color.Grn5("✓")
+			statusStr := color.Grn3("✓")
 			if !isUniform {
 				statusStr = color.Gra5("⚠")
 			}
 
 			fmt.Printf("      %s %s: χ²=%s  %s draws  %s\n",
 				statusStr,
-				color.Blu5(fmt.Sprintf("%d", year)),
-				color.Grn5(fmt.Sprintf("%.2f", chiSq)),
-				color.Grn5(yearDraws),
+				color.Blu7(fmt.Sprintf("%d", year)),
+				color.Grn3(fmt.Sprintf("%.2f", chiSq)),
+				color.Grn3(yearDraws),
 				color.Gra5(fmt.Sprintf("(pool=%d, df=%d, critical=%.1f)", poolSize, df, critical)))
 		}
 	}
 
 	// 3. Sequential pair analysis
-	fmt.Printf("\n  %s:\n", color.Blu5("Sequential Pair Uniformity"))
-	fmt.Printf("    %s: %s\n", color.Blu5("Testing"), color.Gra5("Whether consecutive numbers appear uniformly"))
+	fmt.Printf("\n  %s:\n", color.Blu7("Sequential Pair Uniformity"))
+	fmt.Printf("    %s: %s\n", color.Blu7("Testing"), color.Gra5("Whether consecutive numbers appear uniformly"))
 
 	consecutivePairs := 0
 	totalPairs := 0
@@ -492,24 +492,24 @@ func displayStatistics(draws []Draw) error {
 	actualRate := float64(consecutivePairs) / float64(totalPairs)
 
 	fmt.Printf("    %s: %s  %s\n",
-		color.Blu5("Consecutive pairs found"),
-		color.Grn5(fmt.Sprintf("%d/%d", consecutivePairs, totalPairs)),
+		color.Blu7("Consecutive pairs found"),
+		color.Grn3(fmt.Sprintf("%d/%d", consecutivePairs, totalPairs)),
 		color.Gra5(fmt.Sprintf("(%.2f%%)", actualRate*100)))
 	fmt.Printf("    %s: %s\n",
-		color.Blu5("Expected rate"),
-		color.Grn5(fmt.Sprintf("%.2f%%", expectedConsecutiveRate*100)))
+		color.Blu7("Expected rate"),
+		color.Grn3(fmt.Sprintf("%.2f%%", expectedConsecutiveRate*100)))
 
 	deviation := ((actualRate - expectedConsecutiveRate) / expectedConsecutiveRate) * 100
 	if deviation > -10 && deviation < 10 {
-		fmt.Printf("    %s: %s  %s\n", color.Blu5("Assessment"), color.Grn5("Within expected range"),
+		fmt.Printf("    %s: %s  %s\n", color.Blu7("Assessment"), color.Grn3("Within expected range"),
 			color.Gra5(fmt.Sprintf("(%.1f%% deviation)", deviation)))
 	} else {
-		fmt.Printf("    %s: %s  %s\n", color.Blu5("Assessment"), color.Gra5("Outside expected range"),
+		fmt.Printf("    %s: %s  %s\n", color.Blu7("Assessment"), color.Gra5("Outside expected range"),
 			color.Gra5(fmt.Sprintf("(%.1f%% deviation)", deviation)))
 	}
 
 	// Breakdown: top 10 most frequent consecutive pairs
-	fmt.Printf("\n    %s:\n", color.Blu5("Top 10 Consecutive Pairs"))
+	fmt.Printf("\n    %s:\n", color.Blu7("Top 10 Consecutive Pairs"))
 	topConsec := findTopNPairs(consecPairFreq, 10)
 	// Expected per specific pair: each adjacent pair (k, k+1) has roughly equal probability
 	// Total expected consecutive = totalPairs * expectedConsecutiveRate
@@ -517,8 +517,8 @@ func displayStatistics(draws []Draw) error {
 	expectedPerPair := float64(totalPairs) * expectedConsecutiveRate / 44.0
 	for i, pc := range topConsec {
 		fmt.Printf("      %2d. %s:  %s  %s\n",
-			i+1, color.Grn5(pc.pair),
-			color.Grn5(fmt.Sprintf("%d times", pc.count)),
+			i+1, color.Grn3(pc.pair),
+			color.Grn3(fmt.Sprintf("%d times", pc.count)),
 			color.Gra5(fmt.Sprintf("(expected ~%.1f)", expectedPerPair)))
 	}
 
@@ -536,18 +536,18 @@ func displayStatistics(draws []Draw) error {
 			highConsec += count
 		}
 	}
-	fmt.Printf("\n    %s:\n", color.Blu5("Consecutive Pairs by Range"))
-	fmt.Printf("      %s: %s\n", color.Blu5("Low (1-15)"), color.Grn5(fmt.Sprintf("%d", lowConsec)))
-	fmt.Printf("      %s: %s\n", color.Blu5("Mid (16-30)"), color.Grn5(fmt.Sprintf("%d", midConsec)))
-	fmt.Printf("      %s: %s\n", color.Blu5("High (31-44)"), color.Grn5(fmt.Sprintf("%d", highConsec)))
+	fmt.Printf("\n    %s:\n", color.Blu7("Consecutive Pairs by Range"))
+	fmt.Printf("      %s: %s\n", color.Blu7("Low (1-15)"), color.Grn3(fmt.Sprintf("%d", lowConsec)))
+	fmt.Printf("      %s: %s\n", color.Blu7("Mid (16-30)"), color.Grn3(fmt.Sprintf("%d", midConsec)))
+	fmt.Printf("      %s: %s\n", color.Blu7("High (31-44)"), color.Grn3(fmt.Sprintf("%d", highConsec)))
 
 	// 4. Low vs High number distribution (hypergeometric baseline)
 	// For a sorted draw of 5 from 1-45, E[low numbers 1-22] = 5 * 22/45 ≈ 2.444
 	// This is already the correct hypergeometric expected value.
 	// The simple proportion 22/45 is correct for each of 5 picks without replacement
 	// because E[X] = n*K/N for hypergeometric.
-	fmt.Printf("\n  %s:\n", color.Blu5("Low vs High Number Distribution"))
-	fmt.Printf("    %s: %s\n", color.Blu5("Testing"), color.Gra5("Whether low (1-22) and high (23-45) numbers match hypergeometric expectation"))
+	fmt.Printf("\n  %s:\n", color.Blu7("Low vs High Number Distribution"))
+	fmt.Printf("    %s: %s\n", color.Blu7("Testing"), color.Gra5("Whether low (1-22) and high (23-45) numbers match hypergeometric expectation"))
 
 	lowCount := 0
 	highCount := 0
@@ -574,26 +574,26 @@ func displayStatistics(draws []Draw) error {
 		(float64(highCount)-expectedHigh)*(float64(highCount)-expectedHigh)/expectedHigh
 
 	fmt.Printf("    %s: %s  %s\n",
-		color.Blu5("Low numbers (1-22)"),
-		color.Grn5(fmt.Sprintf("%d", lowCount)),
+		color.Blu7("Low numbers (1-22)"),
+		color.Grn3(fmt.Sprintf("%d", lowCount)),
 		color.Gra5(fmt.Sprintf("(hypergeometric expected: %.0f)", expectedLow)))
 	fmt.Printf("    %s: %s  %s\n",
-		color.Blu5("High numbers (23-45)"),
-		color.Grn5(fmt.Sprintf("%d", highCount)),
+		color.Blu7("High numbers (23-45)"),
+		color.Grn3(fmt.Sprintf("%d", highCount)),
 		color.Gra5(fmt.Sprintf("(hypergeometric expected: %.0f)", expectedHigh)))
 	fmt.Printf("    %s: %s  %s\n",
-		color.Blu5("χ² statistic"),
-		color.Grn5(fmt.Sprintf("%.2f", chiSqLowHigh)),
+		color.Blu7("χ² statistic"),
+		color.Grn3(fmt.Sprintf("%.2f", chiSqLowHigh)),
 		color.Gra5("(df=1, critical=3.84 at p=0.05)"))
 
 	if chiSqLowHigh < 3.84 {
-		fmt.Printf("    %s: %s\n", color.Blu5("Result"), color.Grn5("✓ Balanced distribution"))
+		fmt.Printf("    %s: %s\n", color.Blu7("Result"), color.Grn3("✓ Balanced distribution"))
 	} else {
-		fmt.Printf("    %s: %s\n", color.Blu5("Result"), color.Gra5("⚠ Imbalanced — exceeds hypergeometric expectation"))
+		fmt.Printf("    %s: %s\n", color.Blu7("Result"), color.Gra5("⚠ Imbalanced — exceeds hypergeometric expectation"))
 	}
 
 	// 5. Summary
-	fmt.Printf("\n  %s:\n", color.Blu5("Analysis Summary"))
+	fmt.Printf("\n  %s:\n", color.Blu7("Analysis Summary"))
 	issuesFound := 0
 	if !allPositionsUniform {
 		issuesFound++
@@ -603,13 +603,13 @@ func displayStatistics(draws []Draw) error {
 	}
 
 	if issuesFound == 0 {
-		fmt.Printf("    %s\n", color.Grn5("✓ All tests passed - lottery appears statistically fair"))
+		fmt.Printf("    %s\n", color.Grn3("✓ All tests passed - lottery appears statistically fair"))
 	} else {
 		fmt.Printf("    %s\n", color.Gra5(fmt.Sprintf("⚠ %d potential issues detected - review individual tests", issuesFound)))
 	}
 
 	// Repeat probability analysis
-	fmt.Printf("\n%s:\n", color.Blu5("Repeat Combination Analysis"))
+	fmt.Printf("\n%s:\n", color.Blu7("Repeat Combination Analysis"))
 
 	historicalCombos := make(map[string]bool)
 	for i := range uniqueDraws {
@@ -625,26 +625,26 @@ func displayStatistics(draws []Draw) error {
 
 	simResults := runRepeatSimulation(numHistorical, totalCombinations, 10000)
 
-	fmt.Printf("  %s: %s\n", color.Blu5("Historical combinations"), color.Grn5(fmt.Sprintf("%d unique sets", numHistorical)))
-	fmt.Printf("  %s: %s\n", color.Blu5("Total possible combos"), color.Grn5(formatNumber(totalCombinations)))
-	fmt.Printf("  %s: %s\n", color.Blu5("Coverage"), color.Grn5(fmt.Sprintf("%.4f%%", float64(numHistorical)*100.0/float64(totalCombinations))))
+	fmt.Printf("  %s: %s\n", color.Blu7("Historical combinations"), color.Grn3(fmt.Sprintf("%d unique sets", numHistorical)))
+	fmt.Printf("  %s: %s\n", color.Blu7("Total possible combos"), color.Grn3(formatNumber(totalCombinations)))
+	fmt.Printf("  %s: %s\n", color.Blu7("Coverage"), color.Grn3(fmt.Sprintf("%.4f%%", float64(numHistorical)*100.0/float64(totalCombinations))))
 
 	// Birthday paradox context
 	bpExpected := birthdayExpectedDuplicates(len(uniqueDraws), totalCombinations)
 	bpDev := (float64(observedDups) - bpExpected) / birthdayStdDev(bpExpected)
-	fmt.Printf("  %s: %s\n", color.Blu5("Birthday paradox expected repeats"),
-		color.Grn5(fmt.Sprintf("~%.1f for %d draws from %s combos", bpExpected, len(uniqueDraws), formatNumber(totalCombinations))))
-	fmt.Printf("  %s: %s\n", color.Blu5("Observed repeats"),
-		color.Grn5(fmt.Sprintf("%d (z=%.1f, consistent with expectation)", observedDups, bpDev)))
+	fmt.Printf("  %s: %s\n", color.Blu7("Birthday paradox expected repeats"),
+		color.Grn3(fmt.Sprintf("~%.1f for %d draws from %s combos", bpExpected, len(uniqueDraws), formatNumber(totalCombinations))))
+	fmt.Printf("  %s: %s\n", color.Blu7("Observed repeats"),
+		color.Grn3(fmt.Sprintf("%d (z=%.1f, consistent with expectation)", observedDups, bpDev)))
 
-	fmt.Printf("\n  %s:\n", color.Blu5("Future repeat probability"))
-	fmt.Printf("    %s: %s\n", color.Blu5("In next 30 draws"), color.Grn5(fmt.Sprintf("%.2f%%", simResults.prob30Days*100)))
-	fmt.Printf("    %s: %s\n", color.Blu5("In next 90 draws"), color.Grn5(fmt.Sprintf("%.2f%%", simResults.prob90Days*100)))
-	fmt.Printf("    %s: %s\n", color.Blu5("In next 365 draws"), color.Grn5(fmt.Sprintf("%.2f%%", simResults.prob365Days*100)))
-	fmt.Printf("    %s: %s\n", color.Blu5("In next 10 years"), color.Grn5(fmt.Sprintf("%.2f%%", simResults.prob10Years*100)))
+	fmt.Printf("\n  %s:\n", color.Blu7("Future repeat probability"))
+	fmt.Printf("    %s: %s\n", color.Blu7("In next 30 draws"), color.Grn3(fmt.Sprintf("%.2f%%", simResults.prob30Days*100)))
+	fmt.Printf("    %s: %s\n", color.Blu7("In next 90 draws"), color.Grn3(fmt.Sprintf("%.2f%%", simResults.prob90Days*100)))
+	fmt.Printf("    %s: %s\n", color.Blu7("In next 365 draws"), color.Grn3(fmt.Sprintf("%.2f%%", simResults.prob365Days*100)))
+	fmt.Printf("    %s: %s\n", color.Blu7("In next 10 years"), color.Grn3(fmt.Sprintf("%.2f%%", simResults.prob10Years*100)))
 
 	// Distance scoring caveat
-	fmt.Printf("\n%s:\n", color.Blu5("Combinatorial Distance Scoring"))
+	fmt.Printf("\n%s:\n", color.Blu7("Combinatorial Distance Scoring"))
 	coverage := float64(numHistorical) * 100.0 / float64(totalCombinations)
 	fmt.Printf("  %s\n", color.Gra5(fmt.Sprintf("With %d draws covering %.2f%% of %s possible combinations,",
 		len(uniqueDraws), coverage, formatNumber(totalCombinations))))

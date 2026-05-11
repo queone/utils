@@ -9,7 +9,7 @@ require (
 	github.com/koki-develop/go-fzf v0.15.0
 	github.com/mattn/go-isatty v0.0.19
 	github.com/mattn/go-runewidth v0.0.15
-	github.com/queone/governa-buildtool v1.0.1
+	github.com/queone/governa-buildtool v1.1.0
 	github.com/queone/governa-color v1.0.1
 	github.com/queone/governa-reltool v1.0.1
 	github.com/sethvargo/go-diceware v0.5.0

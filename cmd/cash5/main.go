@@ -16,7 +16,7 @@ import (
 
 const (
 	programName     = "cash5"
-	programVersion  = "0.11.0"
+	programVersion  = "0.12.0"
 	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit 😀"
 )
 
@@ -34,7 +34,7 @@ func runDailyWithRand() error {
 	// Check connectivity once, up front. All fetch decisions key off this.
 	online := checkInternet()
 	if !online {
-		fmt.Printf("%s\n", color.Red5("Internet is unreachable — showing cached data"))
+		fmt.Printf("%s\n", color.Red3("Internet is unreachable — showing cached data"))
 	}
 
 	// Auto-fetch if no data or data is too old (more than 7 days)
@@ -87,7 +87,7 @@ func runDailyWithRand() error {
 				fmt.Printf("Fetched recent draws. Total in database: %d\n\n", len(existing))
 			} else if is404Error(err) {
 				// Primary returned 404 — try backup sources transparently
-				fmt.Printf("%s\n", color.Red5(fmt.Sprintf("Primary source unavailable (%v) — trying backup...", err)))
+				fmt.Printf("%s\n", color.Red3(fmt.Sprintf("Primary source unavailable (%v) — trying backup...", err)))
 				existing = tryBackupFetchers(existing, dateFrom, dateTo)
 			} else {
 				fmt.Printf("Warning: failed to fetch recent draws: %v\n", err)
@@ -142,24 +142,24 @@ func runDailyWithRand() error {
 	if online {
 		jackpot, err := fetchCurrentJackpot()
 		if err == nil && jackpot > 0 {
-			fmt.Printf("  %s: %s\n", color.Blu5("CURRENT JACKPOT"), color.Grn5(formatCurrency(jackpot/100)))
+			fmt.Printf("  %s: %s\n", color.Blu7("CURRENT JACKPOT"), color.Grn3(formatCurrency(jackpot/100)))
 		} else if len(uniqueDraws) > 0 {
 			// Fall back to latest draw's estimated jackpot
 			jp := uniqueDraws[len(uniqueDraws)-1].EstimatedJackpot
 			if jp > 0 {
-				fmt.Printf("  %s: %s\n", color.Blu5("CURRENT JACKPOT"), color.Grn5(formatCurrency(jp/100)))
+				fmt.Printf("  %s: %s\n", color.Blu7("CURRENT JACKPOT"), color.Grn3(formatCurrency(jp/100)))
 			}
 		}
 	} else if len(uniqueDraws) > 0 {
 		jp := uniqueDraws[len(uniqueDraws)-1].EstimatedJackpot
 		if jp > 0 {
-			fmt.Printf("  %s: %s %s\n", color.Blu5("CURRENT JACKPOT"),
-				color.Grn5(formatCurrency(jp/100)), color.Gra5("(cached)"))
+			fmt.Printf("  %s: %s %s\n", color.Blu7("CURRENT JACKPOT"),
+				color.Grn3(formatCurrency(jp/100)), color.Gra5("(cached)"))
 		}
 	}
 
 	// LWN repeat check
-	fmt.Printf("  %s: %s", color.Blu5("LAST WINNING NUMBERS"), color.Grn5(lwnKey))
+	fmt.Printf("  %s: %s", color.Blu7("LAST WINNING NUMBERS"), color.Grn3(lwnKey))
 	lwnDates := comboHistory[lwnKey]
 	if len(lwnDates) > 1 {
 		// Filter out the last draw date itself to find prior occurrences
@@ -170,7 +170,7 @@ func runDailyWithRand() error {
 			}
 		}
 		if len(priorDates) > 0 {
-			fmt.Printf("  %s", color.Blu5("REPEATED: "+strings.Join(priorDates, ", ")))
+			fmt.Printf("  %s", color.Blu7("REPEATED: "+strings.Join(priorDates, ", ")))
 		} else {
 			fmt.Printf("  %s", color.Gra5("Never repeated"))
 		}
@@ -181,7 +181,7 @@ func runDailyWithRand() error {
 
 	// Winning circle — inline image with winners highlighted (iTerm2 only)
 	if isITerm2() {
-		fmt.Printf("  %s:\n", color.Blu5("WINNING CIRCLE"))
+		fmt.Printf("  %s:\n", color.Blu7("WINNING CIRCLE"))
 		displayCircleImage(lwn, "  ")
 	}
 
@@ -218,7 +218,7 @@ func runDailyWithRand() error {
 		return closeMatches[i].drawTime > closeMatches[j].drawTime
 	})
 
-	fmt.Printf("  %s:\n", color.Blu5("CLOSEST 5 PREVIOUS WINNING MATCHES"))
+	fmt.Printf("  %s:\n", color.Blu7("CLOSEST 5 PREVIOUS WINNING MATCHES"))
 	if len(closeMatches) == 0 {
 		fmt.Printf("  %s\n", color.Gra5("No previous draws with 3+ matching numbers"))
 	} else {
@@ -227,7 +227,7 @@ func runDailyWithRand() error {
 			numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 				cm.nums[0], cm.nums[1], cm.nums[2], cm.nums[3], cm.nums[4])
 			fmt.Printf("    %s  %s  %s\n",
-				color.Grn5(numStr), color.Grn5(cm.date),
+				color.Grn3(numStr), color.Grn3(cm.date),
 				color.Gra5(fmt.Sprintf("(%d/5 match)", cm.matches)))
 		}
 	}
@@ -235,14 +235,14 @@ func runDailyWithRand() error {
 	// Generate intelligent recommendations
 	recommendations := generateRecommendations(uniqueDraws)
 
-	fmt.Printf("  %s:\n", color.Blu5("RECOMMENDATION"))
+	fmt.Printf("  %s:\n", color.Blu7("RECOMMENDATION"))
 	for _, rec := range recommendations {
 		numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 			rec.numbers[0], rec.numbers[1], rec.numbers[2], rec.numbers[3], rec.numbers[4])
-		fmt.Printf("    %s  %s\n", color.Grn5(numStr), color.Gra5(rec.strategy))
+		fmt.Printf("    %s  %s\n", color.Grn3(numStr), color.Gra5(rec.strategy))
 	}
 
-	fmt.Printf("\n  %s\n", color.Red5(lottery_warning))
+	fmt.Printf("\n  %s\n", color.Red3(lottery_warning))
 
 	return nil
 }
@@ -354,7 +354,7 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 }
 
 func printUsage() {
-	n := color.Whi10(programName)
+	n := color.Whi5(programName)
 	v := programVersion
 	usage := fmt.Sprintf("%s v%s\n"+
 		"NJ Cash 5 daily numbers recommender\n"+
@@ -366,7 +366,7 @@ func printUsage() {
 		"  -f             Fetch new draws since last run (within last year)\n"+
 		"  -a             Display all previous drawings\n"+
 		"  -s             Show statistics about historical data\n"+
-		"  -m             Show closest-match analysis for all drawings\n"+
+		"  -m [N]         Show closest-match analysis for last N drawings (default: 30)\n"+
 		"  -o [N]         Show odds table for 1 to N combos played (default: 30)\n"+
 		"  -d DATE        Show raw JSON for draws on DATE (format: 2026-02-06)\n"+
 		"  -v             Show this help message and exit\n"+
@@ -381,12 +381,13 @@ func printUsage() {
 		"  %s\n"+
 		"  %s -f\n"+
 		"  %s -s\n"+
+		"  %s -m 50\n"+
 		"  %s -o 100\n"+
 		"  %s -o\n",
-		n, v, color.Whi10("Usage"), n, color.Whi10("Options"),
-		color.Whi10("Running without switches will"), color.Whi10("Examples"),
-		n, n, n, n, n)
-	usage += "\n" + color.Red5(lottery_warning) + "\n"
+		n, v, color.Whi5("Usage"), n, color.Whi5("Options"),
+		color.Whi5("Running without switches will"), color.Whi5("Examples"),
+		n, n, n, n, n, n)
+	usage += "\n" + color.Red3(lottery_warning) + "\n"
 	fmt.Print(usage)
 }
 
@@ -413,11 +414,30 @@ func runCLI() {
 		}
 	}
 
+	// Handle -m before cobra — same optional-value reason as -o.
+	for i, arg := range os.Args[1:] {
+		if arg == "-m" || arg == "--match-analysis" {
+			n := 30 // default
+			if i+1 < len(os.Args[1:]) {
+				if val, err := strconv.Atoi(os.Args[i+2]); err == nil && val > 0 {
+					n = val
+				}
+			}
+			existingDraws, err := loadDraws()
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := displayMatchAnalysis(existingDraws, n); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+	}
+
 	var fetchAll bool
 	var showVersion bool
 	var showAll bool
 	var showStats bool
-	var matchAnalysis bool
 	var debugDate string
 
 	root := &cobra.Command{
@@ -483,18 +503,6 @@ func runCLI() {
 				return
 			}
 
-			if matchAnalysis {
-				existingDraws, err := loadDraws()
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				if err := displayMatchAnalysis(existingDraws); err != nil {
-					log.Fatal(err)
-				}
-				return
-			}
-
 			if showStats {
 				existingDraws, err := loadDraws()
 				if err != nil {
@@ -516,7 +524,6 @@ func runCLI() {
 	root.Flags().BoolVarP(&fetchAll, "fetch-all", "f", false, "Fetch new draws since last run (within last year)")
 	root.Flags().BoolVarP(&showAll, "all", "a", false, "Display all previous drawings")
 	root.Flags().BoolVarP(&showStats, "stats", "s", false, "Show statistics about historical data")
-	root.Flags().BoolVarP(&matchAnalysis, "match-analysis", "m", false, "Show closest-match analysis for all historical drawings")
 	root.Flags().BoolVarP(&showVersion, "version", "v", false, "Show program version and usage")
 	root.Flags().StringVarP(&debugDate, "debug", "d", "", "Show raw JSON for draws on specified date")
 
