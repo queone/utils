@@ -67,6 +67,11 @@ git pull
 ./build.sh
 ```
 
-Note that you can compile individual utilities with `./build.sh rn,web`, etc.
+Note that you can compile individual utilities with `./build.sh rn web`, etc. Targets are space-separated; validation runs only against the named packages.
 
-To build in Windows you have to have a BASH shell such as [GitBASH](https://www.git-scm.com/download/win). To build from a regular Windows Command Prompt, you may have to tweak the `build.sh` script a bit, to have it run the right `go build ...` command. 
+To build in Windows you have to have a BASH shell such as [GitBASH](https://www.git-scm.com/download/win). To build from a regular Windows Command Prompt, you may have to tweak the `build.sh` script a bit, to have it run the right `go build ...` command.
+
+## Governance
+
+This repo is governed by an explicit session-entry contract for AI coding agents — see [`docs/operator-contract-rationale.md`](docs/operator-contract-rationale.md) for the design reasoning and [`AGENTS.md`](AGENTS.md) for the operational rules.
+
