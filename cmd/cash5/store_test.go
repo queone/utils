@@ -219,6 +219,123 @@ func TestColdStartReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestPruneLegacyEraFiltersPreCutoff(t *testing.T) {
+	draws := []Draw{
+		{ID: "pre-1", DrawTime: 718430400000},                       // 1992-10-08
+		{ID: "pre-2", DrawTime: cash5EraStartMillis - 86_400_000},   // day before cutoff
+		{ID: "boundary", DrawTime: cash5EraStartMillis},             // exact cutoff (kept)
+		{ID: "post-1", DrawTime: cash5EraStartMillis + 86_400_000},  // day after
+		{ID: "post-2", DrawTime: cash5EraStartMillis + 172_800_000}, // two days after
+	}
+
+	pruned, removed := pruneLegacyEra(draws)
+
+	if removed != 2 {
+		t.Errorf("removed = %d, want 2", removed)
+	}
+	if len(pruned) != 3 {
+		t.Fatalf("pruned len = %d, want 3", len(pruned))
+	}
+	wantIDs := []string{"boundary", "post-1", "post-2"}
+	for i, want := range wantIDs {
+		if pruned[i].ID != want {
+			t.Errorf("pruned[%d].ID = %q, want %q", i, pruned[i].ID, want)
+		}
+	}
+}
+
+func TestPruneLegacyEraEmptyInput(t *testing.T) {
+	pruned, removed := pruneLegacyEra(nil)
+	if removed != 0 {
+		t.Errorf("removed = %d, want 0", removed)
+	}
+	if len(pruned) != 0 {
+		t.Errorf("len(pruned) = %d, want 0", len(pruned))
+	}
+}
+
+func TestPruneLegacyEraIdempotent(t *testing.T) {
+	draws := []Draw{
+		{ID: "post-1", DrawTime: cash5EraStartMillis},
+		{ID: "post-2", DrawTime: cash5EraStartMillis + 86_400_000},
+	}
+	once, r1 := pruneLegacyEra(draws)
+	twice, r2 := pruneLegacyEra(once)
+	if r1 != 0 || r2 != 0 {
+		t.Errorf("removed counts = (%d, %d), want (0, 0)", r1, r2)
+	}
+	if len(twice) != len(draws) {
+		t.Errorf("len changed across runs: got %d, want %d", len(twice), len(draws))
+	}
+}
+
+func TestLoadDrawsPrunesAndRewritesOnce(t *testing.T) {
+	withCleanHome(t)
+	path, err := configPath()
+	if err != nil {
+		t.Fatalf("configPath: %v", err)
+	}
+
+	seed := []Draw{
+		{ID: "pre-A", DrawTime: 718430400000, GameName: "Cash 5"},
+		{ID: "pre-B", DrawTime: cash5EraStartMillis - 86_400_000, GameName: "Cash 5"},
+		{ID: "post-1", DrawTime: cash5EraStartMillis, GameName: "Cash 5"},
+		{ID: "post-2", DrawTime: cash5EraStartMillis + 86_400_000, GameName: "Cash 5"},
+	}
+	if err := atomicWriteDraws(path, seed); err != nil {
+		t.Fatalf("seed write: %v", err)
+	}
+
+	var firstStderr string
+	var got []Draw
+	firstStderr = captureStderr(t, func() {
+		var err error
+		got, err = loadDraws()
+		if err != nil {
+			t.Fatalf("loadDraws: %v", err)
+		}
+	})
+
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	for _, d := range got {
+		if d.DrawTime < cash5EraStartMillis {
+			t.Errorf("pre-cutoff row leaked: id=%s drawTime=%d", d.ID, d.DrawTime)
+		}
+	}
+	if !strings.Contains(firstStderr, "pruned 2 pre-2014-09-14 rows") {
+		t.Errorf("stderr missing prune notice: %q", firstStderr)
+	}
+
+	infoAfterFirst, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat after first: %v", err)
+	}
+
+	secondStderr := captureStderr(t, func() {
+		got2, err := loadDraws()
+		if err != nil {
+			t.Fatalf("loadDraws second: %v", err)
+		}
+		if len(got2) != 2 {
+			t.Errorf("second len = %d, want 2", len(got2))
+		}
+	})
+	if secondStderr != "" {
+		t.Errorf("second call should be silent, got stderr: %q", secondStderr)
+	}
+
+	infoAfterSecond, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat after second: %v", err)
+	}
+	if !infoAfterFirst.ModTime().Equal(infoAfterSecond.ModTime()) {
+		t.Errorf("second load rewrote the file (mtime changed: %v → %v)",
+			infoAfterFirst.ModTime(), infoAfterSecond.ModTime())
+	}
+}
+
 func TestSaveLoadRoundTripThroughResolver(t *testing.T) {
 	withCleanHome(t)
 

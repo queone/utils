@@ -39,6 +39,7 @@ Describe the main request, job, or publish path from entrypoint to output.
 
 - record stable system decisions here
 - prefer durable structure and interfaces over transient implementation detail
+- `cash5` operates on the 1-45 era only. Draws with `DrawTime` before `cash5EraStartMillis` (2014-09-14 UTC, the first 1-45 pool draw) are pruned at load and the local `draws.json` is rewritten in place; pre-cutoff history is not retained. Recommendation generation enforces a uniqueness invariant against the post-cutoff winners set.
 
 ## Conventions
 

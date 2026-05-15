@@ -232,54 +232,24 @@ func displayMatchAnalysis(draws []Draw, n int) error {
 	fmt.Println("=== PATTERN ANALYSIS ===")
 	fmt.Println()
 
-	// Detect pool expansion using centralized robust detection
-	// Build overall frequency from the parsed draws for cross-validation
-	parsedOverallFreq := make(map[int]int)
-	for _, p := range parsed {
-		for _, n := range p.nums {
-			parsedOverallFreq[n]++
-		}
-	}
-	pe := detectPoolExpansion(uniqueDraws, parsedOverallFreq)
-
-	// 1. Number frequency in top matches vs pool-expansion-adjusted baseline
-	fmt.Printf("%s:\n", color.Blu7("Number Frequency in Top Matches (Pool-Adjusted Baseline)"))
+	// 1. Number frequency in top matches vs uniform 1-45 baseline
+	fmt.Printf("%s:\n", color.Blu7("Number Frequency in Top Matches"))
 
 	totalMatchNums := totalMatchEntries * 5
 
-	if pe.expanded {
-		var lateNums []int
-		for n := range pe.lateEntrants {
-			lateNums = append(lateNums, n)
-		}
-		sort.Ints(lateNums)
-		expandDate := narrativeDate(time.UnixMilli(parsed[pe.expansionIdx].draw.DrawTime))
-		fmt.Printf("  %s: %v at draw #%d (%s), pool %d → %d\n",
-			color.Blu7("Pool expansion"),
-			lateNums, pe.expansionIdx+1, expandDate, pe.prePoolSize, pe.postPoolSize)
-	}
-
-	// Compute per-number expected frequency using expansion-aware baseline
-	// Scale: expected share of total match-number slots
-	totalExpected := 0.0
-	expectedPerNum := make(map[int]float64)
-	for n := 1; n <= 45; n++ {
-		expectedPerNum[n] = expectedFreqForNumber(n, len(parsed), pe)
-		totalExpected += expectedPerNum[n]
-	}
-	// Normalize so sum of expected = totalMatchNums
+	// Uniform baseline: each of 45 numbers expects an equal share of slots.
 	type adjEntry struct {
 		num      int
 		observed int
 		expected float64
 		residual float64
 	}
+	flatExpected := float64(totalMatchNums) / 45.0
 	var adjEntries []adjEntry
 	for n := 1; n <= 45; n++ {
-		expected := float64(totalMatchNums) * expectedPerNum[n] / totalExpected
 		observed := matchNumFreq[n]
-		residual := float64(observed) - expected
-		adjEntries = append(adjEntries, adjEntry{n, observed, expected, residual})
+		residual := float64(observed) - flatExpected
+		adjEntries = append(adjEntries, adjEntry{n, observed, flatExpected, residual})
 	}
 
 	var variance float64
@@ -448,16 +418,11 @@ func displayMatchAnalysis(draws []Draw, n int) error {
 	}
 	var pairLifts []pairLift
 	if totalMatchEntries > 0 {
-		// Use expansion-aware expected individual frequencies for the PMI baseline
-		// so late-entrant numbers don't get inflated lift scores
+		// Under a uniform 1-45 baseline each number has equal share 1/45.
 		pairSlots := float64(totalMatchEntries) * 10 // C(5,2) = 10 pair slots per entry
+		const pUniform = 1.0 / 45.0
+		expectedCount := pairSlots * pUniform * pUniform
 		for pair, count := range matchPairFreq {
-			var n1, n2 int
-			fmt.Sscanf(pair, "%d-%d", &n1, &n2)
-			// Use the normalized expected share for each number
-			pN1 := expectedPerNum[n1] / totalExpected
-			pN2 := expectedPerNum[n2] / totalExpected
-			expectedCount := pairSlots * pN1 * pN2
 			lift := 0.0
 			if expectedCount > 0 {
 				lift = float64(count) / expectedCount

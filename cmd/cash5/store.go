@@ -11,6 +11,11 @@ import (
 
 const programDataName = "cash5"
 
+// cash5EraStartMillis is the UnixMilli of 2014-09-14 00:00:00 UTC, the first
+// Cash 5 draw under the 1-45 pool. Pre-cutoff data (1-40 era) is pruned at
+// load and not retained.
+const cash5EraStartMillis int64 = 1410667200000
+
 // xdgStateDir returns the user's XDG state directory, honoring
 // XDG_STATE_HOME when set to an absolute path and falling back to
 // $HOME/.local/state otherwise.
@@ -141,9 +146,71 @@ func loadDraws() ([]Draw, error) {
 		}
 		return nil, err
 	}
-	defer file.Close()
-
 	var draws []Draw
-	err = json.NewDecoder(file).Decode(&draws)
-	return draws, err
+	decodeErr := json.NewDecoder(file).Decode(&draws)
+	_ = file.Close()
+	if decodeErr != nil {
+		return draws, decodeErr
+	}
+
+	pruned, removed := pruneLegacyEra(draws)
+	if removed > 0 {
+		if err := atomicWriteDraws(path, pruned); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: prune rewrite failed: %v\n", programDataName, err)
+			return pruned, nil
+		}
+		fmt.Fprintf(os.Stderr, "%s: pruned %d pre-2014-09-14 rows from %s\n", programDataName, removed, path)
+	}
+	return pruned, nil
+}
+
+// pruneLegacyEra filters out draws with DrawTime before cash5EraStartMillis
+// (the 1-40 era prior to the 2014-09-14 pool expansion). It returns the
+// post-cutoff slice and the count removed. Input order is preserved.
+func pruneLegacyEra(draws []Draw) ([]Draw, int) {
+	if len(draws) == 0 {
+		return draws, 0
+	}
+	kept := make([]Draw, 0, len(draws))
+	removed := 0
+	for _, d := range draws {
+		if d.DrawTime >= cash5EraStartMillis {
+			kept = append(kept, d)
+		} else {
+			removed++
+		}
+	}
+	return kept, removed
+}
+
+// atomicWriteDraws writes draws to path via temp file + rename. The temp file
+// is created in the same directory as path so the rename is atomic on the same
+// filesystem; on failure the temp file is removed.
+func atomicWriteDraws(path string, draws []Draw) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "draws-*.json.tmp")
+	if err != nil {
+		return err
+	}
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmp.Name())
+		}
+	}()
+
+	enc := json.NewEncoder(tmp)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(draws); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
 }

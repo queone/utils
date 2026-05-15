@@ -16,7 +16,7 @@ import (
 
 const (
 	programName     = "cash5"
-	programVersion  = "0.12.0"
+	programVersion  = "0.13.0"
 	lottery_warning = "This is basically lighting money on fire! Play for fun, not profit 😀"
 )
 
@@ -66,20 +66,21 @@ func runDailyWithRand() error {
 		fmt.Println()
 	}
 
-	// Fetch all missing recent draws up to yesterday (only when online)
+	// Fetch all missing recent draws up to yesterday (only when online).
+	// Comparison is done in calendar days under the local timezone so the
+	// trigger doesn't fire spuriously when the stored drawTime is at UTC
+	// midnight and the operator is in a TZ west of UTC.
 	if online && len(existing) > 0 {
 		sort.Slice(existing, func(i, j int) bool { return existing[i].DrawTime < existing[j].DrawTime })
-		newest := time.UnixMilli(existing[len(existing)-1].DrawTime)
-		today := time.Now().Truncate(24 * time.Hour)
-		yesterday := today.AddDate(0, 0, -1)
-
-		// If newest draw is before yesterday, we're missing some recent draws
-		if newest.Before(yesterday) {
+		newestDrawTime := existing[len(existing)-1].DrawTime
+		now := time.Now()
+		needs, newest, yesterday := needsRecentFetch(newestDrawTime, now)
+		if needs {
 			fmt.Printf("Missing recent draws (newest: %s, need up to: %s). Fetching...\n",
 				narrativeDate(newest), narrativeDate(yesterday))
 
 			dateFrom := newest.AddDate(0, 0, 1)
-			dateTo := time.Now()
+			dateTo := now
 
 			recentDraws, err := fetchDrawsByDateRange(dateFrom, dateTo, existing, saveDrawsCallback)
 			if err == nil {
@@ -232,10 +233,13 @@ func runDailyWithRand() error {
 		}
 	}
 
-	// Generate intelligent recommendations
-	recommendations := generateRecommendations(uniqueDraws)
+	// Generate intelligent recommendations, guaranteed not to match any
+	// historical winning combination.
+	winners := buildWinnersSet(uniqueDraws)
+	recommendations := generateRecommendations(uniqueDraws, winners)
 
 	fmt.Printf("  %s:\n", color.Blu7("RECOMMENDATION"))
+	fmt.Printf("    %s\n", color.Gra5(recommendationPreamble))
 	for _, rec := range recommendations {
 		numStr := fmt.Sprintf("%02d-%02d-%02d-%02d-%02d",
 			rec.numbers[0], rec.numbers[1], rec.numbers[2], rec.numbers[3], rec.numbers[4])
@@ -247,13 +251,52 @@ func runDailyWithRand() error {
 	return nil
 }
 
+// recommendationPreamble is the line printed under the RECOMMENDATION header
+// asserting that none of the listed combinations has won previously.
+const recommendationPreamble = "(none of these has previously won)"
+
+// needsRecentFetch reports whether the newest cached drawTime is at least one
+// full calendar day older than `now` in `now`'s local timezone. It returns
+// the trigger decision plus the newest and yesterday Time values (in local
+// TZ) so the caller can format the user-facing message and bound the fetch
+// window. Both stored drawTimes at UTC midnight and the operator's local TZ
+// are honored — the check compares date parts, not absolute durations.
+func needsRecentFetch(newestDrawTime int64, now time.Time) (bool, time.Time, time.Time) {
+	loc := now.Location()
+	newest := time.UnixMilli(newestDrawTime).In(loc)
+	newestDay := time.Date(newest.Year(), newest.Month(), newest.Day(), 0, 0, 0, 0, loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	yesterday := today.AddDate(0, 0, -1)
+	return newestDay.Before(yesterday), newest, yesterday
+}
+
+// buildWinnersSet returns a set keyed by the sorted 5-tuple of every draw's
+// primary numbers. Draws whose primary cannot be extracted are skipped.
+func buildWinnersSet(draws []Draw) map[[5]int]bool {
+	winners := make(map[[5]int]bool, len(draws))
+	for i := range draws {
+		nums, err := extractPrimaryFive(&draws[i])
+		if err != nil || len(nums) != 5 {
+			continue
+		}
+		sort.Ints(nums)
+		var key [5]int
+		copy(key[:], nums)
+		winners[key] = true
+	}
+	return winners
+}
+
 type recommendation struct {
 	numbers  []int
 	strategy string
 }
 
-// generateRecommendations creates 5 intelligent recommendations based on statistical analysis
-func generateRecommendations(uniqueDraws []Draw) []recommendation {
+// generateRecommendations creates 5 recommendations based on statistical
+// analysis. Every returned combination is absent from the winners set; on
+// collision each strategy performs a deterministic single-element swap to the
+// next-ranked alternative within its own ranking.
+func generateRecommendations(uniqueDraws []Draw, winners map[[5]int]bool) []recommendation {
 	// Build frequency maps
 	overallFreq := make(map[int]int)
 	firstNumFreq := make(map[int]int)
@@ -290,67 +333,196 @@ func generateRecommendations(uniqueDraws []Draw) []recommendation {
 	var recs []recommendation
 
 	// 1. Most Common by Position
-	mostCommonFirst := findMostCommon(firstNumFreq)
-	mostCommonSecond := findMostCommon(pos2Freq)
-	mostCommonMiddle := findMostCommon(middleNumFreq)
-	mostCommonFourth := findMostCommon(pos4Freq)
-	mostCommonLast := findMostCommon(lastNumFreq)
-
-	positionCombo := []int{mostCommonFirst.num, mostCommonSecond.num, mostCommonMiddle.num, mostCommonFourth.num, mostCommonLast.num}
-	sort.Ints(positionCombo)
-	recs = append(recs, recommendation{positionCombo, "Most common by position"})
-
-	// 2. Most Frequent Overall (expansion-normalized)
-	// Use robust pool expansion detection to normalize frequencies
-	pe := detectPoolExpansion(uniqueDraws, overallFreq)
-	normFreqInt := make(map[int]int)
-	for n, count := range overallFreq {
-		expected := expectedFreqForNumber(n, len(uniqueDraws), pe)
-		if expected > 0 {
-			// Ratio of observed/expected, scaled for integer ranking
-			normFreqInt[n] = int(float64(count) / expected * 1000000)
-		}
+	perPos := [5][]numCount{
+		findTopN(firstNumFreq, 10),
+		findTopN(pos2Freq, 10),
+		findTopN(middleNumFreq, 10),
+		findTopN(pos4Freq, 10),
+		findTopN(lastNumFreq, 10),
 	}
-	topNorm := findTopN(normFreqInt, 10)
-	if len(topNorm) >= 5 {
-		freqCombo := []int{topNorm[0].num, topNorm[1].num, topNorm[2].num, topNorm[3].num, topNorm[4].num}
-		sort.Ints(freqCombo)
-		recs = append(recs, recommendation{freqCombo, "Most frequent (expansion-adjusted)"})
+	if combo := firstUnwonByPositionSwap(perPos, winners, 50); combo != nil {
+		recs = append(recs, recommendation{combo, "Most common by position"})
+	}
+
+	// 2. Most Frequent Overall (uniform 1-45 baseline → rank by raw count)
+	topOverall := findTopN(overallFreq, 10)
+	if combo := firstUnwonFromTopK(topOverall, winners, 50); combo != nil {
+		recs = append(recs, recommendation{combo, "Most frequent"})
 	}
 
 	// 3. Hot Numbers (most frequent in last 30 days)
 	topHot := findTopN(freq30, 10)
-	if len(topHot) >= 5 {
-		hotCombo := []int{topHot[0].num, topHot[1].num, topHot[2].num, topHot[3].num, topHot[4].num}
-		sort.Ints(hotCombo)
-		recs = append(recs, recommendation{hotCombo, "Hot numbers last 30 days"})
+	if combo := firstUnwonFromTopK(topHot, winners, 50); combo != nil {
+		recs = append(recs, recommendation{combo, "Hot numbers last 30 days"})
 	}
 
-	// 4. Least Common by Position (expansion-normalized)
-	normPos := [5]map[int]int{}
-	posFreqs := [5]map[int]int{firstNumFreq, pos2Freq, middleNumFreq, pos4Freq, lastNumFreq}
-	for p := range 5 {
-		normPos[p] = make(map[int]int)
-		for n, count := range posFreqs[p] {
-			expected := expectedFreqForNumber(n, len(uniqueDraws), pe)
-			if expected > 0 {
-				normPos[p][n] = int(float64(count) / expected * 1000000)
-			}
-		}
+	// 4. Least Common by Position
+	leastPerPos := [5][]numCount{
+		findBottomN(firstNumFreq, 10),
+		findBottomN(pos2Freq, 10),
+		findBottomN(middleNumFreq, 10),
+		findBottomN(pos4Freq, 10),
+		findBottomN(lastNumFreq, 10),
 	}
-	leastNorm := [5]numCount{}
-	for p := range 5 {
-		leastNorm[p] = findLeastCommon(normPos[p])
+	if combo := firstUnwonByPositionSwap(leastPerPos, winners, 50); combo != nil {
+		recs = append(recs, recommendation{combo, "Least common by position"})
 	}
-	leastPositionCombo := []int{leastNorm[0].num, leastNorm[1].num, leastNorm[2].num, leastNorm[3].num, leastNorm[4].num}
-	sort.Ints(leastPositionCombo)
-	recs = append(recs, recommendation{leastPositionCombo, "Least common by position (expansion-adjusted)"})
 
 	// 5. Consecutive pair avoidance — the one statistically grounded signal
-	consecCombo := generateConsecAvoidCombo()
+	consecCombo := generateConsecAvoidComboUnique(winners)
 	recs = append(recs, recommendation{consecCombo, "Consecutive pair avoidance"})
 
 	return recs
+}
+
+// firstUnwonFromTopK enumerates ascending 5-index subsets of the top-K ranked
+// numbers in lexicographic order and returns the first sorted combo that is
+// not in winners. Falls back to a random unwon combo (with a stderr warning)
+// after maxAttempts or after the rank space is exhausted.
+func firstUnwonFromTopK(ranks []numCount, winners map[[5]int]bool, maxAttempts int) []int {
+	if len(ranks) < 5 {
+		return generateRandomUnwonCombo(winners)
+	}
+	K := len(ranks)
+	idx := []int{0, 1, 2, 3, 4}
+	attempts := 0
+	for attempts < maxAttempts {
+		combo := []int{
+			ranks[idx[0]].num, ranks[idx[1]].num, ranks[idx[2]].num,
+			ranks[idx[3]].num, ranks[idx[4]].num,
+		}
+		sort.Ints(combo)
+		var key [5]int
+		copy(key[:], combo)
+		if !winners[key] {
+			return combo
+		}
+		if !nextLexComboIndices(idx, K) {
+			break
+		}
+		attempts++
+	}
+	fmt.Fprintln(os.Stderr, "cash5: top-K perturbation cap hit; falling back to random unwon combo")
+	return generateRandomUnwonCombo(winners)
+}
+
+// nextLexComboIndices advances idx (a strictly ascending k-combination over
+// [0, K)) to the next combination in lex order. Returns false when idx is the
+// last combination.
+func nextLexComboIndices(idx []int, K int) bool {
+	k := len(idx)
+	i := k - 1
+	for i >= 0 && idx[i] == K-k+i {
+		i--
+	}
+	if i < 0 {
+		return false
+	}
+	idx[i]++
+	for j := i + 1; j < k; j++ {
+		idx[j] = idx[j-1] + 1
+	}
+	return true
+}
+
+// firstUnwonByPositionSwap tries the natural pick (rank 0 from each position),
+// then deterministically swaps one slot at a time to its next-ranked alternative
+// until a sorted combo absent from winners is found or the attempt cap is hit.
+// Picks producing duplicate numbers across positions are skipped.
+func firstUnwonByPositionSwap(perPos [5][]numCount, winners map[[5]int]bool, maxAttempts int) []int {
+	check := func(idx [5]int) []int {
+		combo := make([]int, 5)
+		seen := make(map[int]bool)
+		for p := range 5 {
+			if idx[p] >= len(perPos[p]) {
+				return nil
+			}
+			v := perPos[p][idx[p]].num
+			if seen[v] {
+				return nil
+			}
+			seen[v] = true
+			combo[p] = v
+		}
+		sort.Ints(combo)
+		var key [5]int
+		copy(key[:], combo)
+		if winners[key] {
+			return nil
+		}
+		return combo
+	}
+
+	if r := check([5]int{0, 0, 0, 0, 0}); r != nil {
+		return r
+	}
+	attempts := 0
+	for depth := 1; attempts < maxAttempts; depth++ {
+		progressed := false
+		for slot := range 5 {
+			if depth >= len(perPos[slot]) {
+				continue
+			}
+			progressed = true
+			attempts++
+			idx := [5]int{0, 0, 0, 0, 0}
+			idx[slot] = depth
+			if r := check(idx); r != nil {
+				return r
+			}
+			if attempts >= maxAttempts {
+				break
+			}
+		}
+		if !progressed {
+			break
+		}
+	}
+	fmt.Fprintln(os.Stderr, "cash5: position-swap perturbation cap hit; falling back to random unwon combo")
+	return generateRandomUnwonCombo(winners)
+}
+
+// generateRandomUnwonCombo returns a random 5-number combo absent from winners.
+// After a hard cap of 1000 attempts (statistically unreachable) it returns the
+// final random combo unconditionally.
+func generateRandomUnwonCombo(winners map[[5]int]bool) []int {
+	for range 1000 {
+		combo := generateRandomCombo()
+		var key [5]int
+		copy(key[:], combo)
+		if !winners[key] {
+			return combo
+		}
+	}
+	return generateRandomCombo()
+}
+
+// generateConsecAvoidComboUnique is the consec-avoid strategy with a winners
+// filter applied: candidates already in winners are rejected outright.
+func generateConsecAvoidComboUnique(winners map[[5]int]bool) []int {
+	var bestCombo []int
+	bestConsec := 0
+	for range 1000 {
+		combo := generateRandomCombo()
+		var key [5]int
+		copy(key[:], combo)
+		if winners[key] {
+			continue
+		}
+		consec := countConsecPairs(combo)
+		if bestCombo == nil || consec < bestConsec {
+			bestCombo = combo
+			bestConsec = consec
+			if bestConsec == 0 {
+				break
+			}
+		}
+	}
+	if bestCombo == nil {
+		fmt.Fprintln(os.Stderr, "cash5: consec-avoid perturbation cap hit; falling back to random unwon combo")
+		return generateRandomUnwonCombo(winners)
+	}
+	return bestCombo
 }
 
 func printUsage() {

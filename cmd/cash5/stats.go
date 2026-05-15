@@ -122,21 +122,6 @@ func displayStatistics(draws []Draw) error {
 		}
 	}
 
-	// Detect pool expansion (used throughout analysis)
-	pe := detectPoolExpansion(uniqueDraws, overallFreq)
-	if pe.expanded {
-		// Find the date of the expansion
-		expandDate := narrativeDate(time.UnixMilli(uniqueDraws[pe.expansionIdx].DrawTime))
-		var lateNums []int
-		for n := range pe.lateEntrants {
-			lateNums = append(lateNums, n)
-		}
-		sort.Ints(lateNums)
-		fmt.Printf("\n%s: %v first eligible at draw #%d (%s)\n",
-			color.Blu7("Pool expansion detected"), lateNums, pe.expansionIdx+1, expandDate)
-		fmt.Printf("  %s: %d → %d\n", color.Blu7("Pool size change"), pe.prePoolSize, pe.postPoolSize)
-	}
-
 	fmt.Printf("\n%s: %s\n", color.Blu7("Winners (5/5 Match)"), color.Grn3(winnersCount))
 
 	// Check for duplicate winning combinations
@@ -437,7 +422,7 @@ func displayStatistics(draws []Draw) error {
 	}
 	sort.Ints(years)
 
-	fmt.Printf("    %s:\n", color.Blu7("Year-by-Year Analysis (pool-size adjusted)"))
+	fmt.Printf("    %s:\n", color.Blu7("Year-by-Year Analysis"))
 	for _, year := range years {
 		yearDraws := 0
 		for i := range uniqueDraws {
@@ -447,9 +432,8 @@ func displayStatistics(draws []Draw) error {
 		}
 
 		if yearDraws >= 30 { // Only analyze years with enough data
-			poolSize := detectPoolSizeForYear(uniqueDraws, year, pe)
-			chiSq := calculateChiSquaredWithPool(yearlyFreqs[year], yearDraws*5, poolSize)
-			df := poolSize - 1
+			chiSq := calculateChiSquared(yearlyFreqs[year], yearDraws*5)
+			const df = 44 // 45 numbers - 1
 			critical := chiSquaredCritical(df)
 			isUniform := chiSq < critical
 
@@ -463,7 +447,7 @@ func displayStatistics(draws []Draw) error {
 				color.Blu7(fmt.Sprintf("%d", year)),
 				color.Grn3(fmt.Sprintf("%.2f", chiSq)),
 				color.Grn3(yearDraws),
-				color.Gra5(fmt.Sprintf("(pool=%d, df=%d, critical=%.1f)", poolSize, df, critical)))
+				color.Gra5(fmt.Sprintf("(df=%d, critical=%.1f)", df, critical)))
 		}
 	}
 
@@ -822,21 +806,6 @@ func birthdayStdDev(expected float64) float64 {
 	return math.Sqrt(expected)
 }
 
-// calculateChiSquaredWithPool performs chi-squared test using only numbers in the active pool.
-func calculateChiSquaredWithPool(freq map[int]int, totalBalls int, poolSize int) float64 {
-	if poolSize == 0 {
-		return 0
-	}
-	expected := float64(totalBalls) / float64(poolSize)
-	var chiSquared float64
-	for i := 1; i <= poolSize; i++ {
-		observed := float64(freq[i])
-		diff := observed - expected
-		chiSquared += (diff * diff) / expected
-	}
-	return chiSquared
-}
-
 // chiSquaredCritical returns the p=0.05 critical value for given degrees of freedom.
 // Uses approximation for df > 30: critical ≈ df * (1 - 2/(9*df) + 1.6449*sqrt(2/(9*df)))^3
 func chiSquaredCritical(df int) float64 {
@@ -847,206 +816,6 @@ func chiSquaredCritical(df int) float64 {
 	d := float64(df)
 	x := 1.0 - 2.0/(9.0*d) + 1.6449*math.Sqrt(2.0/(9.0*d))
 	return d * x * x * x
-}
-
-// detectPoolSizeForYear determines the active pool size for a given year
-// using the expansion detection result.
-func detectPoolSizeForYear(uniqueDraws []Draw, year int, pe poolExpansion) int {
-	if !pe.expanded {
-		return 45
-	}
-	// Find the draw index at the start of the given year
-	for i := range uniqueDraws {
-		if time.UnixMilli(uniqueDraws[i].DrawTime).Year() > year {
-			// Draw i is the first draw after this year.
-			// If expansion happened before end of this year, use post pool size.
-			if pe.expansionIdx < i {
-				return pe.postPoolSize
-			}
-			return pe.prePoolSize
-		}
-	}
-	// Year extends past all draws — use post pool size
-	return pe.postPoolSize
-}
-
-// numFirstSeenIndex returns a map of number -> index of first draw where it appeared.
-func numFirstSeenIndex(uniqueDraws []Draw) map[int]int {
-	first := make(map[int]int)
-	for i := range uniqueDraws {
-		nums, err := extractPrimaryFive(&uniqueDraws[i])
-		if err != nil {
-			continue
-		}
-		for _, n := range nums {
-			if _, ok := first[n]; !ok {
-				first[n] = i
-			}
-		}
-	}
-	return first
-}
-
-// poolExpansion holds the result of pool expansion detection.
-type poolExpansion struct {
-	expanded     bool
-	lateEntrants map[int]bool // numbers that entered late
-	expansionIdx int          // draw index where expansion started
-	prePoolSize  int          // pool size before expansion
-	postPoolSize int          // pool size after expansion
-}
-
-// detectPoolExpansion looks for a structural cluster of late-arriving numbers
-// that indicates a genuine pool size change (e.g. from 38 to 45).
-// It requires: 2+ numbers first appearing within a 60-draw window, no earlier
-// than draw 200, cross-validated by significantly low total frequency.
-func detectPoolExpansion(uniqueDraws []Draw, overallFreq map[int]int) poolExpansion {
-	totalDraws := len(uniqueDraws)
-	if totalDraws < 200 {
-		return poolExpansion{postPoolSize: 45}
-	}
-
-	firstSeen := numFirstSeenIndex(uniqueDraws)
-
-	// Collect numbers whose first appearance is at draw index >= 200
-	type candidate struct {
-		num      int
-		firstIdx int
-	}
-	var candidates []candidate
-	for n := 1; n <= 45; n++ {
-		idx, ok := firstSeen[n]
-		if ok && idx >= 200 {
-			candidates = append(candidates, candidate{n, idx})
-		}
-	}
-
-	if len(candidates) < 2 {
-		return poolExpansion{postPoolSize: 45}
-	}
-
-	// Sort by first-seen index
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].firstIdx < candidates[j].firstIdx
-	})
-
-	// Find the densest cluster within a 60-draw window
-	bestStart := 0
-	bestCount := 0
-	for i := range candidates {
-		count := 0
-		for j := i; j < len(candidates); j++ {
-			if candidates[j].firstIdx-candidates[i].firstIdx <= 60 {
-				count++
-			} else {
-				break
-			}
-		}
-		if count > bestCount {
-			bestCount = count
-			bestStart = i
-		}
-	}
-
-	if bestCount < 2 {
-		return poolExpansion{postPoolSize: 45}
-	}
-
-	// Extract cluster members
-	clusterStartIdx := candidates[bestStart].firstIdx
-	var clusterNums []candidate
-	for i := bestStart; i < len(candidates); i++ {
-		if candidates[i].firstIdx-clusterStartIdx <= 60 {
-			clusterNums = append(clusterNums, candidates[i])
-		} else {
-			break
-		}
-	}
-
-	// Cross-validate: each candidate should have significantly low frequency.
-	// Expected if the number were eligible from the start: totalDraws * 5/45
-	// Its actual eligible draws: totalDraws - firstIdx
-	// If actual frequency is within 1σ of full-history expectation, it's not
-	// a true late entrant (just a random late first appearance).
-	lateEntrants := make(map[int]bool)
-	for _, c := range clusterNums {
-		eligibleDraws := totalDraws - c.firstIdx
-		// Expected if it had been eligible all along
-		fullExpected := float64(totalDraws) * 5.0 / 45.0
-		// Its actual-eligibility expected
-		eligibleExpected := float64(eligibleDraws) * 5.0 / 45.0
-		observed := float64(overallFreq[c.num])
-		// σ for binomial: sqrt(n * p * (1-p)) where p = 5/45
-		sigma := math.Sqrt(float64(totalDraws) * (5.0 / 45.0) * (40.0 / 45.0))
-		// If observed is within 1σ of the full-history expectation, this number
-		// has appeared roughly as often as a number eligible from the start — discard it
-		if observed < fullExpected-sigma {
-			// Frequency is significantly below what a full-history number would have.
-			// Additional check: is the observed count consistent with its actual eligible period?
-			eligibleSigma := math.Sqrt(float64(eligibleDraws) * (5.0 / 45.0) * (40.0 / 45.0))
-			if math.Abs(observed-eligibleExpected) <= 2*eligibleSigma {
-				// Consistent with being eligible only from firstIdx onward
-				lateEntrants[c.num] = true
-			}
-		}
-	}
-
-	if len(lateEntrants) < 2 {
-		return poolExpansion{postPoolSize: 45}
-	}
-
-	// Determine pre-pool size: 45 minus late entrants
-	prePoolSize := 45 - len(lateEntrants)
-
-	return poolExpansion{
-		expanded:     true,
-		lateEntrants: lateEntrants,
-		expansionIdx: clusterStartIdx,
-		prePoolSize:  prePoolSize,
-		postPoolSize: 45,
-	}
-}
-
-// expectedFreqForNumber computes the expected frequency for a single number
-// given the pool expansion info.
-func expectedFreqForNumber(n int, totalDraws int, pe poolExpansion) float64 {
-	if !pe.expanded {
-		// No expansion: flat baseline
-		return float64(totalDraws) * 5.0 / 45.0
-	}
-
-	if pe.lateEntrants[n] {
-		// Late entrant: only eligible from expansionIdx onward
-		eligible := totalDraws - pe.expansionIdx
-		return float64(eligible) * 5.0 / float64(pe.postPoolSize)
-	}
-
-	// Original pool number: higher expected rate pre-expansion, normal rate post
-	preDraws := pe.expansionIdx
-	postDraws := totalDraws - pe.expansionIdx
-	return float64(preDraws)*5.0/float64(pe.prePoolSize) +
-		float64(postDraws)*5.0/float64(pe.postPoolSize)
-}
-
-// generateConsecAvoidCombo generates a 5-number combo that minimizes consecutive pairs.
-func generateConsecAvoidCombo() []int {
-	// Strategy: pick numbers spaced at least 2 apart
-	// Try random combos and keep the one with fewest consecutive pairs
-	bestCombo := generateRandomCombo()
-	bestConsec := countConsecPairs(bestCombo)
-
-	for range 1000 {
-		combo := generateRandomCombo()
-		consec := countConsecPairs(combo)
-		if consec < bestConsec {
-			bestConsec = consec
-			bestCombo = combo
-			if bestConsec == 0 {
-				break
-			}
-		}
-	}
-	return bestCombo
 }
 
 func countConsecPairs(combo []int) int {

@@ -8,7 +8,7 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 
 - [`bak`](cmd/bak/main.go): Create dated backups of files or directories.
 - [`brew-update`](cmd/brew-update/main.go): Update, upgrade, and clean up Homebrew packages.
-- [`cash5`](cmd/cash5/main.go): Analyze historical Cash5 draws and generate number recommendations.
+- [`cash5`](cmd/cash5/main.go): Analyze historical NJ Cash 5 draws (1-45 era, starting 2014-09-14) and generate number recommendations guaranteed to be unwon combinations.
 - [`certgen`](cmd/certgen/main.go): Generate self-signed TLS certificates for local testing.
 - [`certls`](cmd/certls/main.go): Show SSL/TLS certificate details for a host and port.
 - [`days`](cmd/days/README.md): A CLI calendar days calculator.
