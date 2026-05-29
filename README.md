@@ -73,5 +73,5 @@ To build in Windows you have to have a BASH shell such as [GitBASH](https://www.
 
 ## Governance
 
-This repo is governed by an explicit session-entry contract for AI coding agents — see [`docs/operator-contract-rationale.md`](docs/operator-contract-rationale.md) for the design reasoning and [`AGENTS.md`](AGENTS.md) for the operational rules.
+This repo is governed by an explicit session-entry contract for AI coding agents — see [`governa/operator-contract-rationale.md`](governa/operator-contract-rationale.md) for the design reasoning and [`AGENTS.md`](AGENTS.md) for the operational rules.
 
