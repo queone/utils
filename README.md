@@ -21,9 +21,9 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`git-remotev`](cmd/git-remotev/main.go): Print each local repository with its `origin` remote URL.
 - [`git-statall`](cmd/git-statall/main.go): Show git status across local repositories.
 - [`jy`](cmd/jy/README.md): A lightweight JSON and YAML converter utility.
-- [`moneycon`](cmd/moneycon/README.md): Financial data consolidation — reads CSV or aligned text, outputs aligned summary with totals.
 - [`pgen`](cmd/pgen/README.md): A simple generator of memorable passwords.
 - [`pman`](cmd/pman/main.go): Run authenticated Microsoft Graph and Azure REST API requests.
+- [`retotal`](cmd/retotal/README.md): Recalculate TOTALS in a signed financial summary; also consolidates CSV/aligned input into a signed summary.
 - [`rn`](cmd/rn/README.md): A bulk file re-namer.
 - [`rncap`](cmd/rncap/main.go): Rename files by capitalizing each word in filenames.
 - [`rnlower`](cmd/rnlower/main.go): Rename files by converting filenames to lowercase.

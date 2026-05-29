@@ -5,15 +5,21 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/queone/governa-color"
 )
 
 const (
-	programName    = "moneycon"
+	programName    = "retotal"
 	programVersion = "1.0.0"
-	outputFile     = "moneycon-output.txt"
+	// signatureLine gates re-tally and tells the user how to recalculate. It is the
+	// last non-empty line of every output file. The `<FILE>` token is a literal
+	// placeholder, so the signature is path-independent.
+	signatureLine = "NOTE: To recalculate TOTALS for this FILE, run `retotal <FILE>`"
 )
 
 var outHeader = [4]string{"DESCRIPTION", "MO/AVG", "YR/AVG", "NOTES"}
@@ -26,10 +32,28 @@ type row struct {
 	note string
 }
 
+// usageText returns the days-style information screen (program name, version,
+// overview, supported invocations).
+func usageText() string {
+	n := color.Whi10(programName)
+	return fmt.Sprintf("%s v%s\n"+
+		"Financial TOTALS consolidator and re-tallier — https://github.com/queone/utils/blob/main/cmd/retotal/README.md\n"+
+		"%s\n"+
+		"  retotal reads CSV or space-aligned financial data and writes an aligned summary with computed\n"+
+		"  TOTALS, signed with a recalculation note; it then re-tallies that signed output file in place\n"+
+		"  after you edit it. Supported invocations are:\n"+
+		"\n"+
+		"    retotal -h, --help    Prints this information screen.\n"+
+		"    retotal FILE          Consolidate CSV/aligned input into <stem>.txt with computed TOTALS and a\n"+
+		"                          signature line; or, when FILE is already a signed retotal output file,\n"+
+		"                          recompute its TOTALS in place.\n",
+		n, programVersion, color.Whi10("Overview"))
+}
+
+// printUsage prints the information screen and exits 0.
 func printUsage() {
-	fmt.Fprintf(os.Stderr, "usage: %s FILE\n", programName)
-	fmt.Fprintf(os.Stderr, "       %s -v | --version\n", programName)
-	os.Exit(1)
+	fmt.Print(usageText())
+	os.Exit(0)
 }
 
 func stripBOM(s string) string {
@@ -102,7 +126,9 @@ func toFloat(s string) float64 {
 var reQuoted = regexp.MustCompile(`"[^"]*"`)
 var reTwoSpaces = regexp.MustCompile(` {2,}`)
 
-func isMoneyconOutput(path string) (bool, error) {
+// isRetotalOutput reports whether path's first non-empty line is the retotal
+// output header (DESCRIPTION / MO/AVG / YR/AVG), selecting the re-tally path.
+func isRetotalOutput(path string) (bool, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", path, err)
@@ -241,7 +267,9 @@ func readAligned5(path string) ([]row, error) {
 	return rows, nil
 }
 
-func readMoneyconOutput(path string) ([]row, error) {
+// readRetotalOutput parses a retotal output-format file into rows, skipping the
+// trailing signature line and any prior TOTAL row.
+func readRetotalOutput(path string) ([]row, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
@@ -250,9 +278,13 @@ func readMoneyconOutput(path string) ([]row, error) {
 
 	var lines []string
 	for ln := range strings.SplitSeq(content, "\n") {
-		if strings.TrimSpace(ln) != "" {
-			lines = append(lines, ln)
+		if strings.TrimSpace(ln) == "" {
+			continue
 		}
+		if strings.TrimRight(ln, " \t\r") == signatureLine {
+			continue
+		}
+		lines = append(lines, ln)
 	}
 	if len(lines) < 2 {
 		return nil, nil
@@ -288,6 +320,26 @@ func readMoneyconOutput(path string) ([]row, error) {
 		})
 	}
 	return rows, nil
+}
+
+// hasSignature reports whether content's last non-empty line is the signature
+// line (trailing whitespace tolerated).
+func hasSignature(content string) bool {
+	lines := strings.Split(content, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		t := strings.TrimRight(lines[i], " \t\r")
+		if strings.TrimSpace(t) == "" {
+			continue
+		}
+		return t == signatureLine
+	}
+	return false
+}
+
+// stemTxt derives the consolidation output filename by replacing path's
+// extension with .txt.
+func stemTxt(path string) string {
+	return strings.TrimSuffix(path, filepath.Ext(path)) + ".txt"
 }
 
 type outputRow [4]string
@@ -390,40 +442,43 @@ func formatOutput(rows []outputRow) string {
 	return b.String()
 }
 
-func run() error {
-	args := os.Args[1:]
+// withSignature appends a blank separator line and the signature to a formatted
+// table.
+func withSignature(table string) string {
+	return table + "\n" + signatureLine + "\n"
+}
 
-	if len(args) == 1 && (args[0] == "-v" || args[0] == "--version") {
-		fmt.Printf("%s v%s\n", programName, programVersion)
-		return nil
+// retally validates the signature on an output-format file, recomputes TOTAL,
+// and rewrites the file in place.
+func retally(inPath string) error {
+	data, err := os.ReadFile(inPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", inPath, err)
+	}
+	if !hasSignature(stripBOM(string(data))) {
+		return fmt.Errorf("%s is missing the required signature line; add this as the last line of the file:\n%s", inPath, signatureLine)
 	}
 
-	if len(args) != 1 {
-		printUsage()
-	}
-
-	inPath := args[0]
-
-	retally, err := isMoneyconOutput(inPath)
+	input, err := readRetotalOutput(inPath)
 	if err != nil {
 		return err
 	}
-
-	if retally {
-		input, err := readMoneyconOutput(inPath)
-		if err != nil {
-			return err
-		}
-		out := processRetally(input)
-		result := formatOutput(out)
-		if err := os.WriteFile(inPath, []byte(result), 0644); err != nil {
-			return fmt.Errorf("write %s: %w", inPath, err)
-		}
-		return nil
+	result := withSignature(formatOutput(processRetally(input)))
+	if err := os.WriteFile(inPath, []byte(result), 0644); err != nil {
+		return fmt.Errorf("write %s: %w", inPath, err)
 	}
+	return nil
+}
 
-	if _, err := os.Stat(outputFile); err == nil {
-		return fmt.Errorf("%s already exists; remove or rename it first", outputFile)
+// consolidate reads CSV/aligned input, writes a signed <stem>.txt summary, and
+// prints a recalculation hint.
+func consolidate(inPath string) error {
+	outPath := stemTxt(inPath)
+	if outPath == inPath {
+		return fmt.Errorf("input %s already uses the .txt output name; rename the input first", inPath)
+	}
+	if _, err := os.Stat(outPath); err == nil {
+		return fmt.Errorf("%s already exists; remove or rename it first", outPath)
 	}
 
 	data, err := os.ReadFile(inPath)
@@ -438,10 +493,8 @@ func run() error {
 		}
 	}
 
-	format := detectInputFormat(firstLine)
-
 	var input []row
-	if format == "csv" {
+	if detectInputFormat(firstLine) == "csv" {
 		input, err = readCSV(inPath)
 	} else {
 		input, err = readAligned5(inPath)
@@ -450,13 +503,31 @@ func run() error {
 		return err
 	}
 
-	out := process(input)
-	result := formatOutput(out)
-
-	if err := os.WriteFile(outputFile, []byte(result), 0644); err != nil {
-		return fmt.Errorf("write %s: %w", outputFile, err)
+	result := withSignature(formatOutput(process(input)))
+	if err := os.WriteFile(outPath, []byte(result), 0644); err != nil {
+		return fmt.Errorf("write %s: %w", outPath, err)
 	}
+	fmt.Printf("wrote %s; run `retotal %s` to recalculate TOTALS\n", outPath, outPath)
 	return nil
+}
+
+func run() error {
+	args := os.Args[1:]
+
+	if len(args) != 1 || args[0] == "-h" || args[0] == "--help" {
+		printUsage()
+	}
+
+	inPath := args[0]
+
+	isOutput, err := isRetotalOutput(inPath)
+	if err != nil {
+		return err
+	}
+	if isOutput {
+		return retally(inPath)
+	}
+	return consolidate(inPath)
 }
 
 func main() {
