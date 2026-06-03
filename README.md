@@ -29,6 +29,7 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`rnlower`](cmd/rnlower/main.go): Rename files by converting filenames to lowercase.
 - [`sms`](cmd/sms/README.md): Send SMS messages using Twilio credentials from a local config file.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
+- [`vtrim`](cmd/vtrim/README.md): Trim a video from the left, right, or middle (or cut a middle section out) via ffmpeg.
 - [`web`](cmd/web/README.md): Search DuckDuckGo and open results with an interactive selector.
 
 ## Quick Install

@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.41.0 | AC48: add vtrim utility; l/r/m/x video trim via ffmpeg (-a accurate) |
 | 0.40.0 | AC47: moneycon->retotal; signature-gated re-tally; stem .txt output; drop -v |
 | 0.39.0 | AC46: adopt governa v0.136.0; docs->governa/; preserve README.md repo-owned |
 | 0.38.0 | AC45: cash5 1-45 era rebase; unwon-recs guarantee; TZ-aware fetch trigger |
