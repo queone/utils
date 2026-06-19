@@ -1,8 +1,8 @@
-// Package vedit is the shared engine behind the vclip and vcut utilities: it
+// Package vedit is the shared engine behind the vkeep and vdrop utilities: it
 // drives ffmpeg/ffprobe to keep or remove a START..END section of a video,
 // validates the requested range against the source, names the output, and
-// prints a before/after summary. vclip and vcut are thin command wrappers over
-// Clip and Cut.
+// prints a before/after summary. vkeep and vdrop are thin command wrappers over
+// Keep and Drop, and share a single help screen rendered by Usage.
 package vedit
 
 import (
@@ -280,17 +280,80 @@ func cutFilter(start, end int) string {
 		start, start, end, end)
 }
 
-// Clip keeps the START..END section of input, writing it to the derived output.
+// Keep writes the START..END section of input to the derived output.
 // endTok may be a timestamp or the literal "end" (run to the source end).
-func Clip(accurate bool, startTok, endTok, input string) error {
+func Keep(accurate bool, startTok, endTok, input string) error {
 	return process(false, accurate, startTok, endTok, input)
 }
 
-// Cut removes the START..END section of input and joins the remainder, writing
+// Drop removes the START..END section of input and joins the remainder, writing
 // the result to the derived output. endTok may be a timestamp or the literal
 // "end" (remove through to the source end).
-func Cut(accurate bool, startTok, endTok, input string) error {
+func Drop(accurate bool, startTok, endTok, input string) error {
 	return process(true, accurate, startTok, endTok, input)
+}
+
+// Usage returns the shared help screen printed by both vkeep and vdrop. invoked
+// is the command name the user typed; its rows in the cheatsheet are highlighted
+// so each tool points the reader at its own shorter form. The body is identical
+// for both tools apart from that highlight and the header line, so the pair is
+// documented from a single source.
+func Usage(invoked, version string) string {
+	h := color.Whi10
+	rows := []struct{ goal, cmd string }{
+		{"Copy the whole file", "vkeep 0 FILE"},
+		{"Keep from 1:00 to the end", "vkeep 1:00 FILE"},
+		{"Drop from 1:00 to the end", "vdrop 1:00 FILE"},
+		{"Keep only the middle 1:00..8:31", "vkeep 1:00 8:31 FILE"},
+		{"Drop only the middle 1:00..8:31", "vdrop 1:00 8:31 FILE"},
+	}
+	var table strings.Builder
+	fmt.Fprintf(&table, "  %-34s%s\n", "What you want", "Use this")
+	for _, r := range rows {
+		cmd := r.cmd
+		if strings.HasPrefix(cmd, invoked+" ") {
+			cmd = h(cmd)
+		}
+		fmt.Fprintf(&table, "  %-34s%s\n", r.goal, cmd)
+	}
+
+	return fmt.Sprintf("%s v%s\n"+
+		"Keep or drop a section of a video by driving ffmpeg.\n"+
+		"\n"+
+		"%s\n"+
+		"  vkeep keeps the part you want. vdrop removes the part you don't want\n"+
+		"  (and joins the remainder). They are counterparts — every result is\n"+
+		"  reachable from either, but one form is usually shorter.\n"+
+		"\n"+
+		"%s\n"+
+		"  vkeep START [END] [-a] <input>     keep START..END\n"+
+		"  vdrop START [END] [-a] <input>     drop START..END, join the rest\n"+
+		"\n"+
+		"%s\n"+
+		"  MM:SS by default (8:31); a bare integer is whole seconds (90); HH:MM:SS\n"+
+		"  only when the source is longer than one hour. END is optional — omit it\n"+
+		"  (or pass the literal 'end') to reach the source end.\n"+
+		"\n"+
+		"%s\n"+
+		"%s"+
+		"\n"+
+		"%s\n"+
+		"  -a, --accurate  Frame-accurate re-encode (default: fast keyframe copy)\n"+
+		"  -v, --version   Show this help message and exit\n"+
+		"  -h, -?, --help  Show this help message and exit\n"+
+		"\n"+
+		"%s\n"+
+		"  vkeep 0 FILE copies the whole file. vdrop has no whole-file form —\n"+
+		"  dropping 0..end would remove everything, which vdrop refuses.\n"+
+		"  Requires ffmpeg and ffprobe on PATH (brew install ffmpeg).\n",
+		h(invoked), version,
+		h("Overview"),
+		h("Usage"),
+		h("Timestamps"),
+		h("Cheatsheet"),
+		table.String(),
+		h("Options"),
+		h("Notes"))
 }
 
 // process is the shared driver for Clip and Cut: it validates tooling and input,

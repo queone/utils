@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.43.0 | AC50: rename vclip/vcut to vkeep/vdrop; single shared usage screen |
 | 0.42.0 | AC49: split vtrim into vclip (keep) and vcut (remove); shared internal/vedit |
 | 0.41.0 | AC48: add vtrim utility; l/r/m/x video trim via ffmpeg (-a accurate) |
 | 0.40.0 | AC47: moneycon->retotal; signature-gated re-tally; stem .txt output; drop -v |

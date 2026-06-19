@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -209,32 +210,32 @@ func TestCutPlans(t *testing.T) {
 	})
 }
 
-// AT7 — old vtrim l/r/m/x argv is reproduced byte-for-byte by the new keep/cut
-// for each documented mapping (the wants pinned in the pre-refactor TestBuildPlan).
-func TestOldToNewEquivalence(t *testing.T) {
+// keep/drop argv is pinned byte-for-byte for each command form, so a future
+// engine change cannot silently alter the ffmpeg invocations.
+func TestKeepDropArgvPinned(t *testing.T) {
 	const in, out, tmp = "in.mp4", "in_1.mp4", "/tmp/vt"
 	const d = 600.0
 
-	// vclip START end  ≡  vtrim l START  (left trim, START=511)
+	// vkeep START (END omitted) -> left trim, START=511
 	assertCmds(t, keep(511, int(d), false, in, out, d).Cmds,
 		[][]string{{"-ss", "511", "-i", in, "-c", "copy", out}})
 	assertCmds(t, keep(511, int(d), true, in, out, d).Cmds,
 		[][]string{{"-i", in, "-ss", "511", "-c:v", "libx264", "-c:a", "aac", out}})
 
-	// vclip 0 END  ≡  vtrim r END  (right trim, END=300)
+	// vkeep 0 END -> right trim, END=300
 	assertCmds(t, keep(0, 300, false, in, out, d).Cmds,
 		[][]string{{"-i", in, "-to", "300", "-c", "copy", out}})
 
-	// vclip START END  ≡  vtrim m START END  (middle keep)
+	// vkeep START END -> middle keep
 	assertCmds(t, keep(60, 511, false, in, out, d).Cmds,
 		[][]string{{"-ss", "60", "-i", in, "-t", "451", "-c", "copy", out}})
 
-	// vclip 0 end  ≡  vtrim l 0  (whole-file byte copy)
+	// vkeep 0 (END omitted) -> whole-file byte copy
 	if p := keep(0, int(d), false, in, out, d); len(p.Cmds) != 0 {
-		t.Errorf("vclip 0 end should be byte copy, got %v", p.Cmds)
+		t.Errorf("vkeep 0 should be byte copy, got %v", p.Cmds)
 	}
 
-	// vcut START END (interior)  ≡  vtrim x START END
+	// vdrop START END (interior) -> concat of the two surrounding segments
 	p := cut(60, 300, false, in, out, tmp, d)
 	seg1 := filepath.Join(tmp, "seg0.mp4")
 	seg2 := filepath.Join(tmp, "seg1.mp4")
@@ -271,7 +272,7 @@ func TestOverwriteProtection(t *testing.T) {
 	var calls int
 	withFakes(t, 600, func([]string) error { calls++; return nil })
 
-	err := Clip(false, "8:31", "end", input)
+	err := Keep(false, "8:31", "end", input)
 	if err == nil || !contains(err.Error(), "already exists") {
 		t.Fatalf("expected overwrite error, got %v", err)
 	}
@@ -289,8 +290,8 @@ func TestWholeFileByteCopy(t *testing.T) {
 	var calls int
 	withFakes(t, 600, func([]string) error { calls++; return nil })
 
-	if err := Clip(false, "0", "end", input); err != nil {
-		t.Fatalf("Clip whole-file failed: %v", err)
+	if err := Keep(false, "0", "end", input); err != nil {
+		t.Fatalf("Keep whole-file failed: %v", err)
 	}
 	if calls != 0 {
 		t.Errorf("ffmpeg invoked %d times for a byte copy, want 0", calls)
@@ -314,7 +315,7 @@ func TestAccurateVsCopyRouting(t *testing.T) {
 			writeFile(t, args[len(args)-1], "out")
 			return nil
 		})
-		if err := Clip(accurate, "8:31", "end", input); err != nil {
+		if err := Keep(accurate, "8:31", "end", input); err != nil {
 			t.Fatalf("run failed: %v", err)
 		}
 		if !sliceHas(got, wantFlag) {
@@ -329,15 +330,15 @@ func TestAccurateVsCopyRouting(t *testing.T) {
 }
 
 // AT12 — tools missing prints the brew hint and fails before any work, for both
-// Clip and Cut.
+// Keep and Drop.
 func TestToolMissing(t *testing.T) {
 	restore := lookPath
 	defer func() { lookPath = restore }()
 	lookPath = func(string) (string, error) { return "", errors.New("not found") }
 
 	for _, fn := range []func() error{
-		func() error { return Clip(false, "8:31", "end", "whatever.mp4") },
-		func() error { return Cut(false, "1:00", "8:31", "whatever.mp4") },
+		func() error { return Keep(false, "8:31", "end", "whatever.mp4") },
+		func() error { return Drop(false, "1:00", "8:31", "whatever.mp4") },
 	} {
 		err := fn()
 		if err == nil || !contains(err.Error(), "brew install ffmpeg") {
@@ -366,7 +367,7 @@ func TestCutTempCleanup(t *testing.T) {
 			return nil
 		})
 
-		err := Cut(false, "1:00", "5:00", input)
+		err := Drop(false, "1:00", "5:00", input)
 		if fail && err == nil {
 			t.Error("expected failure to propagate")
 		}
@@ -401,15 +402,39 @@ func TestOptionalEndEquivalence(t *testing.T) {
 			writeFile(t, args[len(args)-1], "out")
 			return nil
 		})
-		if err := Clip(false, "4:13", endTok, input); err != nil {
-			t.Fatalf("Clip(%q) failed: %v", endTok, err)
+		if err := Keep(false, "4:13", endTok, input); err != nil {
+			t.Fatalf("Keep(%q) failed: %v", endTok, err)
 		}
 		return got
 	}
 
 	omitted := capture("end") // wrappers pass "end" when END is omitted
 	if !sliceHas(omitted, "-ss") {
-		t.Errorf("omitted-END clip argv %v should be a left trim (-ss)", omitted)
+		t.Errorf("omitted-END keep argv %v should be a left trim (-ss)", omitted)
+	}
+}
+
+// Usage renders one shared screen for both tools: it contains every cheatsheet
+// command form and the whole-file note, and the two tools' screens are identical
+// apart from the header line and which command column is highlighted.
+func TestUsage(t *testing.T) {
+	keepScreen := Usage("vkeep", "0.1.0")
+	for _, want := range []string{
+		"vkeep 0 FILE",
+		"vkeep 1:00 FILE",
+		"vdrop 1:00 FILE",
+		"vkeep 1:00 8:31 FILE",
+		"vdrop 1:00 8:31 FILE",
+		"vdrop has no whole-file form",
+	} {
+		if !contains(keepScreen, want) {
+			t.Errorf("vkeep usage missing %q", want)
+		}
+	}
+
+	dropScreen := Usage("vdrop", "0.1.0")
+	if stripExceptHeader(keepScreen) != stripExceptHeader(dropScreen) {
+		t.Error("vkeep and vdrop usage bodies differ beyond the header line and highlight")
 	}
 }
 
@@ -447,3 +472,15 @@ func sliceHas(s []string, v string) bool {
 }
 
 func contains(s, sub string) bool { return strings.Contains(s, sub) }
+
+var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// stripExceptHeader removes ANSI color codes and drops the first line (the
+// per-tool header), leaving the shared body for cross-tool comparison.
+func stripExceptHeader(s string) string {
+	plain := ansiRE.ReplaceAllString(s, "")
+	if _, body, found := strings.Cut(plain, "\n"); found {
+		return body
+	}
+	return plain
+}
