@@ -46,6 +46,16 @@ The output goes next to the input. Its name is the input's with `_` inserted bef
 ### Speed vs. accuracy
 By default `vdrop` stream-copies (`-c copy`) the surrounding segments and concatenates them — fast and lossless, but each segment boundary snaps to the nearest preceding keyframe. Pass `-a, --accurate` for a frame-accurate result; this re-encodes (`libx264`/`aac`) through a filter graph and is slower.
 
+### Smooth transition
+By default the two surrounding parts meet at a hard cut. Pass `-x, --crossfade` to dissolve across the join instead — the tail of the kept "before" part blends into the head of the kept "after" part. The default length is `0.5`s; set your own with `--crossfade=1` (or `-x=1`).
+
+```bash
+vdrop -x 1:00 8:31 SOURCE1.mp4             # dissolve, 0.5s
+vdrop --crossfade=1 1:00 8:31 SOURCE1.mp4  # dissolve, 1s
+```
+
+A crossfade re-encodes (it cannot stream-copy) and applies only to an **interior** drop — both `START` and `END` must fall inside the source, since an edge trim has no second segment to blend. Because the transition overlaps its duration, the output is that many seconds shorter than the equivalent hard cut.
+
 ### Requirements
 Requires `ffmpeg` and `ffprobe` on your `PATH`:
 

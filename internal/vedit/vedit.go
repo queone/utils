@@ -118,6 +118,25 @@ func validateCut(start, end int, d float64) error {
 	return nil
 }
 
+// validateCrossfade enforces that a crossfade applies only to an interior drop
+// (both boundaries strictly inside the source) and that its duration fits within
+// each kept segment, so the dissolve has room to overlap on both sides.
+func validateCrossfade(start, end int, d, crossfade float64) error {
+	if start == 0 || end >= int(d) {
+		return errors.New("crossfade requires an interior drop — START and END must both fall inside the source")
+	}
+	if crossfade <= 0 {
+		return errors.New("crossfade duration must be greater than zero")
+	}
+	if crossfade > float64(start) {
+		return fmt.Errorf("crossfade duration %gs exceeds the %ds kept before the drop", crossfade, start)
+	}
+	if crossfade > d-float64(end) {
+		return fmt.Errorf("crossfade duration %gs exceeds the %ds kept after the drop", crossfade, int(d)-end)
+	}
+	return nil
+}
+
 // deriveOutputName builds the output filename from an input basename: it inserts
 // '_' before the trailing run of digits in the stem (SOURCE1.mp4 -> SOURCE_1.mp4),
 // or appends '_1' when the stem has no trailing digit (clip.mp4 -> clip_1.mp4).
@@ -268,6 +287,22 @@ func cut(start, end int, accurate bool, in, out, tmpDir string, d float64) Plan 
 	}
 }
 
+// crossfadeFilter builds the -filter_complex graph that keeps [0,start] and
+// [end,duration] and dissolves between them over dur seconds, re-encoding for a
+// smooth join. The video transition begins dur seconds before the cut
+// (offset = start - dur); audio crossfades over the same window.
+func crossfadeFilter(start, end int, dur float64) string {
+	off := float64(start) - dur
+	return fmt.Sprintf(
+		"[0:v]trim=0:%d,setpts=PTS-STARTPTS[v0];"+
+			"[0:v]trim=start=%d,setpts=PTS-STARTPTS[v1];"+
+			"[v0][v1]xfade=transition=fade:duration=%g:offset=%g[v];"+
+			"[0:a]atrim=0:%d,asetpts=PTS-STARTPTS[a0];"+
+			"[0:a]atrim=start=%d,asetpts=PTS-STARTPTS[a1];"+
+			"[a0][a1]acrossfade=d=%g[a]",
+		start, end, dur, off, start, end, dur)
+}
+
 // cutFilter builds the -filter_complex graph that drops [start,end] and
 // concatenates the surrounding parts, re-encoding for a frame-accurate cut.
 func cutFilter(start, end int) string {
@@ -283,14 +318,16 @@ func cutFilter(start, end int) string {
 // Keep writes the START..END section of input to the derived output.
 // endTok may be a timestamp or the literal "end" (run to the source end).
 func Keep(accurate bool, startTok, endTok, input string) error {
-	return process(false, accurate, startTok, endTok, input)
+	return process(false, accurate, 0, startTok, endTok, input)
 }
 
 // Drop removes the START..END section of input and joins the remainder, writing
 // the result to the derived output. endTok may be a timestamp or the literal
-// "end" (remove through to the source end).
-func Drop(accurate bool, startTok, endTok, input string) error {
-	return process(true, accurate, startTok, endTok, input)
+// "end" (remove through to the source end). A crossfade greater than zero
+// dissolves across the interior join over that many seconds (re-encodes;
+// interior drops only).
+func Drop(accurate bool, crossfade float64, startTok, endTok, input string) error {
+	return process(true, accurate, crossfade, startTok, endTok, input)
 }
 
 // Usage returns the shared help screen printed by both vkeep and vdrop. invoked
@@ -338,13 +375,17 @@ func Usage(invoked, version string) string {
 		"%s"+
 		"\n"+
 		"%s\n"+
-		"  -a, --accurate  Frame-accurate re-encode (default: fast keyframe copy)\n"+
-		"  -v, --version   Show this help message and exit\n"+
-		"  -h, -?, --help  Show this help message and exit\n"+
+		"  -a, --accurate         Frame-accurate re-encode (default: fast keyframe copy)\n"+
+		"  -x, --crossfade[=SECS] Dissolve the interior join (vdrop only; re-encodes;\n"+
+		"                         default 0.5s)\n"+
+		"  -v, --version          Show this help message and exit\n"+
+		"  -h, -?, --help         Show this help message and exit\n"+
 		"\n"+
 		"%s\n"+
 		"  vkeep 0 FILE copies the whole file. vdrop has no whole-file form —\n"+
 		"  dropping 0..end would remove everything, which vdrop refuses.\n"+
+		"  A vdrop crossfade (-x) overlaps SECS seconds, so the output is that much\n"+
+		"  shorter than a hard cut.\n"+
 		"  Requires ffmpeg and ffprobe on PATH (brew install ffmpeg).\n",
 		h(invoked), version,
 		h("Overview"),
@@ -356,10 +397,11 @@ func Usage(invoked, version string) string {
 		h("Notes"))
 }
 
-// process is the shared driver for Clip and Cut: it validates tooling and input,
+// process is the shared driver for Keep and Drop: it validates tooling and input,
 // probes duration, resolves and validates the range, refuses to overwrite, then
 // executes the byte-copy fast path or the ffmpeg plan and prints the summary.
-func process(isCut, accurate bool, startTok, endTok, input string) error {
+// crossfade (Drop only, > 0) selects the dissolving interior-join plan.
+func process(isCut, accurate bool, crossfade float64, startTok, endTok, input string) error {
 	if err := toolsAvailable(); err != nil {
 		return err
 	}
@@ -389,6 +431,11 @@ func process(isCut, accurate bool, startTok, endTok, input string) error {
 	if err != nil {
 		return err
 	}
+	if crossfade > 0 {
+		if err := validateCrossfade(start, end, duration, crossfade); err != nil {
+			return err
+		}
+	}
 
 	output := filepath.Join(filepath.Dir(input), deriveOutputName(filepath.Base(input)))
 	if _, err := os.Stat(output); err == nil {
@@ -396,7 +443,12 @@ func process(isCut, accurate bool, startTok, endTok, input string) error {
 	}
 
 	var plan Plan
-	if isCut {
+	switch {
+	case !isCut:
+		plan = keep(start, end, accurate, input, output, duration)
+	case crossfade > 0:
+		plan = Plan{Cmds: [][]string{{"-i", input, "-filter_complex", crossfadeFilter(start, end, crossfade), "-map", "[v]", "-map", "[a]", output}}}
+	default:
 		tmpDir := ""
 		interior := start != 0 && end < int(duration)
 		if interior && !accurate {
@@ -406,8 +458,6 @@ func process(isCut, accurate bool, startTok, endTok, input string) error {
 			defer os.RemoveAll(tmpDir)
 		}
 		plan = cut(start, end, accurate, input, output, tmpDir, duration)
-	} else {
-		plan = keep(start, end, accurate, input, output, duration)
 	}
 
 	// An empty plan means a whole-file keep; byte-copy it (-a is moot).

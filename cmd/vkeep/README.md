@@ -54,7 +54,7 @@ brew install ffmpeg
 ```
 
 ### See also
-- [`vdrop`](../vdrop/README.md) — the counterpart that **removes** a section and joins the remainder.
+- [`vdrop`](../vdrop/README.md) — the counterpart that **removes** a section and joins the remainder. Its `-x, --crossfade` transition is a `vdrop` option only — `vkeep` keeps a single section, so there is no join to smooth.
 
 ### Getting Started
 This utility is part of a collection of Go utilities. To compile and install follow the **Getting Started** instructions at the [utils repo](https://github.com/queone/utils).

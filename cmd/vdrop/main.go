@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/queone/utils/internal/vedit"
@@ -13,7 +14,10 @@ import (
 const (
 	// Global constants
 	programName    = "vdrop"
-	programVersion = "0.1.0"
+	programVersion = "0.2.0"
+
+	// defaultCrossfade is the dissolve length, in seconds, when -x is bare.
+	defaultCrossfade = 0.5
 )
 
 // die prints an error message to stderr and exits with status 1.
@@ -47,15 +51,24 @@ func runCLI() {
 	}
 
 	accurate := false
+	crossfade := 0.0
 	var pos []string
 	for _, a := range args {
-		switch a {
-		case "-a", "--accurate":
+		switch {
+		case a == "-a" || a == "--accurate":
 			accurate = true
-		default:
-			if strings.HasPrefix(a, "-") {
-				die("%s: unknown flag %q (see %s --help)\n", programName, a, programName)
+		case a == "-x" || a == "--crossfade":
+			crossfade = defaultCrossfade
+		case strings.HasPrefix(a, "--crossfade=") || strings.HasPrefix(a, "-x="):
+			v := a[strings.IndexByte(a, '=')+1:]
+			secs, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				die("%s: invalid crossfade duration %q (see %s --help)\n", programName, v, programName)
 			}
+			crossfade = secs
+		case strings.HasPrefix(a, "-"):
+			die("%s: unknown flag %q (see %s --help)\n", programName, a, programName)
+		default:
 			pos = append(pos, a)
 		}
 	}
@@ -70,7 +83,7 @@ func runCLI() {
 		die("%s: expected START [END] FILE (see %s --help)\n", programName, programName)
 	}
 
-	if err := vedit.Drop(accurate, startTok, endTok, input); err != nil {
+	if err := vedit.Drop(accurate, crossfade, startTok, endTok, input); err != nil {
 		die("%s: %v\n", programName, err)
 	}
 }

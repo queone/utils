@@ -13,7 +13,7 @@ import (
 const (
 	// Global constants
 	programName    = "vkeep"
-	programVersion = "0.1.0"
+	programVersion = "0.2.0"
 )
 
 // die prints an error message to stderr and exits with status 1.
@@ -49,13 +49,14 @@ func runCLI() {
 	accurate := false
 	var pos []string
 	for _, a := range args {
-		switch a {
-		case "-a", "--accurate":
+		switch {
+		case a == "-a" || a == "--accurate":
 			accurate = true
+		case a == "-x" || a == "--crossfade" || strings.HasPrefix(a, "--crossfade=") || strings.HasPrefix(a, "-x="):
+			die("%s: --crossfade applies only to vdrop; vkeep keeps a single section and has no join to smooth\n", programName)
+		case strings.HasPrefix(a, "-"):
+			die("%s: unknown flag %q (see %s --help)\n", programName, a, programName)
 		default:
-			if strings.HasPrefix(a, "-") {
-				die("%s: unknown flag %q (see %s --help)\n", programName, a, programName)
-			}
 			pos = append(pos, a)
 		}
 	}

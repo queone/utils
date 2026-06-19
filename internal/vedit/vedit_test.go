@@ -338,7 +338,7 @@ func TestToolMissing(t *testing.T) {
 
 	for _, fn := range []func() error{
 		func() error { return Keep(false, "8:31", "end", "whatever.mp4") },
-		func() error { return Drop(false, "1:00", "8:31", "whatever.mp4") },
+		func() error { return Drop(false, 0, "1:00", "8:31", "whatever.mp4") },
 	} {
 		err := fn()
 		if err == nil || !contains(err.Error(), "brew install ffmpeg") {
@@ -367,7 +367,7 @@ func TestCutTempCleanup(t *testing.T) {
 			return nil
 		})
 
-		err := Drop(false, "1:00", "5:00", input)
+		err := Drop(false, 0, "1:00", "5:00", input)
 		if fail && err == nil {
 			t.Error("expected failure to propagate")
 		}
@@ -426,6 +426,7 @@ func TestUsage(t *testing.T) {
 		"vkeep 1:00 8:31 FILE",
 		"vdrop 1:00 8:31 FILE",
 		"vdrop has no whole-file form",
+		"--crossfade",
 	} {
 		if !contains(keepScreen, want) {
 			t.Errorf("vkeep usage missing %q", want)
@@ -435,6 +436,81 @@ func TestUsage(t *testing.T) {
 	dropScreen := Usage("vdrop", "0.1.0")
 	if stripExceptHeader(keepScreen) != stripExceptHeader(dropScreen) {
 		t.Error("vkeep and vdrop usage bodies differ beyond the header line and highlight")
+	}
+}
+
+// AT1 — crossfadeFilter emits the xfade/acrossfade graph with the transition
+// beginning dur seconds before the cut (offset = start - dur).
+func TestCrossfadeFilter(t *testing.T) {
+	got := crossfadeFilter(60, 300, 1)
+	for _, want := range []string{
+		"[0:v]trim=0:60",
+		"[0:v]trim=start=300",
+		"xfade=transition=fade",
+		"duration=1",
+		"offset=59",
+		"acrossfade=d=1",
+	} {
+		if !contains(got, want) {
+			t.Errorf("crossfadeFilter missing %q in %q", want, got)
+		}
+	}
+	// Fractional duration yields a fractional offset.
+	if f := crossfadeFilter(60, 300, 0.5); !contains(f, "duration=0.5") || !contains(f, "offset=59.5") {
+		t.Errorf("fractional crossfade filter = %q", f)
+	}
+}
+
+// AT2 — Drop with crossfade > 0 routes to the single filter-complex re-encode
+// (no concat list); crossfade == 0 keeps the existing hard-cut plan.
+func TestCrossfadeRouting(t *testing.T) {
+	dir := t.TempDir()
+	input := filepath.Join(dir, "clip7.mp4")
+	writeFile(t, input, "data")
+
+	var got []string
+	withFakes(t, 600, func(args []string) error {
+		got = args
+		writeFile(t, args[len(args)-1], "out")
+		return nil
+	})
+	if err := Drop(false, 1, "1:00", "5:00", input); err != nil {
+		t.Fatalf("crossfade Drop failed: %v", err)
+	}
+	joined := strings.Join(got, " ")
+	if !sliceHas(got, "-filter_complex") || !contains(joined, "xfade=transition=fade") {
+		t.Errorf("crossfade Drop argv %v should use the xfade filter", got)
+	}
+	if sliceHas(got, "concat") {
+		t.Errorf("crossfade Drop should not concat, argv %v", got)
+	}
+	// Hard-cut routing is exercised by TestCutPlans/TestKeepDropArgvPinned.
+}
+
+// AT3/AT4 — crossfade is interior-only and its duration must fit both kept
+// segments.
+func TestCrossfadeValidation(t *testing.T) {
+	const d = 600.0
+	if err := validateCrossfade(0, 300, d, 1); err == nil {
+		t.Error("crossfade should be rejected for a left-edge drop")
+	}
+	if err := validateCrossfade(300, 600, d, 1); err == nil {
+		t.Error("crossfade should be rejected for a right-edge drop")
+	}
+	if err := validateCrossfade(60, 300, d, 0); err == nil {
+		t.Error("zero crossfade duration should error")
+	}
+	if err := validateCrossfade(60, 300, d, -1); err == nil {
+		t.Error("negative crossfade duration should error")
+	}
+	if err := validateCrossfade(60, 300, d, 61); err == nil {
+		t.Error("crossfade longer than the kept-before segment should error")
+	}
+	if err := validateCrossfade(60, 300, d, 301); err == nil {
+		t.Error("crossfade longer than the kept-after segment should error")
+	}
+	if err := validateCrossfade(60, 300, d, 0.5); err != nil {
+		t.Errorf("in-bounds crossfade should be accepted, got %v", err)
 	}
 }
 
