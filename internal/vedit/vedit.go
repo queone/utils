@@ -1,6 +1,9 @@
-// vtrim.go
-
-package main
+// Package vedit is the shared engine behind the vclip and vcut utilities: it
+// drives ffmpeg/ffprobe to keep or remove a START..END section of a video,
+// validates the requested range against the source, names the output, and
+// prints a before/after summary. vclip and vcut are thin command wrappers over
+// Clip and Cut.
+package vedit
 
 import (
 	"errors"
@@ -30,7 +33,7 @@ var (
 		return exec.Command("ffprobe", args...).Output()
 	}
 
-	makeTempDir = func() (string, error) { return os.MkdirTemp("", "vtrim-") }
+	makeTempDir = func() (string, error) { return os.MkdirTemp("", "vedit-") }
 )
 
 // parseOffset parses a timestamp's syntax into whole seconds, independent of any
@@ -74,32 +77,49 @@ func validateTimestamp(components int, durationSeconds float64) error {
 	return nil
 }
 
-// validateBounds checks per-mode timestamp bounds against the source duration d
-// (seconds). For single-timestamp modes (l, r) the unused timestamp is ignored.
-func validateBounds(mode string, start, end int, d float64) error {
-	dd := formatDuration(int(d))
-	switch mode {
-	case "l":
-		if start < 0 || float64(start) >= d {
-			return fmt.Errorf("start cannot reach or exceed the source duration %s", dd)
-		}
-	case "r":
-		if end <= 0 || float64(end) >= d {
-			return fmt.Errorf("end must be greater than 0 and less than the source duration %s", dd)
-		}
-	case "m", "x":
-		if start < 0 || start >= end || float64(end) > d {
-			return fmt.Errorf("require 0 <= start < end <= source duration %s", dd)
-		}
-		if mode == "x" && start == 0 && float64(end) >= d {
-			return errors.New("cut would remove the entire video")
-		}
+// parseAndGate parses a timestamp and applies the duration gate, returning seconds.
+func parseAndGate(ts string, duration float64) (int, error) {
+	secs, comps, err := parseOffset(ts)
+	if err != nil {
+		return 0, err
+	}
+	if err := validateTimestamp(comps, duration); err != nil {
+		return 0, fmt.Errorf("%q: %w", ts, err)
+	}
+	return secs, nil
+}
+
+// resolveEnd turns an END token into whole seconds: the literal "end" yields the
+// source duration (run to the very end), any other token is parsed and gated.
+func resolveEnd(token string, duration float64) (int, error) {
+	if token == "end" {
+		return int(duration), nil
+	}
+	return parseAndGate(token, duration)
+}
+
+// validateClip enforces the keep range 0 <= start < end <= source duration.
+func validateClip(start, end int, d float64) error {
+	if start < 0 || start >= end || float64(end) > d {
+		return fmt.Errorf("require 0 <= start < end <= source duration %s", formatDuration(int(d)))
+	}
+	return nil
+}
+
+// validateCut enforces the keep-range bounds and additionally rejects a cut that
+// would remove the entire video (start at 0 reaching the source end).
+func validateCut(start, end int, d float64) error {
+	if err := validateClip(start, end, d); err != nil {
+		return err
+	}
+	if start == 0 && end >= int(d) {
+		return errors.New("cut would remove the entire video")
 	}
 	return nil
 }
 
 // deriveOutputName builds the output filename from an input basename: it inserts
-// '_' before the trailing run of digits in the stem (april1.mp4 -> april_1.mp4),
+// '_' before the trailing run of digits in the stem (SOURCE1.mp4 -> SOURCE_1.mp4),
 // or appends '_1' when the stem has no trailing digit (clip.mp4 -> clip_1.mp4).
 func deriveOutputName(name string) string {
 	ext := filepath.Ext(name)
@@ -175,37 +195,60 @@ func toolsAvailable() error {
 	return nil
 }
 
-// Plan is the ordered set of ffmpeg commands for one trim, plus an optional
-// concat-list file to materialize before the final command (used by 'x' default).
+// Plan is the ordered set of ffmpeg commands for one operation, plus an optional
+// concat-list file to materialize before the final command (used by the interior
+// copy cut). An empty Plan signals a whole-file byte copy.
 type Plan struct {
 	Cmds       [][]string // each entry is the argv passed to ffmpeg
 	ConcatList string     // path of the concat-list file to write, or "" if none
 	ConcatBody string     // contents of that file
 }
 
-// buildPlan returns the command plan for a mode. tmpDir is used only by the
-// default 'x' path for its intermediate segments and concat list.
-func buildPlan(mode string, start, end int, accurate bool, in, out, tmpDir string) Plan {
-	ss := strconv.Itoa(start)
-	switch mode {
-	case "l":
-		if accurate {
-			return Plan{Cmds: [][]string{{"-i", in, "-ss", ss, "-c:v", "libx264", "-c:a", "aac", out}}}
-		}
-		return Plan{Cmds: [][]string{{"-ss", ss, "-i", in, "-c", "copy", out}}}
-	case "r":
+// keep returns the command plan that keeps start..end. It dispatches on the
+// resolved bounds: a whole-file keep is signalled with an empty Plan (byte copy);
+// start at 0 trims from the right (-to); end at the source duration trims from the
+// left (-ss); otherwise it keeps the middle segment (-ss/-t). Accurate variants
+// re-encode (libx264/aac); fast variants stream-copy.
+func keep(start, end int, accurate bool, in, out string, d float64) Plan {
+	full := end >= int(d)
+	switch {
+	case start == 0 && full:
+		return Plan{} // whole file: caller byte-copies
+	case start == 0:
 		to := strconv.Itoa(end)
 		if accurate {
 			return Plan{Cmds: [][]string{{"-i", in, "-to", to, "-c:v", "libx264", "-c:a", "aac", out}}}
 		}
 		return Plan{Cmds: [][]string{{"-i", in, "-to", to, "-c", "copy", out}}}
-	case "m":
+	case full:
+		ss := strconv.Itoa(start)
+		if accurate {
+			return Plan{Cmds: [][]string{{"-i", in, "-ss", ss, "-c:v", "libx264", "-c:a", "aac", out}}}
+		}
+		return Plan{Cmds: [][]string{{"-ss", ss, "-i", in, "-c", "copy", out}}}
+	default:
+		ss := strconv.Itoa(start)
 		dur := strconv.Itoa(end - start)
 		if accurate {
 			return Plan{Cmds: [][]string{{"-i", in, "-ss", ss, "-t", dur, "-c:v", "libx264", "-c:a", "aac", out}}}
 		}
 		return Plan{Cmds: [][]string{{"-ss", ss, "-i", in, "-t", dur, "-c", "copy", out}}}
-	case "x":
+	}
+}
+
+// cut returns the command plan that removes start..end and joins the remainder.
+// A removal anchored at the start reduces to a left-trim keep; one reaching the
+// end reduces to a right-trim keep; an interior removal stream-copies the two
+// surrounding segments and concatenates them (fast), or re-encodes through a
+// filter graph (accurate). tmpDir holds the intermediate segments for the
+// interior copy path.
+func cut(start, end int, accurate bool, in, out, tmpDir string, d float64) Plan {
+	switch {
+	case start == 0:
+		return keep(end, int(d), accurate, in, out, d)
+	case end >= int(d):
+		return keep(0, start, accurate, in, out, d)
+	default:
 		if accurate {
 			return Plan{Cmds: [][]string{{"-i", in, "-filter_complex", cutFilter(start, end), "-map", "[v]", "-map", "[a]", out}}}
 		}
@@ -215,7 +258,7 @@ func buildPlan(mode string, start, end int, accurate bool, in, out, tmpDir strin
 		list := filepath.Join(tmpDir, "concat.txt")
 		return Plan{
 			Cmds: [][]string{
-				{"-i", in, "-to", ss, "-c", "copy", seg1},
+				{"-i", in, "-to", strconv.Itoa(start), "-c", "copy", seg1},
 				{"-ss", strconv.Itoa(end), "-i", in, "-c", "copy", seg2},
 				{"-f", "concat", "-safe", "0", "-i", list, "-c", "copy", out},
 			},
@@ -223,7 +266,6 @@ func buildPlan(mode string, start, end int, accurate bool, in, out, tmpDir strin
 			ConcatBody: fmt.Sprintf("file '%s'\nfile '%s'\n", seg1, seg2),
 		}
 	}
-	return Plan{}
 }
 
 // cutFilter builds the -filter_complex graph that drops [start,end] and
@@ -238,16 +280,26 @@ func cutFilter(start, end int) string {
 		start, start, end, end)
 }
 
-// run validates inputs, performs the trim for mode, and prints the summary table.
-// args is the subcommand's positional list: one or two timestamps followed by the
-// input path.
-func run(mode string, accurate bool, args []string) error {
+// Clip keeps the START..END section of input, writing it to the derived output.
+// endTok may be a timestamp or the literal "end" (run to the source end).
+func Clip(accurate bool, startTok, endTok, input string) error {
+	return process(false, accurate, startTok, endTok, input)
+}
+
+// Cut removes the START..END section of input and joins the remainder, writing
+// the result to the derived output. endTok may be a timestamp or the literal
+// "end" (remove through to the source end).
+func Cut(accurate bool, startTok, endTok, input string) error {
+	return process(true, accurate, startTok, endTok, input)
+}
+
+// process is the shared driver for Clip and Cut: it validates tooling and input,
+// probes duration, resolves and validates the range, refuses to overwrite, then
+// executes the byte-copy fast path or the ffmpeg plan and prints the summary.
+func process(isCut, accurate bool, startTok, endTok, input string) error {
 	if err := toolsAvailable(); err != nil {
 		return err
 	}
-
-	input := args[len(args)-1]
-	stamps := args[:len(args)-1]
 	if fi, err := os.Stat(input); err != nil || fi.IsDir() {
 		return fmt.Errorf("input %q: not a readable file", input)
 	}
@@ -257,25 +309,21 @@ func run(mode string, accurate bool, args []string) error {
 		return err
 	}
 
-	var start, end int
-	switch mode {
-	case "l":
-		if start, err = parseAndGate(stamps[0], duration); err != nil {
-			return err
-		}
-	case "r":
-		if end, err = parseAndGate(stamps[0], duration); err != nil {
-			return err
-		}
-	case "m", "x":
-		if start, err = parseAndGate(stamps[0], duration); err != nil {
-			return err
-		}
-		if end, err = parseAndGate(stamps[1], duration); err != nil {
-			return err
-		}
+	start, err := parseAndGate(startTok, duration)
+	if err != nil {
+		return err
 	}
-	if err := validateBounds(mode, start, end, duration); err != nil {
+	end, err := resolveEnd(endTok, duration)
+	if err != nil {
+		return err
+	}
+
+	if isCut {
+		err = validateCut(start, end, duration)
+	} else {
+		err = validateClip(start, end, duration)
+	}
+	if err != nil {
 		return err
 	}
 
@@ -284,23 +332,29 @@ func run(mode string, accurate bool, args []string) error {
 		return fmt.Errorf("output %q already exists; refusing to overwrite", output)
 	}
 
-	// Zero-offset left trim is a straight copy; -a is moot (nothing to re-encode).
-	if mode == "l" && start == 0 {
+	var plan Plan
+	if isCut {
+		tmpDir := ""
+		interior := start != 0 && end < int(duration)
+		if interior && !accurate {
+			if tmpDir, err = makeTempDir(); err != nil {
+				return fmt.Errorf("creating temp dir: %w", err)
+			}
+			defer os.RemoveAll(tmpDir)
+		}
+		plan = cut(start, end, accurate, input, output, tmpDir, duration)
+	} else {
+		plan = keep(start, end, accurate, input, output, duration)
+	}
+
+	// An empty plan means a whole-file keep; byte-copy it (-a is moot).
+	if len(plan.Cmds) == 0 {
 		if err := copyFile(input, output); err != nil {
 			return fmt.Errorf("copying %q to %q: %w", input, output, err)
 		}
 		return printSummary(input, output)
 	}
 
-	tmpDir := ""
-	if mode == "x" && !accurate {
-		if tmpDir, err = makeTempDir(); err != nil {
-			return fmt.Errorf("creating temp dir: %w", err)
-		}
-		defer os.RemoveAll(tmpDir)
-	}
-
-	plan := buildPlan(mode, start, end, accurate, input, output, tmpDir)
 	if plan.ConcatList != "" {
 		if err := os.WriteFile(plan.ConcatList, []byte(plan.ConcatBody), 0o644); err != nil {
 			return fmt.Errorf("writing concat list: %w", err)
@@ -312,18 +366,6 @@ func run(mode string, accurate bool, args []string) error {
 		}
 	}
 	return printSummary(input, output)
-}
-
-// parseAndGate parses a timestamp and applies the duration gate, returning seconds.
-func parseAndGate(ts string, duration float64) (int, error) {
-	secs, comps, err := parseOffset(ts)
-	if err != nil {
-		return 0, err
-	}
-	if err := validateTimestamp(comps, duration); err != nil {
-		return 0, fmt.Errorf("%q: %w", ts, err)
-	}
-	return secs, nil
 }
 
 // copyFile copies src to dst byte-for-byte.
