@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.44.1 | AC52: retire Go build tooling; adopt shell build.sh |
 | 0.44.0 | AC51: vdrop -x/--crossfade dissolve at the interior join (xfade/acrossfade) |
 | 0.43.0 | AC50: rename vclip/vcut to vkeep/vdrop; single shared usage screen |
 | 0.42.0 | AC49: split vtrim into vclip (keep) and vcut (remove); shared internal/vedit |
