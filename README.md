@@ -30,6 +30,7 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`sms`](cmd/sms/README.md): Send SMS messages using Twilio credentials from a local config file.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
 - [`vdrop`](cmd/vdrop/README.md): Remove a section of a video — drop START..END and join the remainder — via ffmpeg.
+- [`vjoin`](cmd/vjoin/README.md): Join two videos with orientation-aware framing and normalized output via ffmpeg.
 - [`vkeep`](cmd/vkeep/README.md): Keep a section of a video — extract START..END to a new file — via ffmpeg.
 - [`web`](cmd/web/README.md): Search DuckDuckGo and open results with an interactive selector.
 
