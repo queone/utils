@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.45.0 | AC53: show beginning-of-clip vkeep/vdrop Cheatsheet forms |
 | 0.44.1 | AC52: retire Go build tooling; adopt shell build.sh |
 | 0.44.0 | AC51: vdrop -x/--crossfade dissolve at the interior join (xfade/acrossfade) |
 | 0.43.0 | AC50: rename vclip/vcut to vkeep/vdrop; single shared usage screen |

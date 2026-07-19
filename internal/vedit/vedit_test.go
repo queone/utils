@@ -421,6 +421,8 @@ func TestUsage(t *testing.T) {
 	keepScreen := Usage("vkeep", "0.1.0")
 	for _, want := range []string{
 		"vkeep 0 FILE",
+		"vkeep 0 1:00 FILE",
+		"vdrop 0 1:00 FILE",
 		"vkeep 1:00 FILE",
 		"vdrop 1:00 FILE",
 		"vkeep 1:00 8:31 FILE",
@@ -432,10 +434,46 @@ func TestUsage(t *testing.T) {
 			t.Errorf("vkeep usage missing %q", want)
 		}
 	}
+	goals := []string{
+		"Copy the whole file",
+		"Keep from beginning to 1:00",
+		"Drop from beginning to 1:00",
+		"Keep from 1:00 to the end",
+	}
+	last := -1
+	for _, goal := range goals {
+		pos := strings.Index(keepScreen, goal)
+		if pos < 0 {
+			t.Fatalf("vkeep usage missing goal %q", goal)
+		}
+		if pos <= last {
+			t.Fatalf("vkeep usage goal %q is out of order", goal)
+		}
+		last = pos
+	}
 
 	dropScreen := Usage("vdrop", "0.1.0")
 	if stripExceptHeader(keepScreen) != stripExceptHeader(dropScreen) {
 		t.Error("vkeep and vdrop usage bodies differ beyond the header line and highlight")
+	}
+}
+
+func TestUsageREADMECheatsheets(t *testing.T) {
+	want := "  Copy the whole file             vkeep 0 FILE\n" +
+		"  Keep from beginning to 1:00       vkeep 0 1:00 FILE\n" +
+		"  Drop from beginning to 1:00       vdrop 0 1:00 FILE\n" +
+		"  Keep from 1:00 to the end       vkeep 1:00 FILE"
+	for _, path := range []string{
+		filepath.Join("..", "..", "cmd", "vkeep", "README.md"),
+		filepath.Join("..", "..", "cmd", "vdrop", "README.md"),
+	} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if !strings.Contains(string(body), want) {
+			t.Errorf("%s cheatsheet missing ordered beginning-of-clip rows", path)
+		}
 	}
 }
 

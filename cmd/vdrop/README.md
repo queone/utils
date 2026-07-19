@@ -25,6 +25,8 @@ vdrop START [END] [-a] <input>
 ```
 What you want                     Use this
   Copy the whole file             vkeep 0 FILE
+  Keep from beginning to 1:00       vkeep 0 1:00 FILE
+  Drop from beginning to 1:00       vdrop 0 1:00 FILE
   Keep from 1:00 to the end       vkeep 1:00 FILE
   Drop from 1:00 to the end       vdrop 1:00 FILE
   Keep only the middle 1:00..8:31 vkeep 1:00 8:31 FILE

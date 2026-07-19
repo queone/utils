@@ -14,7 +14,7 @@ import (
 const (
 	// Global constants
 	programName    = "vdrop"
-	programVersion = "0.2.0"
+	programVersion = "0.3.0"
 
 	// defaultCrossfade is the dissolve length, in seconds, when -x is bare.
 	defaultCrossfade = 0.5
