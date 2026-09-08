@@ -21,10 +21,12 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`dl`](cmd/dl/main.go): Download online videos using `yt-dlp` with a target filename.
 - [`dos2unix`](cmd/dos2unix/main.go): Preview or convert CRLF line endings to LF.
 - [`fr`](cmd/fr/README.md): A simple find/replace utility.
+- [`ishrink`](cmd/ishrink/README.md): Re-encode a HEIC, JPEG, or JPG image as a small JPEG via macOS `sips`.
 - [`repoctl`](cmd/repoctl/README.md): Control collections of local Git repositories with status, pull, build, clone, and list operations.
 - [`jy`](cmd/jy/README.md): A lightweight JSON and YAML converter utility.
 - [`mdview`](cmd/mdview/README.md): Render GitHub Flavored Markdown in a browser or write it as HTML.
 - [`namehunt`](cmd/namehunt/README.md): Find free usernames on GitHub, Lichess, or any site with a predictable profile URL, one name or a whole pattern at a time.
+- [`oidctok`](cmd/oidctok/README.md): Exchange a GitHub Actions OIDC token for Azure Resource Manager and Microsoft Graph tokens and hand them to later job steps.
 - [`pgen`](cmd/pgen/README.md): A simple generator of memorable passwords.
 - [`pman`](cmd/pman/main.go): Run authenticated Microsoft Graph and Azure REST API requests.
 - [`retotal`](cmd/retotal/README.md): Recalculate TOTALS in a signed financial summary; also consolidates CSV/aligned input into a signed summary.
@@ -34,9 +36,11 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`sms`](cmd/sms/README.md): Send SMS messages using Twilio credentials from a local config file.
 - [`swatch`](cmd/swatch/README.md): Xterm 256-color palette and ramp inspector.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
+- [`vconv`](cmd/vconv/README.md): Convert a video, typically WebM, to an H.264/AAC MP4 via ffmpeg.
 - [`vdrop`](cmd/vdrop/README.md): Remove a section of a video — drop START..END and join the remainder — via ffmpeg.
 - [`vjoin`](cmd/vjoin/README.md): Join two videos with orientation-aware framing and normalized output via ffmpeg.
 - [`vkeep`](cmd/vkeep/README.md): Keep a section of a video — extract START..END to a new file — via ffmpeg.
+- [`vshrink`](cmd/vshrink/README.md): Re-encode an MP4 at a high compression level to cut its size via ffmpeg.
 - [`web`](cmd/web/README.md): Search DuckDuckGo and open results with an interactive selector.
 
 ## Quick Install
@@ -93,9 +97,7 @@ Standalone scripts that are fetched rather than installed. Download any of them 
 - `install_tf.sh`: Install or upgrade Terraform, through Homebrew on a Mac, HashiCorp's apt repository on Debian or Ubuntu, and the official archive otherwise.
 - `install_vault.sh`: Install or upgrade HashiCorp Vault, through Homebrew on a Mac, HashiCorp's apt repository on Debian or Ubuntu, and the official archive otherwise.
 - `mac_screencap.sh`: Adjust the macOS Shift-Cmd-4 screen-capture settings.
-- `resize_image.sh`: Shrink a HEIC, JPEG, or JPG image by 10%, or compress an MP4 video.
-- `webm2mp4.sh`: Convert WebM files to MP4.
-- `get_oidc_tokens.py`: Exchange a GitHub Actions OIDC token for Azure tokens.
+- `get_oidc_tokens.py`: Python option to exchange a GitHub Actions OIDC token for Azure tokens; the `oidctok` utility is recommended for simplicity and speed.
 - `dns_chk.ps1`: Verify Active Directory A and PTR records from an input file.
 - `dns_add.ps1`: Create Active Directory DNS records from an input file.
 - `dns_del.ps1`: Delete Active Directory DNS records from an input file.

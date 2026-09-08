@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-# get_oidc_tokens.py 1.0.2
+# get_oidc_tokens.py 1.0.3
+#
+# Python option. The Go utility oidctok in this repository (cmd/oidctok) does the
+# same job and is recommended for simplicity and speed: one static binary with
+# no pip installs. Keep using this script when a Python toolchain is already the
+# job's runtime.
 # See https://que.one/git/oidc-azure.html
 
 import os

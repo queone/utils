@@ -13,7 +13,7 @@ import (
 const (
 	// Global constants
 	programName    = "vkeep"
-	programVersion = "0.3.0"
+	programVersion = "0.3.1"
 )
 
 // die prints an error message to stderr and exits with status 1.

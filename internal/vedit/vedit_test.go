@@ -608,3 +608,93 @@ func stripExceptHeader(s string) string {
 	}
 	return plain
 }
+
+// stubTools points the tool seams at fakes: every tool is "installed", ffprobe
+// answers with probeOut, and ffmpeg records its argv and creates the last
+// argument as an empty output file.
+func stubTools(t *testing.T, probeOut string) *[][]string {
+	t.Helper()
+	rl, rp, rf := lookPath, runFFprobe, runFFmpeg
+	t.Cleanup(func() { lookPath, runFFprobe, runFFmpeg = rl, rp, rf })
+	var calls [][]string
+	lookPath = func(string) (string, error) { return "/fake/bin", nil }
+	runFFprobe = func([]string) ([]byte, error) { return []byte(probeOut + "\n"), nil }
+	runFFmpeg = func(argv []string) error {
+		calls = append(calls, append([]string(nil), argv...))
+		return os.WriteFile(argv[len(argv)-1], []byte("out"), 0o644)
+	}
+	return &calls
+}
+
+func TestProbeFormatReturnsTrimmedFormatName(t *testing.T) {
+	stubTools(t, "  matroska,webm  ")
+	got, err := ProbeFormat("clip.webm")
+	if err != nil {
+		t.Fatalf("ProbeFormat: %v", err)
+	}
+	if got != "matroska,webm" {
+		t.Errorf("ProbeFormat = %q, want %q", got, "matroska,webm")
+	}
+}
+
+func TestProbeFormatWrapsProbeFailure(t *testing.T) {
+	stubTools(t, "")
+	runFFprobe = func([]string) ([]byte, error) { return nil, errors.New("exit status 1") }
+	if _, err := ProbeFormat("bad.bin"); err == nil || !strings.Contains(err.Error(), `probing "bad.bin"`) {
+		t.Errorf("ProbeFormat error = %v, want one naming the file", err)
+	}
+}
+
+func TestTranscodeRunsArgvAndPrintsSummary(t *testing.T) {
+	calls := stubTools(t, "12.0")
+	dir := t.TempDir()
+	in := filepath.Join(dir, "clip.webm")
+	out := filepath.Join(dir, "clip.mp4")
+	if err := os.WriteFile(in, []byte("in"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	argv := []string{"-i", in, "-c:v", "libx264", out}
+	if err := Transcode(in, out, argv); err != nil {
+		t.Fatalf("Transcode: %v", err)
+	}
+	if len(*calls) != 1 || !reflect.DeepEqual((*calls)[0], argv) {
+		t.Errorf("ffmpeg calls = %v, want exactly %v", *calls, argv)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Errorf("output not created: %v", err)
+	}
+}
+
+func TestTranscodeRefusesExistingOutput(t *testing.T) {
+	calls := stubTools(t, "12.0")
+	dir := t.TempDir()
+	in := filepath.Join(dir, "clip.webm")
+	out := filepath.Join(dir, "clip.mp4")
+	for _, p := range []string{in, out} {
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := Transcode(in, out, []string{"-i", in, out})
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("Transcode error = %v, want an already-exists refusal", err)
+	}
+	if len(*calls) != 0 {
+		t.Errorf("ffmpeg ran %d times, want 0", len(*calls))
+	}
+}
+
+func TestTranscodeRejectsMissingInput(t *testing.T) {
+	stubTools(t, "12.0")
+	err := Transcode(filepath.Join(t.TempDir(), "missing.webm"), "x.mp4", nil)
+	if err == nil || !strings.Contains(err.Error(), "not a readable file") {
+		t.Errorf("Transcode error = %v, want a not-readable error", err)
+	}
+}
+
+func TestRenderSummaryUsesThousandsSeparators(t *testing.T) {
+	got := renderSummary([]fileStat{{label: "input", name: "a.mp4", size: 1234567, seconds: 61}})
+	if !strings.Contains(got, "1,234,567") || !strings.Contains(got, "00:01:01") {
+		t.Errorf("renderSummary = %q, want separators and HH:MM:SS", got)
+	}
+}

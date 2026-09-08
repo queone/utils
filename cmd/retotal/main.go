@@ -12,11 +12,12 @@ import (
 	"strings"
 
 	"github.com/queone/gkit/internal/color"
+	"github.com/queone/gkit/internal/numfmt"
 )
 
 const (
 	programName    = "retotal"
-	programVersion = "1.0.0"
+	programVersion = "1.0.1"
 	// signatureLine gates re-tally and tells the user how to recalculate. It is the
 	// last non-empty line of every output file. The `<FILE>` token is a literal
 	// placeholder, so the signature is path-independent.
@@ -74,38 +75,9 @@ func commatize(s string) string {
 		parts := strings.SplitN(s, ".", 2)
 		decimals := len(parts[1])
 		formatted := strconv.FormatFloat(n, 'f', decimals, 64)
-		return addCommas(formatted)
+		return numfmt.Commas(formatted)
 	}
-	return addCommas(strconv.FormatInt(int64(n), 10))
-}
-
-func addCommas(s string) string {
-	negative := false
-	if strings.HasPrefix(s, "-") {
-		negative = true
-		s = s[1:]
-	}
-
-	intPart := s
-	decPart := ""
-	if idx := strings.Index(s, "."); idx >= 0 {
-		intPart = s[:idx]
-		decPart = s[idx:]
-	}
-
-	var b strings.Builder
-	for i, ch := range intPart {
-		if i > 0 && (len(intPart)-i)%3 == 0 {
-			b.WriteByte(',')
-		}
-		b.WriteRune(ch)
-	}
-
-	result := b.String() + decPart
-	if negative {
-		result = "-" + result
-	}
-	return result
+	return numfmt.Commas(strconv.FormatInt(int64(n), 10))
 }
 
 func normalize2(s string) string {

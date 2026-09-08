@@ -2,7 +2,8 @@
 // drives ffmpeg/ffprobe to keep or remove a START..END section of a video,
 // validates the requested range against the source, names the output, and
 // prints a before/after summary. vkeep and vdrop are thin command wrappers over
-// Keep and Drop, and share a single help screen rendered by Usage.
+// Keep and Drop, and share a single help screen rendered by Usage. Transcode
+// and ProbeFormat expose the same ffmpeg/ffprobe driving to vconv and vshrink.
 package vedit
 
 import (
@@ -16,6 +17,7 @@ import (
 	"strings"
 
 	color "github.com/queone/gkit/internal/color"
+	"github.com/queone/gkit/internal/numfmt"
 )
 
 // Injectable seams, overridden in tests to avoid invoking real binaries.
@@ -151,27 +153,6 @@ func deriveOutputName(name string) string {
 		return stem + "_1" + ext
 	}
 	return stem[:i] + "_" + stem[i:] + ext
-}
-
-// formatBytes renders a byte count with thousands separators (1234567 -> "1,234,567").
-func formatBytes(n int64) string {
-	s := strconv.FormatInt(n, 10)
-	neg := strings.HasPrefix(s, "-")
-	if neg {
-		s = s[1:]
-	}
-	var b strings.Builder
-	for i, ch := range s {
-		if i > 0 && (len(s)-i)%3 == 0 {
-			b.WriteByte(',')
-		}
-		b.WriteRune(ch)
-	}
-	out := b.String()
-	if neg {
-		out = "-" + out
-	}
-	return out
 }
 
 // formatDuration renders whole seconds as zero-padded HH:MM:SS (4111 -> "01:08:31").
@@ -543,7 +524,7 @@ func renderSummary(rows []fileStat) string {
 	right := []bool{false, false, true, true}
 	cells := make([][]string, len(rows))
 	for i, r := range rows {
-		cells[i] = []string{r.label, r.name, formatBytes(r.size), formatDuration(r.seconds)}
+		cells[i] = []string{r.label, r.name, numfmt.Int(r.size), formatDuration(r.seconds)}
 	}
 
 	widths := make([]int, len(heads))
@@ -586,4 +567,39 @@ func pad(s string, w int, right bool) string {
 		return sp + s
 	}
 	return s + sp
+}
+
+// ProbeFormat returns the container format names ffprobe reports for path,
+// such as "mov,mp4,m4a,3gp,3g2,mj2" for an MP4 or "matroska,webm" for a WebM.
+func ProbeFormat(path string) (string, error) {
+	out, err := runFFprobe([]string{
+		"-v", "error",
+		"-show_entries", "format=format_name",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		path,
+	})
+	if err != nil {
+		return "", fmt.Errorf("probing %q: %w (is it a valid media file?)", path, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Transcode runs ffmpeg once with argv, the complete argument list that reads
+// input and writes output, then prints the input-versus-output summary. It
+// checks that ffmpeg and ffprobe are installed, that input is a readable file,
+// and that output does not already exist before running anything.
+func Transcode(input, output string, argv []string) error {
+	if err := toolsAvailable(); err != nil {
+		return err
+	}
+	if fi, err := os.Stat(input); err != nil || fi.IsDir() {
+		return fmt.Errorf("input %q: not a readable file", input)
+	}
+	if _, err := os.Stat(output); err == nil {
+		return fmt.Errorf("output %q already exists; refusing to overwrite", output)
+	}
+	if err := runFFmpeg(argv); err != nil {
+		return fmt.Errorf("ffmpeg failed: %w", err)
+	}
+	return printSummary(input, output)
 }

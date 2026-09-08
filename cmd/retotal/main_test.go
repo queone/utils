@@ -618,8 +618,8 @@ func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
 
 func TestUsageTextContent(t *testing.T) {
 	got := stripANSI(usageText())
-	if !strings.Contains(got, "retotal v1.0.0") {
-		t.Errorf("usage screen missing version line 'retotal v1.0.0':\n%s", got)
+	if !strings.Contains(got, programName+" v"+programVersion) {
+		t.Errorf("usage screen missing version line %q:\n%s", programName+" v"+programVersion, got)
 	}
 	if !strings.Contains(got, "Consolidate") {
 		t.Errorf("usage screen should name the consolidation mode:\n%s", got)
@@ -660,7 +660,7 @@ func TestUsageScreenExitsZero(t *testing.T) {
 			continue
 		}
 		clean := stripANSI(string(out))
-		if !strings.Contains(clean, "retotal v1.0.0") {
+		if !strings.Contains(clean, programName+" v"+programVersion) {
 			t.Errorf("mode %q: information screen missing version line:\n%s", mode, clean)
 		}
 	}
