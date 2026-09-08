@@ -88,9 +88,9 @@ Standalone scripts that are fetched rather than installed. Download any of them 
 - `bashrc_user.sh`: Generic interactive bash settings for a user account on macOS, installed by copying.
 - `bashrc_root.sh`: Generic interactive bash settings for the root account on macOS, installed by copying.
 - `gitbranch.sh`: Fast git branch indicator for the bash prompt.
-- `install_go.sh`: Install and set up Go.
-- `install_tf.sh`: Install the Terraform binary.
-- `install_vault.sh`: Install the HashiCorp Vault binary.
+- `install_go.sh`: Install or upgrade Go, through Homebrew on a Mac when present and the official tarball otherwise.
+- `install_tf.sh`: Install or upgrade Terraform, through Homebrew on a Mac, HashiCorp's apt repository on Debian or Ubuntu, and the official archive otherwise.
+- `install_vault.sh`: Install or upgrade HashiCorp Vault, through Homebrew on a Mac, HashiCorp's apt repository on Debian or Ubuntu, and the official archive otherwise.
 - `mac_screencap.sh`: Adjust the macOS Shift-Cmd-4 screen-capture settings.
 - `resize_image.sh`: Shrink a HEIC, JPEG, or JPG image by 10%, or compress an MP4 video.
 - `webm2mp4.sh`: Convert WebM files to MP4.
