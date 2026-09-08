@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.65.0 | AC84: bashrc_user.sh 1.1.0 XDG homes; add install_docker.sh 1.0.0 |
 | 0.64.0 | AC83: install scripts use Homebrew on Mac, apt on Ubuntu; drop curl -k |
 | 0.63.0 | AC82: add namehunt v1.0.0 and scripts/ folder; retire moneycon.py |
 | 0.62.0 | AC81: cash5 v0.14.0 four recommendations; drop consecutive-pair strategy |

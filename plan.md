@@ -12,3 +12,4 @@ Ideas captured for future reference. A bullet list — each line starts with `- 
 
 - IE1: Consolidate the byte-commatizing helper — `cmd/retotal` has its own `addCommas`/`formatBytes`, now also duplicated by `internal/vedit.formatBytes` — into one shared `internal/` package and migrate both callers.
 - IE2: Port `webm2mp4.sh` and `resize_image.sh` to Go alongside `vkeep`, `vdrop`, and `vjoin`.
+- IE3: Port `get_oidc_tokens.py` to Go as an OIDC token utility for GitHub Actions callers.

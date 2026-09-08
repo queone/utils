@@ -87,7 +87,8 @@ Standalone scripts that are fetched rather than installed. Download any of them 
 - `aztoken_compose.yaml`: Docker Compose file for the Azure token demo.
 - `bashrc_user.sh`: Generic interactive bash settings for a user account on macOS, installed by copying.
 - `bashrc_root.sh`: Generic interactive bash settings for the root account on macOS, installed by copying.
-- `gitbranch.sh`: Fast git branch indicator for the bash prompt.
+- `gitbranch.sh`: Fast git branch indicator for the bash prompt; `bashrc_user.sh` sources it from `~/.config/bash/gitbranch.sh`.
+- `install_docker.sh`: Install or upgrade Docker, through the docker CLI and colima on a Mac, Docker's apt repository on Debian or Ubuntu, and Docker's dnf repository on Fedora and RHEL-family systems.
 - `install_go.sh`: Install or upgrade Go, through Homebrew on a Mac when present and the official tarball otherwise.
 - `install_tf.sh`: Install or upgrade Terraform, through Homebrew on a Mac, HashiCorp's apt repository on Debian or Ubuntu, and the official archive otherwise.
 - `install_vault.sh`: Install or upgrade HashiCorp Vault, through Homebrew on a Mac, HashiCorp's apt repository on Debian or Ubuntu, and the official archive otherwise.
