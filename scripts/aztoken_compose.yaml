@@ -1,0 +1,21 @@
+# aztoken_compose.yaml
+
+version: '3'
+services:
+  python_app:
+    image: python:3.10-slim  # On Debian GNU/Linux 12 (bookworm)
+    command: bash -c '
+      cat /etc/os-release &&
+      pip install msal &&
+      python /app/aztoken.py'
+    volumes:
+      - ./:/app
+    environment:
+      - MAZ_CLIENT_ID=${MAZ_CLIENT_ID}
+      - MAZ_CLIENT_SECRET=${MAZ_CLIENT_SECRET}
+      - MAZ_TENANT_ID=${MAZ_TENANT_ID}
+    working_dir: /app
+
+# BUILD & RUN: docker compose -f aztoken_compose.yaml up --build
+# JUST RUN   : docker compose -f aztoken_compose.yaml up
+# INSPECT    : docker compose -f aztoken_compose.yaml run --build python_app bash

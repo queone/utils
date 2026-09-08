@@ -24,6 +24,7 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`repoctl`](cmd/repoctl/README.md): Control collections of local Git repositories with status, pull, build, clone, and list operations.
 - [`jy`](cmd/jy/README.md): A lightweight JSON and YAML converter utility.
 - [`mdview`](cmd/mdview/README.md): Render GitHub Flavored Markdown in a browser or write it as HTML.
+- [`namehunt`](cmd/namehunt/README.md): Find free usernames on GitHub, Lichess, or any site with a predictable profile URL, one name or a whole pattern at a time.
 - [`pgen`](cmd/pgen/README.md): A simple generator of memorable passwords.
 - [`pman`](cmd/pman/main.go): Run authenticated Microsoft Graph and Azure REST API requests.
 - [`retotal`](cmd/retotal/README.md): Recalculate TOTALS in a signed financial summary; also consolidates CSV/aligned input into a signed summary.
@@ -77,6 +78,27 @@ git pull
 Note that you can compile individual utilities with `./build.sh rn web`, etc. Targets are space-separated; validation runs only against the named packages.
 
 To build in Windows you have to have a BASH shell such as [GitBASH](https://www.git-scm.com/download/win). To build from a regular Windows Command Prompt, you may have to tweak the `build.sh` script a bit, to have it run the right `go build ...` command.
+
+## Scripts
+
+Standalone scripts that are fetched rather than installed. Download any of them with `curl -L` from `https://github.com/queone/gkit/raw/main/scripts/<file>`, which redirects to the raw host.
+
+- `aztoken.py`: Azure token demo, run under Docker Compose.
+- `aztoken_compose.yaml`: Docker Compose file for the Azure token demo.
+- `bashrc_user.sh`: Generic interactive bash settings for a user account on macOS, installed by copying.
+- `bashrc_root.sh`: Generic interactive bash settings for the root account on macOS, installed by copying.
+- `gitbranch.sh`: Fast git branch indicator for the bash prompt.
+- `install_go.sh`: Install and set up Go.
+- `install_tf.sh`: Install the Terraform binary.
+- `install_vault.sh`: Install the HashiCorp Vault binary.
+- `mac_screencap.sh`: Adjust the macOS Shift-Cmd-4 screen-capture settings.
+- `resize_image.sh`: Shrink a HEIC, JPEG, or JPG image by 10%, or compress an MP4 video.
+- `webm2mp4.sh`: Convert WebM files to MP4.
+- `get_oidc_tokens.py`: Exchange a GitHub Actions OIDC token for Azure tokens.
+- `dns_chk.ps1`: Verify Active Directory A and PTR records from an input file.
+- `dns_add.ps1`: Create Active Directory DNS records from an input file.
+- `dns_del.ps1`: Delete Active Directory DNS records from an input file.
+- `dns_upsert.ps1`: Create or update Active Directory DNS records from an input file.
 
 ## Governance
 
