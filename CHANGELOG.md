@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.67.1 | AC87: adopt govna v0.54.0 canon |
 | 0.67.0 | AC86: add vconv, vshrink, ishrink, oidctok; numfmt package; drop 2 scripts |
 | 0.66.0 | AC85: bashrc_user.sh 1.2.0 Lima, Colima, Docker homes under XDG |
 | 0.65.0 | AC84: bashrc_user.sh 1.1.0 XDG homes; add install_docker.sh 1.0.0 |
