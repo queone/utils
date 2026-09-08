@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bashrc_user.sh 1.1.0
+# bashrc_user.sh 1.2.0
 # Generic interactive bash settings for a user account on macOS
 
 [[ $- == *i* ]] || return # skip all of this for non-interactive shells
@@ -17,8 +17,11 @@ export XDG_CACHE_HOME="$HOME/.cache"
 export RUSTUP_HOME="$XDG_DATA_HOME/rustup"
 export CARGO_HOME="$XDG_DATA_HOME/cargo"
 export CODEX_HOME="$XDG_DATA_HOME/codex"
+export LIMA_HOME="$XDG_DATA_HOME/lima"
+export COLIMA_HOME="$XDG_DATA_HOME/colima"
 export CLAUDE_CONFIG_DIR="$XDG_CONFIG_HOME/claude"
 export AZURE_CONFIG_DIR="$XDG_CONFIG_HOME/azure"
+export DOCKER_CONFIG="$XDG_CONFIG_HOME/docker"
 export MPLCONFIGDIR="$XDG_CONFIG_HOME/matplotlib"
 export npm_config_cache="$XDG_CACHE_HOME/npm"
 export LESSHISTFILE="$XDG_STATE_HOME/lesshst"

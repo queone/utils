@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.66.0 | AC85: bashrc_user.sh 1.2.0 Lima, Colima, Docker homes under XDG |
 | 0.65.0 | AC84: bashrc_user.sh 1.1.0 XDG homes; add install_docker.sh 1.0.0 |
 | 0.64.0 | AC83: install scripts use Homebrew on Mac, apt on Ubuntu; drop curl -k |
 | 0.63.0 | AC82: add namehunt v1.0.0 and scripts/ folder; retire moneycon.py |
