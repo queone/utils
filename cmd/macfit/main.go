@@ -22,7 +22,7 @@ import (
 	"golang.org/x/term"
 )
 
-const programVersion = "1.1.0"
+const programVersion = "1.2.0"
 
 // storeSource names where the store path came from.
 type storeSource string
@@ -119,7 +119,7 @@ func usage() string {
 		"  macfit rm TARGET [-H HOST]          forget a file and its stored versions\n" +
 		"  macfit ls                           list entries\n" +
 		"  macfit push [TARGET...]             send changed live files into the store\n" +
-		"  macfit pull [TARGET...] [-n] [-f]   restore files from the store\n" +
+		"  macfit pull [TARGET...] [-f]        plan the restore, or write it with -f\n" +
 		"  macfit diff [TARGET...] [-V]        show drift between the store and this Mac\n" +
 		"  macfit key show                     store path, key id, keychain and store state\n" +
 		"  macfit key restore                  put the key back in the keychain with the passphrase\n" +
@@ -130,8 +130,8 @@ func usage() string {
 		"  -N, --new          Create a new store (init)\n" +
 		"  -H, --host NAME    Bind the entry to one Mac (add, rm)\n" +
 		"  -l, --literal      Keep the path under ~ instead of an XDG variable (add)\n" +
-		"  -n, --dry-run      Print what pull would write and write nothing\n" +
-		"  -f, --force        Let pull overwrite a live file that differs; skip the key rm prompt\n" +
+		"  -n, --dry-run      Print the pull plan; the default, kept for scripts\n" +
+		"  -f, --force        Write the pull plan, overwriting live files that differ; skip the key rm prompt\n" +
 		"  -V, --verbose      Add a unified diff to diff output\n" +
 		"  -v, --version      Print macfit v" + programVersion + " and exit\n" +
 		"  -h, -?, --help     Show this help message and exit\n\n" +
@@ -579,7 +579,7 @@ func (a *app) addOne(st *lockbox.Store, p, host string, literal bool) error {
 	if _, err := st.AddVersion(e.ID, content, a.host); err != nil {
 		return err
 	}
-	fmt.Fprintf(a.stdout, "added %s (mode %04o%s)\n", target, e.Mode, forHost(host))
+	fmt.Fprintln(a.stdout, status("added", fmt.Sprintf("%s (mode %04o%s)", target, e.Mode, forHost(host))))
 	return nil
 }
 
@@ -723,7 +723,7 @@ func (a *app) cmdPush(ref storeRef, args []string) int {
 		live := a.env.Expand(e.Target)
 		content, err := os.ReadFile(live)
 		if errors.Is(err, fs.ErrNotExist) {
-			fmt.Fprintf(a.stdout, "missing    %s\n", e.Target)
+			fmt.Fprintln(a.stdout, status("missing", e.Target))
 			continue
 		}
 		if err != nil {
@@ -746,7 +746,7 @@ func (a *app) cmdPush(ref storeRef, args []string) int {
 		}
 		sameContent := ok && latest.SHA256 == lockbox.Digest(content)
 		if sameContent && mode == e.Mode {
-			fmt.Fprintf(a.stdout, "unchanged  %s\n", e.Target)
+			fmt.Fprintln(a.stdout, status("unchanged", e.Target))
 			continue
 		}
 		if mode != e.Mode {
@@ -762,7 +762,7 @@ func (a *app) cmdPush(ref storeRef, args []string) int {
 			}
 		}
 		changed = true
-		fmt.Fprintf(a.stdout, "updated    %s\n", e.Target)
+		fmt.Fprintln(a.stdout, status("updated", e.Target))
 	}
 	if changed {
 		if err := st.Save(); err != nil {
@@ -772,14 +772,13 @@ func (a *app) cmdPush(ref storeRef, args []string) int {
 	}
 	return rc
 }
-
 func (a *app) cmdPull(ref storeRef, args []string) int {
 	flags, pos, err := parseArgs(args, []flagSpec{{"-n", "--dry-run", false}, {"-f", "--force", false}})
 	if err != nil {
 		a.errorf("pull: %s; run `macfit help`", err)
 		return 2
 	}
-	dry, force := flags["--dry-run"] == "true", flags["--force"] == "true"
+	write := flags["--force"] == "true" && flags["--dry-run"] != "true"
 	st, err := a.openStore(ref.path)
 	if err != nil {
 		a.errorf("pull: %s", err)
@@ -799,17 +798,20 @@ func (a *app) cmdPull(ref storeRef, args []string) int {
 			return 1
 		}
 		if !ok {
-			fmt.Fprintf(a.stdout, "empty      %s (nothing stored yet)\n", e.Target)
+			fmt.Fprintln(a.stdout, status("empty", e.Target+" (nothing stored yet)"))
 			continue
 		}
 		live := a.env.Expand(e.Target)
 		info, err := os.Lstat(live)
 		if err == nil && info.Mode()&os.ModeSymlink != 0 {
-			fmt.Fprintf(a.stdout, "symlink    %s (refusing to write through a link)\n", e.Target)
-			rc = 1
+			fmt.Fprintln(a.stdout, status("symlink", e.Target+" (refusing to write through a link)"))
+			if write {
+				rc = 1
+			}
 			continue
 		}
-		if err == nil {
+		exists := err == nil
+		if exists {
 			cur, rerr := os.ReadFile(live)
 			if rerr != nil {
 				a.errorf("pull: %s: %s", e.Target, rerr)
@@ -817,17 +819,16 @@ func (a *app) cmdPull(ref storeRef, args []string) int {
 				continue
 			}
 			if lockbox.Digest(cur) == latest.SHA256 && info.Mode().Perm() == e.Mode {
-				fmt.Fprintf(a.stdout, "unchanged  %s\n", e.Target)
-				continue
-			}
-			if !force {
-				fmt.Fprintf(a.stdout, "differs    %s (use -f to overwrite)\n", e.Target)
-				rc = 1
+				fmt.Fprintln(a.stdout, status("unchanged", e.Target))
 				continue
 			}
 		}
-		if dry {
-			fmt.Fprintf(a.stdout, "would write %s\n", e.Target)
+		if !write {
+			if exists {
+				fmt.Fprintln(a.stdout, status("would overwrite", e.Target))
+			} else {
+				fmt.Fprintln(a.stdout, status("would write", e.Target))
+			}
 			continue
 		}
 		dirMode := os.FileMode(0o755)
@@ -849,13 +850,52 @@ func (a *app) cmdPull(ref storeRef, args []string) int {
 			rc = 1
 			continue
 		}
-		fmt.Fprintf(a.stdout, "restored   %s\n", e.Target)
+		fmt.Fprintln(a.stdout, status("restored", e.Target))
 	}
 	return rc
 }
 
-// drift renders a diff line that reports drift in yellow.
-func drift(line string) string { return color.Yel5(line) }
+// statusWidth is the column where targets start: the longest status word,
+// "would overwrite", plus two spaces.
+const statusWidth = len("would overwrite") + 2
+
+// paint colors a whole line by the outcome its first word reports.
+func paint(word, line string) string {
+	switch word {
+	case "=", "unchanged":
+		return color.Gra5(line)
+	case "M", "differs", "would overwrite", "missing", "empty":
+		return color.Yel5(line)
+	case "?":
+		return color.Org5(line)
+	case "would write", "restored", "added", "updated":
+		return color.Grn5(line)
+	case "symlink":
+		return color.Red5(line)
+	}
+	return line
+}
+
+// status renders a padded, colored status line for a target.
+func status(word, target string) string {
+	return paint(word, fmt.Sprintf("%-*s%s", statusWidth, word, target))
+}
+
+// marker renders a one-character diff marker line.
+func marker(mark, rest string) string {
+	return paint(mark, mark+" "+rest)
+}
+
+// diffLine colors one line of a unified diff block.
+func diffLine(line string) string {
+	switch {
+	case strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "@@"):
+		return color.Gra4(line)
+	case strings.HasPrefix(line, "-") || strings.HasPrefix(line, "+"):
+		return color.Yel8(line)
+	}
+	return color.Gra5(line)
+}
 
 func (a *app) cmdDiff(ref storeRef, args []string) int {
 	flags, pos, err := parseArgs(args, []flagSpec{{"-V", "--verbose", false}})
@@ -885,7 +925,7 @@ func (a *app) cmdDiff(ref storeRef, args []string) int {
 		live := a.env.Expand(e.Target)
 		cur, rerr := os.ReadFile(live)
 		if errors.Is(rerr, fs.ErrNotExist) {
-			fmt.Fprintln(a.stdout, drift("? "+e.Target))
+			fmt.Fprintln(a.stdout, marker("?", e.Target))
 			drifted = true
 			continue
 		}
@@ -896,25 +936,27 @@ func (a *app) cmdDiff(ref storeRef, args []string) int {
 		info, _ := os.Stat(live)
 		mode := info.Mode().Perm()
 		if !ok {
-			fmt.Fprintln(a.stdout, drift("M "+e.Target+" (nothing stored yet)"))
+			fmt.Fprintln(a.stdout, marker("M", e.Target+" (nothing stored yet)"))
 			drifted = true
 			continue
 		}
 		sameContent := lockbox.Digest(cur) == latest.SHA256
 		if sameContent && mode == e.Mode {
-			fmt.Fprintf(a.stdout, "= %s\n", e.Target)
+			fmt.Fprintln(a.stdout, marker("=", e.Target))
 			continue
 		}
 		drifted = true
 		if mode != e.Mode {
-			fmt.Fprintln(a.stdout, drift(fmt.Sprintf("M %s (mode %04o in store, %04o live)", e.Target, e.Mode, mode)))
+			fmt.Fprintln(a.stdout, marker("M", fmt.Sprintf("%s (mode %04o in store, %04o live)", e.Target, e.Mode, mode)))
 		} else {
-			fmt.Fprintln(a.stdout, drift("M "+e.Target))
+			fmt.Fprintln(a.stdout, marker("M", e.Target))
 		}
 		if verbose && !sameContent {
+			fmt.Fprintln(a.stdout)
 			for _, line := range splitLines([]byte(unifiedDiff(e.Target+" (store)", live+" (live)", latest.Content, cur))) {
-				fmt.Fprintln(a.stdout, drift(line))
+				fmt.Fprintln(a.stdout, diffLine(line))
 			}
+			fmt.Fprintln(a.stdout)
 		}
 	}
 	if drifted {

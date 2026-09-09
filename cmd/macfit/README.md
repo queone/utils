@@ -8,7 +8,8 @@ macfit init -N -s ~/data/etc/macfit.store     # first Mac: create the store and 
 macfit add ~/.bash_logout ~/.bashrc ~/.profile # register live files and capture them
 macfit push                                   # send changed live files into the store
 macfit diff                                   # show what differs between the store and this Mac
-macfit pull ~/.bashrc                         # restore one file, or all of them with no argument
+macfit pull                                   # plan the restore: what would be written, nothing touched
+macfit pull -f ~/.bashrc                      # write one file, or all of them with no target
 macfit init -s ~/data/etc/macfit.store        # another Mac: unlock with the passphrase, remember the path
 ```
 
@@ -40,8 +41,9 @@ If the passphrase or the key ever leaks, create a new store with `init -N -s NEW
 
 - `macfit add PATH... [-H HOST] [-l]` registers regular files and captures their content and mode. `-H` binds the entries to one Mac's LocalHostName; a host-bound entry wins over the unbound one on that Mac and is ignored elsewhere.
 - `macfit push [TARGET...]` captures live files whose content or mode changed as new versions. Older versions stay in the store.
-- `macfit pull [TARGET...] [-n] [-f]` writes the latest version to the live path, creating parent directories (0700 for a 0600 file, else 0755) and setting the mode. It refuses to overwrite a live file that differs unless `-f`, and never writes through a symlink. `-n` prints the plan and writes nothing.
-- `macfit diff [TARGET...] [-V]` prints `=` same, `M` differs, `?` live file missing, one line per entry, and exits 1 when anything drifted. Drift lines and the `-V` unified diff are yellow on a terminal and plain when piped.
+- `macfit pull [TARGET...]` prints the plan and writes nothing: `unchanged`, `would write` for a missing file, `would overwrite` for a differing one, `symlink` for a live symlink. `macfit pull -f` writes the plan, creating parent directories (0700 for a 0600 file, else 0755) and setting the mode; it never writes through a symlink. `-n` is accepted and means the plan, even next to `-f`.
+- `macfit diff [TARGET...] [-V]` prints `=` same, `M` differs, `?` live file missing, one line per entry, and exits 1 when anything drifted. `-V` adds a unified diff block, set off by blank lines.
+- Colors on a terminal, plain when piped: grey for `=` and `unchanged`, yellow for `M`, `differs`, `would overwrite`, and `missing`, orange for `?`, green for `would write`, `restored`, `added`, and `updated`, red for `symlink`. Inside a diff block the headers are dark grey, unchanged lines grey, and removed and added lines light yellow.
 - `macfit ls` lists every entry with its mode, host, and last capture time. `macfit rm TARGET [-H HOST]` removes one.
 
 A TARGET is either the template as `ls` shows it (`$XDG_CONFIG_HOME/git/config`) or the live path.
@@ -56,7 +58,7 @@ A TARGET is either the template as `ls` shows it (`$XDG_CONFIG_HOME/git/config`)
 ### Usage
 
 ```text
-macfit v1.1.0
+macfit v1.2.0
 Keep Mac config files in one encrypted store and restore them on any Mac.
 
 Overview
@@ -72,7 +74,7 @@ Usage
   macfit rm TARGET [-H HOST]          forget a file and its stored versions
   macfit ls                           list entries
   macfit push [TARGET...]             send changed live files into the store
-  macfit pull [TARGET...] [-n] [-f]   restore files from the store
+  macfit pull [TARGET...] [-f]        plan the restore, or write it with -f
   macfit diff [TARGET...] [-V]        show drift between the store and this Mac
   macfit key show                     store path, key id, keychain and store state
   macfit key restore                  put the key back in the keychain with the passphrase
@@ -84,10 +86,10 @@ Options
   -N, --new          Create a new store (init)
   -H, --host NAME    Bind the entry to one Mac (add, rm)
   -l, --literal      Keep the path under ~ instead of an XDG variable (add)
-  -n, --dry-run      Print what pull would write and write nothing
-  -f, --force        Let pull overwrite a live file that differs; skip the key rm prompt
+  -n, --dry-run      Print the pull plan; the default, kept for scripts
+  -f, --force        Write the pull plan, overwriting live files that differ; skip the key rm prompt
   -V, --verbose      Add a unified diff to diff output
-  -v, --version      Print macfit v1.1.0 and exit
+  -v, --version      Print macfit v1.2.0 and exit
   -h, -?, --help     Show this help message and exit
 
 Notes
