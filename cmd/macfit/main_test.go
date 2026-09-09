@@ -164,7 +164,7 @@ func (h *harness) pointer() string {
 func TestVersionAndHelp(t *testing.T) {
 	h := newHarness(t)
 	for _, arg := range []string{"--version", "-v", "v", "version"} {
-		if code, out, errs := h.runRaw(arg); code != 0 || out != "macfit v1.2.0\n" || errs != "" {
+		if code, out, errs := h.runRaw(arg); code != 0 || out != "macfit v1.3.0\n" || errs != "" {
 			t.Fatalf("%s: code %d stdout %q stderr %q", arg, code, out, errs)
 		}
 	}
@@ -190,7 +190,7 @@ func TestHelpLayoutMatchesTheOtherUtilities(t *testing.T) {
 			t.Fatalf("%s: code %d", arg, code)
 		}
 		lines := strings.Split(out, "\n")
-		if lines[0] != "macfit v1.2.0" {
+		if lines[0] != "macfit v1.3.0" {
 			t.Fatalf("%s: first line %q", arg, lines[0])
 		}
 		if lines[1] != "Keep Mac config files in one encrypted store and restore them on any Mac." {
@@ -204,7 +204,7 @@ func TestHelpLayoutMatchesTheOtherUtilities(t *testing.T) {
 			}
 			last = idx
 		}
-		for _, want := range []string{"  -N, --new ", "  -h, -?, --help     Show this help message and exit", "Store path order: -s, then MACFIT_STORE", "plan the restore, or write it with -f", "Print the pull plan; the default"} {
+		for _, want := range []string{"  -N, --new ", "  -h, -?, --help     Show this help message and exit", "Store path order: -s, then MACFIT_STORE", "plan the restore, or write it with -f", "Print the pull plan; the default", "  macfit st "} {
 			if !strings.Contains(out, want) {
 				t.Fatalf("%s: help lacks %q", arg, want)
 			}
@@ -218,7 +218,7 @@ func TestHelpHeaderAndHeadingsAreColoredLikeSkout(t *testing.T) {
 	defer color.SetEnabled(true)()
 	_, out, _ := h.runRaw("help")
 	lines := strings.Split(out, "\n")
-	if lines[0] != color.Bold(color.Gra10("macfit"))+" v1.2.0" {
+	if lines[0] != color.Bold(color.Gra10("macfit"))+" v1.3.0" {
 		t.Fatalf("first line %q", lines[0])
 	}
 	if lines[1] != color.Gra5("Keep Mac config files in one encrypted store and restore them on any Mac.") {
@@ -263,7 +263,7 @@ func TestReadmeUsageBlockEqualsHelp(t *testing.T) {
 func TestPlatformGuard(t *testing.T) {
 	h := newHarness(t)
 	h.app.goos = "linux"
-	for _, verb := range []string{"init", "add", "rm", "ls", "push", "pull", "diff", "key"} {
+	for _, verb := range []string{"init", "st", "add", "rm", "ls", "push", "pull", "diff", "key"} {
 		code, _, errs := h.run(verb)
 		if code != 1 || !strings.Contains(errs, "macfit supports macOS only") {
 			t.Fatalf("%s on linux: code %d stderr %q", verb, code, errs)
@@ -962,6 +962,164 @@ func TestEmptyFileRoundTrip(t *testing.T) {
 	}
 	if out := h.mustRun("push"); out != line("unchanged", "~/.hushlogin") {
 		t.Fatalf("push empty: %q", out)
+	}
+}
+
+func TestStatusScreen(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("init", "-N")
+	same := h.write(".profile", "same\n", 0o644)
+	changed := h.write(".bashrc", "one\n", 0o644)
+	other := h.write(".vimrc", "elsewhere\n", 0o644)
+	h.mustRun("add", same, changed)
+	h.mustRun("add", other, "-H", "other")
+	h.write(".bashrc", "two\n", 0o644)
+	info, err := os.Stat(h.store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := h.mustRun("st")
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	want := []string{
+		"store: " + h.store + " (flag)",
+		"remembered: " + h.app.pointerFile() + " -> " + h.store,
+		fmt.Sprintf("store file: present, %d bytes, generation %d", info.Size(), h.generation()),
+		"key id: ",
+		"login keychain: present",
+		"store opens: yes",
+		"host: a",
+		"entries: 3 total, 2 for this Mac",
+		"conflict copies: none",
+		"drift: = 1, M 1, ? 0",
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("st printed %d lines, want %d:\n%s", len(lines), len(want), out)
+	}
+	for i, w := range want {
+		if i == 3 {
+			if !strings.HasPrefix(lines[i], w) || len(lines[i]) != len(w)+32 {
+				t.Fatalf("line %d %q, want a 32-hex key id", i, lines[i])
+			}
+			continue
+		}
+		if lines[i] != w {
+			t.Fatalf("line %d %q, want %q", i, lines[i], w)
+		}
+	}
+
+	plain := out
+	defer color.SetEnabled(true)()
+	_, out, _ = h.run("st")
+	if color.ClearCode(out) != plain {
+		t.Fatal("colored st does not strip to the plain screen")
+	}
+	colored := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if colored[0] != "store: "+color.Gra4(h.store+" (flag)") {
+		t.Fatalf("store value not grey: %q", colored[0])
+	}
+	if colored[5] != "store opens: "+color.Grn5("yes") {
+		t.Fatalf("store opens not green: %q", colored[5])
+	}
+	if colored[9] != "drift: "+color.Gra4("= 1")+", "+color.Yel5("M 1")+", "+color.Gra4("? 0") {
+		t.Fatalf("colored drift line: %q", colored[9])
+	}
+	restore := color.SetEnabled(false)
+	defer restore()
+
+	copyPath := filepath.Join(filepath.Dir(h.store), "macfit 2.store")
+	if err := os.WriteFile(copyPath, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out := h.mustRun("st"); !strings.Contains(out, "conflict copies: "+copyPath+"\n") {
+		t.Fatalf("conflict copy line: %q", out)
+	}
+	color.SetEnabled(true)
+	if _, out, _ := h.run("st"); !strings.Contains(out, "conflict copies: "+color.Yel5(copyPath)+"\n") {
+		t.Fatalf("conflict copy not yellow: %q", out)
+	}
+	color.SetEnabled(false)
+	os.Remove(copyPath)
+
+	saved := h.keys.Keys
+	h.keys.Keys = map[string][]byte{}
+	out, _ = h.mustFail(1, "st")
+	for _, w := range []string{"login keychain: missing", "store opens: no (key missing)", "host: a", "entries: unknown", "conflict copies: none", "drift: unknown"} {
+		if !strings.Contains(out, w+"\n") {
+			t.Fatalf("st without key lacks %q: %q", w, out)
+		}
+	}
+	color.SetEnabled(true)
+	if _, out, _ := h.run("st"); !strings.Contains(out, "store opens: "+color.Red5("no (key missing)")+"\n") {
+		t.Fatalf("store opens not red: %q", out)
+	}
+	color.SetEnabled(false)
+	h.keys.Keys = saved
+
+	fresh := newHarness(t)
+	out, _ = fresh.mustFail(1, "st")
+	for _, w := range []string{"remembered: none", "store file: missing", "key id: unknown", "login keychain: unknown", "store opens: no (store file missing)", "entries: unknown", "drift: unknown"} {
+		if !strings.Contains(out, w+"\n") {
+			t.Fatalf("st without store lacks %q: %q", w, out)
+		}
+	}
+	if code, _, _ := h.run("st", "extra"); code != 2 {
+		t.Fatalf("st with an argument: code %d", code)
+	}
+}
+
+func TestStatusDriftAgreesWithDiff(t *testing.T) {
+	h := newHarness(t)
+	outcomeFixture(h)
+	_, diffOut, _ := h.run("diff")
+	counts := map[byte]int{}
+	for l := range strings.SplitSeq(strings.TrimSuffix(diffOut, "\n"), "\n") {
+		counts[l[0]]++
+	}
+	want := fmt.Sprintf("drift: = %d, M %d, ? %d", counts['='], counts['M'], counts['?'])
+	if counts['M'] < 2 {
+		t.Fatalf("fixture must yield a symlink counted as M: %q", diffOut)
+	}
+	if out := h.mustRun("st"); !strings.Contains(out, want+"\n") {
+		t.Fatalf("st drift %q not found in %q", want, out)
+	}
+	defer color.SetEnabled(true)()
+	if _, out, _ := h.run("st"); !strings.Contains(out, color.Red5(fmt.Sprintf("? %d", counts['?']))+"\n") || counts['?'] == 0 {
+		t.Fatalf("missing count not red: %q", out)
+	}
+}
+
+func TestPushAndDiffRefuseSymlinks(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("init", "-N")
+	live := h.write(".bashrc", "real\n", 0o644)
+	h.mustRun("add", live)
+	other := h.write("elsewhere", "other\n", 0o644)
+	os.Remove(live)
+	if err := os.Symlink(other, live); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := h.mustFail(1, "push")
+	if out != line("symlink", "~/.bashrc (refusing to read through a link)") {
+		t.Fatalf("push through symlink: %q", out)
+	}
+	st := h.openStore()
+	entries, _ := st.Entries()
+	if n, _ := st.VersionCount(entries[0].ID); n != 1 {
+		t.Fatalf("push through a symlink stored a version: %d", n)
+	}
+	st.Close()
+	if out, _ := h.mustFail(1, "diff"); out != "M ~/.bashrc (live is a symlink)\n" {
+		t.Fatalf("diff on symlink: %q", out)
+	}
+	if out, _ := h.mustFail(1, "diff", "-V"); out != "M ~/.bashrc (live is a symlink)\n" {
+		t.Fatalf("diff -V on symlink printed a block: %q", out)
+	}
+	defer color.SetEnabled(true)()
+	if _, out, _ := h.run("push"); out != color.Red5(line("symlink", "~/.bashrc (refusing to read through a link)")[:len(line("symlink", "~/.bashrc (refusing to read through a link)"))-1])+"\n" {
+		t.Fatalf("push symlink color: %q", out)
+	}
+	if _, out, _ := h.run("diff"); out != color.Yel5("M ~/.bashrc (live is a symlink)")+"\n" {
+		t.Fatalf("diff symlink color: %q", out)
 	}
 }
 

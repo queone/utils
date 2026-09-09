@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.73.0 | AC95: macfit v1.3.0 st status screen, symlink-aware push/diff, conflict match |
 | 0.72.0 | AC94: macfit v1.2.0 outcome colors, quieter diff blocks, pull plans by default |
 | 0.71.0 | AC91: macfit v1.1.0 XDG default store, init -N, key command, yellow diff |
 | 0.70.0 | AC90: add macfit v1.0.0 encrypted Mac config store; lockbox package |

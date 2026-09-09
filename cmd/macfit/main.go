@@ -22,7 +22,7 @@ import (
 	"golang.org/x/term"
 )
 
-const programVersion = "1.2.0"
+const programVersion = "1.3.0"
 
 // storeSource names where the store path came from.
 type storeSource string
@@ -115,6 +115,7 @@ func usage() string {
 		"  for other Macs.\n\n" +
 		heading("Usage") + "\n" +
 		"  macfit init [-N]                    unlock an existing store, or create one with -N\n" +
+		"  macfit st                           status of the store, key, and drift on this Mac\n" +
 		"  macfit add PATH... [-H HOST] [-l]   register live files and capture them\n" +
 		"  macfit rm TARGET [-H HOST]          forget a file and its stored versions\n" +
 		"  macfit ls                           list entries\n" +
@@ -179,6 +180,8 @@ func (a *app) run(args []string) int {
 	switch verb {
 	case "init":
 		return a.cmdInit(ref, vargs)
+	case "st":
+		return a.cmdSt(ref, vargs)
 	case "add":
 		return a.cmdAdd(ref, vargs)
 	case "rm":
@@ -721,6 +724,11 @@ func (a *app) cmdPush(ref storeRef, args []string) int {
 	rc, changed := 0, false
 	for _, e := range sel {
 		live := a.env.Expand(e.Target)
+		if li, lerr := os.Lstat(live); lerr == nil && li.Mode()&os.ModeSymlink != 0 {
+			fmt.Fprintln(a.stdout, status("symlink", e.Target+" (refusing to read through a link)"))
+			rc = 1
+			continue
+		}
 		content, err := os.ReadFile(live)
 		if errors.Is(err, fs.ErrNotExist) {
 			fmt.Fprintln(a.stdout, status("missing", e.Target))
@@ -923,6 +931,11 @@ func (a *app) cmdDiff(ref storeRef, args []string) int {
 			return 1
 		}
 		live := a.env.Expand(e.Target)
+		if li, lerr := os.Lstat(live); lerr == nil && li.Mode()&os.ModeSymlink != 0 {
+			fmt.Fprintln(a.stdout, marker("M", e.Target+" (live is a symlink)"))
+			drifted = true
+			continue
+		}
 		cur, rerr := os.ReadFile(live)
 		if errors.Is(rerr, fs.ErrNotExist) {
 			fmt.Fprintln(a.stdout, marker("?", e.Target))
@@ -963,6 +976,148 @@ func (a *app) cmdDiff(ref storeRef, args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// driftOf classifies one entry against its live path as "=", "M", or "?".
+func (a *app) driftOf(st *lockbox.Store, e lockbox.Entry) (string, error) {
+	latest, ok, err := st.Latest(e.ID)
+	if err != nil {
+		return "", err
+	}
+	live := a.env.Expand(e.Target)
+	info, err := os.Lstat(live)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "?", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !ok {
+		return "M", nil
+	}
+	cur, err := os.ReadFile(live)
+	if err != nil {
+		return "", err
+	}
+	if lockbox.Digest(cur) == latest.SHA256 && info.Mode().Perm() == e.Mode {
+		return "=", nil
+	}
+	return "M", nil
+}
+
+// cmdSt prints one status screen for the store, the key, and this Mac's drift.
+func (a *app) cmdSt(ref storeRef, args []string) int {
+	if len(args) > 0 {
+		a.errorf("st takes no arguments; run `macfit help`")
+		return 2
+	}
+	rc := 0
+	// kv prints a plain label with a value; grey prints it in dark grey.
+	kv := func(label, value string) { fmt.Fprintf(a.stdout, "%s: %s\n", label, value) }
+	grey := func(label, value string) { kv(label, color.Gra4(value)) }
+	grey("store", fmt.Sprintf("%s (%s)", ref.path, ref.source))
+	if b, err := os.ReadFile(a.pointerFile()); err == nil && strings.TrimSpace(string(b)) != "" {
+		grey("remembered", a.pointerFile()+" -> "+strings.TrimSpace(string(b)))
+	} else {
+		grey("remembered", "none")
+	}
+	var st *lockbox.Store
+	opens := "yes"
+	file, err := os.ReadFile(ref.path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		grey("store file", "missing")
+		grey("key id", "unknown")
+		grey("login keychain", "unknown")
+		opens = "no (store file missing)"
+	case err != nil:
+		grey("store file", err.Error())
+		grey("key id", "unknown")
+		grey("login keychain", "unknown")
+		opens = "no (" + err.Error() + ")"
+	default:
+		hdr, perr := lockbox.ParseHeader(file)
+		if perr != nil {
+			grey("store file", fmt.Sprintf("present, %d bytes, %s", len(file), perr))
+			grey("key id", "unknown")
+			grey("login keychain", "unknown")
+			opens = "no (" + perr.Error() + ")"
+			break
+		}
+		grey("store file", fmt.Sprintf("present, %d bytes, generation %d", len(file), hdr.Generation))
+		keyID := lockbox.KeyIDString(hdr.KeyID)
+		grey("key id", keyID)
+		key, kerr := a.keys.Get(keyID)
+		switch {
+		case errors.Is(kerr, lockbox.ErrKeyNotFound):
+			grey("login keychain", "missing")
+			opens = "no (key missing)"
+		case kerr != nil:
+			grey("login keychain", kerr.Error())
+			opens = "no (" + kerr.Error() + ")"
+		default:
+			grey("login keychain", "present")
+			loaded, lerr := lockbox.Load(ref.path, key)
+			if lerr != nil {
+				opens = "no (" + lerr.Error() + ")"
+			} else {
+				st = loaded
+				defer st.Close()
+			}
+		}
+	}
+	if st == nil {
+		rc = 1
+		kv("store opens", color.Red5(opens))
+	} else {
+		kv("store opens", color.Grn5(opens))
+	}
+	grey("host", a.host)
+	var sel []lockbox.Entry
+	if st == nil {
+		grey("entries", "unknown")
+	} else {
+		all, err := st.Entries()
+		if err != nil {
+			a.errorf("st: %s", err)
+			return 1
+		}
+		sel = lockbox.Select(all, a.host)
+		grey("entries", fmt.Sprintf("%d total, %d for this Mac", len(all), len(sel)))
+	}
+	if copies := lockbox.ConflictCopies(ref.path); len(copies) > 0 {
+		kv("conflict copies", color.Yel5(strings.Join(copies, ", ")))
+	} else {
+		grey("conflict copies", "none")
+	}
+	if st == nil {
+		grey("drift", "unknown")
+		return rc
+	}
+	counts := map[string]int{}
+	for _, e := range sel {
+		mark, err := a.driftOf(st, e)
+		if err != nil {
+			a.errorf("st: %s: %s", e.Target, err)
+			return 1
+		}
+		counts[mark]++
+	}
+	same := color.Gra4(fmt.Sprintf("= %d", counts["="]))
+	modified := fmt.Sprintf("M %d", counts["M"])
+	if counts["M"] > 0 {
+		modified = color.Yel5(modified)
+	} else {
+		modified = color.Gra4(modified)
+	}
+	missing := fmt.Sprintf("? %d", counts["?"])
+	if counts["?"] > 0 {
+		missing = color.Red5(missing)
+	} else {
+		missing = color.Gra4(missing)
+	}
+	kv("drift", same+", "+modified+", "+missing)
+	return rc
 }
 
 func splitLines(b []byte) []string {

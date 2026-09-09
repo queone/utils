@@ -167,8 +167,8 @@ func TestConflictCopies(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "macfit.store")
 	for _, n := range []string{
-		"macfit.store", "macfit 2.store", "macfit (1).store", "macfit (conflicted copy 2026-09-09).store",
-		".macfit.store.tmp-x", "other.store", "macfit.store.bak", "macfit 2.txt",
+		"macfit.store", "macfit 2.store", "macfit (1).store", "macfit (conflicted copy 2026-09-09).store", "macfit-DESKTOP.store",
+		"macfit2.store", "macfit_old.store", ".macfit.store.tmp-x", "other.store", "macfit.store.bak", "macfit 2.txt",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
@@ -179,6 +179,7 @@ func TestConflictCopies(t *testing.T) {
 		filepath.Join(dir, "macfit (1).store"),
 		filepath.Join(dir, "macfit (conflicted copy 2026-09-09).store"),
 		filepath.Join(dir, "macfit 2.store"),
+		filepath.Join(dir, "macfit-DESKTOP.store"),
 	}
 	if len(got) != len(want) {
 		t.Fatalf("conflict copies %v, want %v", got, want)

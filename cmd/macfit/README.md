@@ -11,6 +11,7 @@ macfit diff                                   # show what differs between the st
 macfit pull                                   # plan the restore: what would be written, nothing touched
 macfit pull -f ~/.bashrc                      # write one file, or all of them with no target
 macfit init -s ~/data/etc/macfit.store        # another Mac: unlock with the passphrase, remember the path
+macfit st                                     # one screen: store, key, host, entries, conflicts, drift
 ```
 
 `push` sends live files up into the store. `pull` brings the store down onto the Mac. The store is the remote, as in git.
@@ -45,12 +46,14 @@ If the passphrase or the key ever leaks, create a new store with `init -N -s NEW
 - `macfit diff [TARGET...] [-V]` prints `=` same, `M` differs, `?` live file missing, one line per entry, and exits 1 when anything drifted. `-V` adds a unified diff block, set off by blank lines.
 - Colors on a terminal, plain when piped: grey for `=` and `unchanged`, yellow for `M`, `differs`, `would overwrite`, and `missing`, orange for `?`, green for `would write`, `restored`, `added`, and `updated`, red for `symlink`. Inside a diff block the headers are dark grey, unchanged lines grey, and removed and added lines light yellow.
 - `macfit ls` lists every entry with its mode, host, and last capture time. `macfit rm TARGET [-H HOST]` removes one.
+- `macfit st` prints one status screen: the store path and where it came from, the remembered path, the store file's size and generation, the key id and whether the keychain key opens the store, this Mac's hostname as `-H` sees it, entry counts, sync conflict copies, and a drift summary. Exit 1 when the store does not open. On a terminal the values are dark grey, `store opens` is green or red, conflict copies are yellow, and non-zero `M` and `?` drift counts are yellow and red.
+- `push` and `diff` refuse a live path that has become a symlink, as `pull` does, so a link is never read into the store or compared as if it were the file.
 
 A TARGET is either the template as `ls` shows it (`$XDG_CONFIG_HOME/git/config`) or the live path.
 
 ### Things to know
 
-- Two Macs writing the store while offline produce a sync conflict copy, named `macfit 2.store`, `macfit (1).store`, or similar depending on the sync client. macfit warns when one sits beside the store, and a stale writer that opened an older generation is refused rather than allowed to overwrite the newer file.
+- Two Macs writing the store while offline produce a sync conflict copy, named `macfit 2.store`, `macfit (1).store`, `macfit-DEVICE.store`, or similar depending on the sync client. macfit warns when one sits beside the store, and a stale writer that opened an older generation is refused rather than allowed to overwrite the newer file.
 - A synced folder is not end-to-end encrypted unless the provider says so. The store is encrypted before it reaches the folder, so that does not matter for its contents.
 - `init` and the `key` prompts need a terminal.
 - Files only: no directories, globs, or symlinks. macOS `defaults` settings are a planned addition.
@@ -58,7 +61,7 @@ A TARGET is either the template as `ls` shows it (`$XDG_CONFIG_HOME/git/config`)
 ### Usage
 
 ```text
-macfit v1.2.0
+macfit v1.3.0
 Keep Mac config files in one encrypted store and restore them on any Mac.
 
 Overview
@@ -70,6 +73,7 @@ Overview
 
 Usage
   macfit init [-N]                    unlock an existing store, or create one with -N
+  macfit st                           status of the store, key, and drift on this Mac
   macfit add PATH... [-H HOST] [-l]   register live files and capture them
   macfit rm TARGET [-H HOST]          forget a file and its stored versions
   macfit ls                           list entries
@@ -89,7 +93,7 @@ Options
   -n, --dry-run      Print the pull plan; the default, kept for scripts
   -f, --force        Write the pull plan, overwriting live files that differ; skip the key rm prompt
   -V, --verbose      Add a unified diff to diff output
-  -v, --version      Print macfit v1.2.0 and exit
+  -v, --version      Print macfit v1.3.0 and exit
   -h, -?, --help     Show this help message and exit
 
 Notes

@@ -6,10 +6,11 @@ Skeleton. This AC is parked so the idea is not lost; the Director scopes it befo
 Every gkit utility prints the same first two help lines, in skout's format and coloring: the utility name in bold white followed by ` v<version>` in plain text, then a one-sentence description in gray. Section headings below them use one shared vocabulary, written capitalized rather than all caps (`Overview`, `Usage`, `Options`, `Notes`) and rendered in bold white. One helper renders the header and sections so no utility hand-colors its help. The AC ends with a short written recommendation for the other queone projects, skout among them, that names the header format, the section set, the ordering, and the `--version` form.
 Doc impact: every `cmd/<name>/README.md` usage block, and one new style document whose home is settled at scoping.
 
-## Observed today
+### Observed today
 
 - skout v0.14.1: line one is `skout` in bold white (256-color 231) plus ` v0.14.1` plain; line two is `Fantasy Baseball advisor — github.com/queone/skout` in gray (245); headings `USAGE` and `COMMANDS` are all caps in white (255), not bold; nested flags are indented under their command; `--version` prints `skout 0.14.1` without the `v` that the header shows.
-- gkit: `vkeep`, `vconv`, `ishrink`, and `macfit` print `name vX.Y.Z`, a description line, then `Overview`, `Usage`, `Options`, `Notes` in plain text; `attune` prints `attune — description` then `Usage:` and `Flags:`; older utilities vary further. `--version` prints `name X.Y.Z` in some and `name vX.Y.Z` in others.
+- gkit: `vkeep`, `vconv`, `ishrink`, and `macfit` print `name vX.Y.Z`, a description line, then `Overview`, `Usage`, `Options`, `Notes`; `macfit` already colors its header and headings the skout way (AC91); `attune` prints `attune — description` then `Usage:` and `Flags:`; older utilities vary further. `--version` prints `name X.Y.Z` in some and `name vX.Y.Z` in others.
+- `internal/color`: `color.Bold(color.Gra10("macfit"))` emits `ESC[1m ESC[38;5;231m macfit ESC[0m ESC[1m ESC[0m`, a redundant bold-then-reset pair after the inner reset. Harmless on screen, but the renderer should emit one sequence per heading, as skout does (`ESC[1;38;5;231m`).
 
 ## In Scope
 
@@ -19,6 +20,7 @@ Provisional. Candidate design, to be settled at scoping:
 - Headings: capitalized words, bold white, through `internal/color` (`color.Bold(color.Gra10(...))` or the equivalent settled at scoping), plain when output is not a terminal.
 - Section vocabulary and order: `Overview` (optional), `Usage` (required, synopsis lines), `Commands` (optional, multi-command utilities, with nested flags indented as skout does), `Options` (required when flags exist; replaces `Flags`), utility-specific sections such as `Cheatsheet` or `Timestamps` (optional, after `Options`), `Examples` (optional), `Notes` (optional, last). The basic set every CLI carries is `Usage` and `Options`.
 - One renderer, `internal/usage` or a function in `internal/color`, takes name, version, description, and ordered sections and returns the text, so each utility's `usage()` becomes data.
+- Fix the redundant bold-then-reset pair in `internal/color`, either by a combined bold-plus-color helper or by making `Bold` compose without re-emitting after the inner reset, and cover it with a test.
 - `--version` prints `<name> v<version>` everywhere; `-v`, `-h`, `-?`, `--help`, `help`, and `version` aliases as the shared convention.
 - Every `cmd/<name>/main.go` usage text, its tests, and its README usage block move to the renderer. Scoping decides whether the migration ships in one AC or in batches by utility family.
 - The recommendation document for other queone projects, including the note that skout's `--version` should print `skout v0.14.1` to match its own header and that its headings move from all caps to capitalized bold white.

@@ -255,9 +255,10 @@ func WriteAtomic(path string, data []byte, openedGen uint64) error {
 }
 
 // ConflictCopies lists sync conflict copies beside path: every sibling that
-// starts with the store's stem, ends with its extension, and carries any
-// suffix between them, such as "macfit 2.store", "macfit (1).store", or
-// "macfit (conflicted copy 2026-09-09).store", depending on the sync client.
+// starts with the store's stem, ends with its extension, and carries a suffix
+// between them that starts with a space, an opening parenthesis, or a hyphen,
+// the shapes sync clients produce: "macfit 2.store", "macfit (1).store",
+// "macfit (conflicted copy 2026-09-09).store", "macfit-DESKTOP.store".
 func ConflictCopies(path string) []string {
 	dir, base := filepath.Dir(path), filepath.Base(path)
 	ext := filepath.Ext(base)
@@ -272,7 +273,8 @@ func ConflictCopies(path string) []string {
 		if n == base || !strings.HasPrefix(n, stem) || !strings.HasSuffix(n, ext) {
 			continue
 		}
-		if mid := n[len(stem) : len(n)-len(ext)]; mid == "" {
+		mid := n[len(stem) : len(n)-len(ext)]
+		if mid == "" || !strings.ContainsRune(" (-", rune(mid[0])) {
 			continue
 		}
 		out = append(out, filepath.Join(dir, n))
