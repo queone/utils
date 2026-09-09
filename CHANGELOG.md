@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.70.0 | AC90: add macfit v1.0.0 encrypted Mac config store; lockbox package |
 | 0.69.0 | AC89: namehunt v1.1.0 archive.org, sites file seed, profile URLs, 300ms wait |
 | 0.68.0 | AC88: add tfe v2.0.0 without utl; drop stale plan.md paragraph |
 | 0.67.1 | AC87: adopt govna v0.54.0 canon |

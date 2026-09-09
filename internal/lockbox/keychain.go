@@ -1,0 +1,93 @@
+package lockbox
+
+import (
+	"bytes"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"os/exec"
+	"strings"
+)
+
+// ErrKeyNotFound reports a keychain that holds no key for the store.
+var ErrKeyNotFound = errors.New("key not found in keychain")
+
+// KeyStore stores and retrieves a store's data key by key id.
+type KeyStore interface {
+	Get(keyID string) ([]byte, error)
+	Put(keyID string, key []byte) error
+}
+
+// Executor runs an external command and returns its combined output.
+type Executor func(name string, args ...string) ([]byte, error)
+
+// DefaultExecutor runs commands through os/exec.
+func DefaultExecutor(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).CombinedOutput()
+}
+
+const keychainService = "macfit"
+
+// SecurityKeyStore keeps the data key in the login keychain through the
+// macOS security command. Items the command creates are readable by the
+// command without an access prompt.
+type SecurityKeyStore struct {
+	Exec Executor
+}
+
+func (s SecurityKeyStore) run(args ...string) ([]byte, error) {
+	if s.Exec == nil {
+		return DefaultExecutor("security", args...)
+	}
+	return s.Exec("security", args...)
+}
+
+// Get reads the key for keyID from the login keychain.
+func (s SecurityKeyStore) Get(keyID string) ([]byte, error) {
+	out, err := s.run("find-generic-password", "-a", keyID, "-s", keychainService, "-w")
+	if err != nil {
+		if bytes.Contains(out, []byte("could not be found")) {
+			return nil, ErrKeyNotFound
+		}
+		return nil, fmt.Errorf("read keychain item: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	key, err := hex.DecodeString(strings.TrimSpace(string(out)))
+	if err != nil || len(key) != KeySize {
+		return nil, errors.New("keychain item is not a macfit key")
+	}
+	return key, nil
+}
+
+// Put saves key for keyID in the login keychain, replacing any existing item.
+func (s SecurityKeyStore) Put(keyID string, key []byte) error {
+	if len(key) != KeySize {
+		return fmt.Errorf("data key must be %d bytes", KeySize)
+	}
+	out, err := s.run("add-generic-password", "-a", keyID, "-s", keychainService, "-w", hex.EncodeToString(key), "-U")
+	if err != nil {
+		return fmt.Errorf("save keychain item: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// MemoryKeyStore is an in-memory KeyStore for tests.
+type MemoryKeyStore struct {
+	Keys map[string][]byte
+}
+
+// Get returns the key saved for keyID.
+func (m *MemoryKeyStore) Get(keyID string) ([]byte, error) {
+	if k, ok := m.Keys[keyID]; ok {
+		return bytes.Clone(k), nil
+	}
+	return nil, ErrKeyNotFound
+}
+
+// Put saves key for keyID.
+func (m *MemoryKeyStore) Put(keyID string, key []byte) error {
+	if m.Keys == nil {
+		m.Keys = map[string][]byte{}
+	}
+	m.Keys[keyID] = bytes.Clone(key)
+	return nil
+}
