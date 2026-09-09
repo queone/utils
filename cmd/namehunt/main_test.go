@@ -198,21 +198,21 @@ func TestSiteResolutionPrefersFileOverBuiltIn(t *testing.T) {
 	for _, s := range sites {
 		names = append(names, s.name)
 	}
-	if want := []string{"github", "lichess", "reddit"}; !reflect.DeepEqual(names, want) {
+	if want := []string{"archive", "github", "lichess", "reddit"}; !reflect.DeepEqual(names, want) {
 		t.Fatalf("site names = %q, want %q", names, want)
 	}
-	if sites[0].template != "https://example.test/{}" || sites[0].source != sourceFile || !reflect.DeepEqual(sites[0].free, []int{404, 410}) {
-		t.Errorf("github override = %+v", sites[0])
+	if sites[1].template != "https://example.test/{}" || sites[1].source != sourceFile || !reflect.DeepEqual(sites[1].free, []int{404, 410}) {
+		t.Errorf("github override = %+v", sites[1])
 	}
-	if sites[1].source != sourceBuiltIn || sites[2].source != sourceFile {
-		t.Errorf("sources = %q, %q; want built-in, file", sites[1].source, sites[2].source)
+	if sites[0].source != sourceBuiltIn || sites[2].source != sourceBuiltIn || sites[3].source != sourceFile {
+		t.Errorf("sources = %q, %q, %q; want built-in, built-in, file", sites[0].source, sites[2].source, sites[3].source)
 	}
 
 	s, err := resolveSite("https://x.test/u/{}", sites)
 	if err != nil || s.source != sourceArgument || s.template != "https://x.test/u/{}" {
 		t.Errorf("template argument = %+v, %v", s, err)
 	}
-	if _, err := resolveSite("nosuchsite", sites); err == nil || !strings.Contains(err.Error(), "known sites: github, lichess, reddit") {
+	if _, err := resolveSite("nosuchsite", sites); err == nil || !strings.Contains(err.Error(), "known sites: archive, github, lichess, reddit") {
 		t.Errorf("unknown site error = %v", err)
 	}
 	if _, err := resolveSite("https://x.test/u", sites); err == nil || !strings.Contains(err.Error(), "{}") {
@@ -243,16 +243,16 @@ func TestSitesFileParsing(t *testing.T) {
 	}
 
 	bad := map[string]string{
-		"one field on line 3":      "a https://a.test/{}\n\nlonely\n",
-		"four fields on line 2":    "a https://a.test/{}\nb https://b.test/{} 404 extra\n",
-		"relative template line 1": "a a.test/{}\n",
-		"bad codes on line 2":      "a https://a.test/{}\nb https://b.test/{} abc\n",
+		"one field on line 3":        "a https://a.test/{}\n\nlonely\n",
+		"second code list on line 2": "a https://a.test/{}\nb https://b.test/{} 404 extra\n",
+		"relative template line 1":   "a a.test/{}\n",
+		"bad codes on line 2":        "a https://a.test/{}\nb https://b.test/{} abc\n",
 	}
 	wantLine := map[string]string{
-		"one field on line 3":      "line 3",
-		"four fields on line 2":    "line 2",
-		"relative template line 1": "line 1",
-		"bad codes on line 2":      "line 2",
+		"one field on line 3":        "line 3",
+		"second code list on line 2": "line 2",
+		"relative template line 1":   "line 1",
+		"bad codes on line 2":        "line 2",
 	}
 	for name, content := range bad {
 		_, err := parseSites(strings.NewReader(content), "sites")
@@ -262,15 +262,15 @@ func TestSitesFileParsing(t *testing.T) {
 	}
 
 	sites, err = loadSites(filepath.Join(t.TempDir(), "missing"))
-	if err != nil || len(sites) != 2 {
-		t.Errorf("missing file = %d sites, %v; want the 2 built-ins", len(sites), err)
+	if err != nil || len(sites) != 3 {
+		t.Errorf("missing file = %d sites, %v; want the 3 built-ins", len(sites), err)
 	}
 }
 
 func TestFreeCodePrecedence(t *testing.T) {
 	srv, _ := newSiteServer(t)
 	p := writeSites(t, "mysite "+srv.URL+"/{} 410\n")
-	if r := runWith(t, p, srv.Client(), "", "mysite", "gone"); r.code != 0 || r.stdout != "gone: free\n" {
+	if r := runWith(t, p, srv.Client(), "", "mysite", "gone"); r.code != 0 || r.stdout != "gone: free "+srv.URL+"/gone\n" {
 		t.Errorf("file codes = exit %d, stdout %q; want 0, free", r.code, r.stdout)
 	}
 	if r := runWith(t, p, srv.Client(), "", "-f", "404", "mysite", "gone"); r.code != 2 || r.stdout != "gone: unknown (HTTP 410)\n" {
@@ -290,11 +290,11 @@ func TestClassificationOutcomes(t *testing.T) {
 		stdout string
 		sleeps []time.Duration
 	}{
-		{"free", 0, "free: free\n", nil},
+		{"free", 0, "free: free " + srv.URL + "/free\n", nil},
 		{"taken", 1, "taken: taken\n", nil},
 		{"forbidden", 2, "forbidden: unknown (HTTP 403)\n", nil},
-		{"flaky", 0, "flaky: free\n", []time.Duration{100 * time.Millisecond}},
-		{"nohead", 0, "nohead: free\n", nil},
+		{"flaky", 0, "flaky: free " + srv.URL + "/flaky\n", []time.Duration{100 * time.Millisecond}},
+		{"nohead", 0, "nohead: free " + srv.URL + "/nohead\n", nil},
 		{"limited", 2, "limited: unknown (HTTP 429 after 5 attempts)\n", []time.Duration{100 * time.Millisecond, 200 * time.Millisecond, 400 * time.Millisecond, 800 * time.Millisecond}},
 	}
 	for _, c := range cases {
@@ -325,24 +325,37 @@ func TestScanPrintsFreeNamesAndSummary(t *testing.T) {
 	srv, _ := newSiteServer(t)
 	tmpl := srv.URL + "/{}"
 	r := runWith(t, "", srv.Client(), "free\ntaken\nforbidden\n", tmpl, "-")
-	if r.code != 2 || r.stdout != "free\n" {
-		t.Errorf("mixed scan = exit %d, stdout %q; want 2, free", r.code, r.stdout)
+	if r.code != 2 || r.stdout != "free "+srv.URL+"/free\n" {
+		t.Errorf("mixed scan = exit %d, stdout %q; want 2, free with its URL", r.code, r.stdout)
 	}
-	if !strings.Contains(r.stderr, "forbidden: unknown (HTTP 403)\n") || !strings.HasSuffix(r.stderr, "Checked 3: 1 free, 1 taken, 1 unknown.\n") {
+	if !strings.Contains(r.stderr, "forbidden: unknown (HTTP 403)\n") || !strings.HasSuffix(r.stderr, "Checked 3: 1 free, 1 taken, 1 unknown.\n"+signupNote+"\n") {
 		t.Errorf("mixed scan stderr = %q", r.stderr)
 	}
 	r = runWith(t, "", srv.Client(), "free\ntaken\n", tmpl, "-")
-	if r.code != 0 || r.stdout != "free\n" || r.stderr != "Checked 2: 1 free, 1 taken, 0 unknown.\n" {
+	if r.code != 0 || r.stdout != "free "+srv.URL+"/free\n" || r.stderr != "Checked 2: 1 free, 1 taken, 0 unknown.\n"+signupNote+"\n" {
 		t.Errorf("clean scan = exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
 	}
 }
 
-func TestWaitPausesBetweenRequests(t *testing.T) {
+func TestPauseBetweenRequestsDefaultsTo300ms(t *testing.T) {
 	srv, _ := newSiteServer(t)
-	r := runWith(t, "", srv.Client(), "a\nb\nc\n", "-w", "50", srv.URL+"/{}", "-")
-	want := []time.Duration{50 * time.Millisecond, 50 * time.Millisecond}
-	if r.code != 0 || !reflect.DeepEqual(r.sleeps, want) {
-		t.Errorf("-w 50 = exit %d, sleeps %v; want 0, %v", r.code, r.sleeps, want)
+	tmpl := srv.URL + "/{}"
+	cases := []struct {
+		args []string
+		want []time.Duration
+	}{
+		{[]string{tmpl, "-"}, []time.Duration{300 * time.Millisecond, 300 * time.Millisecond}},
+		{[]string{"-w", "0", tmpl, "-"}, nil},
+		{[]string{"-w", "50", tmpl, "-"}, []time.Duration{50 * time.Millisecond, 50 * time.Millisecond}},
+	}
+	for _, c := range cases {
+		r := runWith(t, "", srv.Client(), "a\nb\nc\n", c.args...)
+		if r.code != 0 || !reflect.DeepEqual(r.sleeps, c.want) {
+			t.Errorf("%q = exit %d, sleeps %v; want 0, %v", c.args, r.code, r.sleeps, c.want)
+		}
+	}
+	if r := runWith(t, "", srv.Client(), "", tmpl, "a"); len(r.sleeps) != 0 {
+		t.Errorf("single name slept %v; want no pacing sleep", r.sleeps)
 	}
 }
 
@@ -379,25 +392,26 @@ func TestListShowsFileAndBuiltInSites(t *testing.T) {
 		t.Fatalf("-l exit = %d, stderr %q", r.code, r.stderr)
 	}
 	lines := strings.Split(strings.TrimRight(r.stdout, "\n"), "\n")
-	if len(lines) != 3 {
+	if len(lines) != 4 {
 		t.Fatalf("-l printed %d lines: %q", len(lines), r.stdout)
 	}
-	want := []struct{ name, template, codes, source string }{
-		{"github", "https://example.test/{}", "404", "file"},
-		{"lichess", "https://lichess.org/@/{}", "404", "built-in"},
-		{"reddit", "https://www.reddit.com/user/{}", "404", "file"},
+	want := []struct{ name, template, codes, source, profile string }{
+		{"archive", "https://archive.org/download/@{}", "404", "built-in", "https://archive.org/details/@{}"},
+		{"github", "https://example.test/{}", "404", "file", "https://example.test/{}"},
+		{"lichess", "https://lichess.org/@/{}", "404", "built-in", "https://lichess.org/@/{}"},
+		{"reddit", "https://www.reddit.com/user/{}", "404", "file", "https://www.reddit.com/user/{}"},
 	}
 	for i, w := range want {
 		fields := strings.Fields(lines[i])
 		got := strings.Join(fields, " ")
-		if got != w.name+" "+w.template+" "+w.codes+" "+w.source {
+		if got != w.name+" "+w.template+" "+w.codes+" "+w.source+" "+w.profile {
 			t.Errorf("-l line %d = %q, want %q", i+1, lines[i], w)
 		}
 	}
 
 	r = runWith(t, "", nil, "", "-l")
-	if r.code != 0 || strings.Count(r.stdout, "\n") != 2 || !strings.Contains(r.stdout, "github") || !strings.Contains(r.stdout, "lichess") {
-		t.Errorf("-l without a file = exit %d, stdout %q; want the two built-ins", r.code, r.stdout)
+	if r.code != 0 || strings.Count(r.stdout, "\n") != 3 || strings.Count(r.stdout, " file ") != 3 {
+		t.Errorf("-l without a file = exit %d, stdout %q; want the three seeded built-ins as file", r.code, r.stdout)
 	}
 
 	p = writeSites(t, "reddit https://www.reddit.com/user/{}\n\nlonely\n")
@@ -409,7 +423,7 @@ func TestListShowsFileAndBuiltInSites(t *testing.T) {
 
 func TestHelpOpensLikeOtherUtilitiesAndListsEveryFlag(t *testing.T) {
 	flags := []string{"-d, --distinct", "-r, --require CHARS", "-n, --dry-run", "-f, --free CODES", "-w, --wait MS", "-l, --list", "-v, --version"}
-	header := "namehunt v1.0.0\nFind free usernames on any site with a predictable profile URL.\n\nOverview\n  "
+	header := "namehunt v1.1.0\nFind free usernames on any site with a predictable profile URL.\n\nOverview\n  "
 	bare := runWith(t, "", nil, "")
 	if bare.code != 0 || !strings.HasPrefix(bare.stdout, header) {
 		t.Errorf("bare namehunt = exit %d, stdout %q; want 0 and the vkeep-style header", bare.code, bare.stdout)
@@ -422,16 +436,21 @@ func TestHelpOpensLikeOtherUtilitiesAndListsEveryFlag(t *testing.T) {
 			t.Errorf("help lacks flag line %q", f)
 		}
 	}
+	for _, s := range []string{"Built-in sites: github, lichess, archive.", "(default 300)", "NAME TEMPLATE [FREE_CODES] [PROFILE_TEMPLATE]", "only signing up confirms"} {
+		if !strings.Contains(bare.stdout, s) {
+			t.Errorf("help lacks %q", s)
+		}
+	}
 	for _, h := range []string{"-h", "-?", "--help"} {
 		r := runWith(t, "", nil, "", h)
 		if r.code != 0 || r.stdout != bare.stdout {
 			t.Errorf("%s = exit %d; stdout differs from bare namehunt: %q", h, r.code, r.stdout)
 		}
 	}
-	if r := runWith(t, "", nil, "", "-v"); r.code != 0 || r.stdout != "namehunt v1.0.0\n" {
+	if r := runWith(t, "", nil, "", "-v"); r.code != 0 || r.stdout != "namehunt v1.1.0\n" {
 		t.Errorf("-v = exit %d, stdout %q", r.code, r.stdout)
 	}
-	if r := runWith(t, "", nil, "", "--version"); r.stdout != "namehunt v1.0.0\n" {
+	if r := runWith(t, "", nil, "", "--version"); r.stdout != "namehunt v1.1.0\n" {
 		t.Errorf("--version stdout = %q", r.stdout)
 	}
 }
@@ -447,5 +466,197 @@ func TestSitesPathHonorsXDGConfigHome(t *testing.T) {
 	p, err = sitesPath()
 	if err != nil || !strings.HasSuffix(p, filepath.Join(".config", "namehunt", "sites")) {
 		t.Errorf("relative XDG_CONFIG_HOME path = %q, %v; want the home fallback", p, err)
+	}
+}
+
+func TestArchiveIsBuiltInWithDetailsProfile(t *testing.T) {
+	sites, err := loadSites(filepath.Join(t.TempDir(), "missing"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := resolveSite("archive", sites)
+	if err != nil || s.source != sourceBuiltIn || s.template != "https://archive.org/download/@{}" || s.free != nil {
+		t.Errorf("archive = %+v, %v; want the built-in download template with default codes", s, err)
+	}
+	if s.profileTemplate() != "https://archive.org/details/@{}" {
+		t.Errorf("archive profile = %q, want the details URL", s.profileTemplate())
+	}
+	for _, name := range []string{"github", "lichess"} {
+		s, err := resolveSite(name, sites)
+		if err != nil || s.profileTemplate() != s.template {
+			t.Errorf("%s profile = %q, %v; want its check template %q", name, s.profileTemplate(), err, s.template)
+		}
+	}
+}
+
+func TestMissingSitesFileIsSeeded(t *testing.T) {
+	srv, _ := newSiteServer(t)
+	for _, args := range [][]string{{"-l"}, {"-n", "github", "kaqe"}, {srv.URL + "/{}", "free"}} {
+		p := filepath.Join(t.TempDir(), "cfg", "namehunt", "sites")
+		if r := runWith(t, p, srv.Client(), "", args...); r.code != 0 {
+			t.Fatalf("%q = exit %d, stderr %q", args, r.code, r.stderr)
+		}
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%q did not seed %s: %v", args, p, err)
+		}
+	}
+	for _, args := range [][]string{{"-h"}, {"-v"}} {
+		p := filepath.Join(t.TempDir(), "cfg", "namehunt", "sites")
+		runWith(t, p, nil, "", args...)
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("%q seeded %s; want no file", args, p)
+		}
+	}
+
+	p := filepath.Join(t.TempDir(), "cfg", "namehunt", "sites")
+	first := runWith(t, p, nil, "", "-l")
+	content, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != seedContent() {
+		t.Errorf("seeded file = %q, want seedContent()", content)
+	}
+	var comments, siteLines []string
+	for line := range strings.SplitSeq(strings.TrimRight(string(content), "\n"), "\n") {
+		if strings.HasPrefix(line, "#") {
+			comments = append(comments, line)
+		} else {
+			siteLines = append(siteLines, line)
+		}
+	}
+	if len(comments) == 0 || len(siteLines) != 3 {
+		t.Errorf("seeded file has %d comment and %d site lines; want some comments and 3 sites: %q", len(comments), len(siteLines), content)
+	}
+	if !strings.Contains(siteLines[2], "https://archive.org/download/@{}") || !strings.Contains(siteLines[2], "https://archive.org/details/@{}") {
+		t.Errorf("archive line = %q, want both the download and details templates", siteLines[2])
+	}
+	parsed, err := parseSites(bytes.NewReader(content), p)
+	if err != nil || len(parsed) != len(builtinSites) {
+		t.Fatalf("seeded file parsed to %d sites, %v; want %d", len(parsed), err, len(builtinSites))
+	}
+	for i, b := range builtinSites {
+		got := parsed[i]
+		if got.name != b.name || got.template != b.template || !reflect.DeepEqual(got.free, b.free) || got.profile != b.profile {
+			t.Errorf("seeded %s = %+v, want %+v", b.name, got, b)
+		}
+	}
+	if first.code != 0 || strings.Count(first.stdout, "\n") != 3 || strings.Count(first.stdout, " file ") != 3 {
+		t.Errorf("-l after seeding = exit %d, stdout %q; want three file entries", first.code, first.stdout)
+	}
+	second := runWith(t, p, nil, "", "-l")
+	again, err := os.ReadFile(p)
+	if err != nil || !bytes.Equal(content, again) || second.stdout != first.stdout || second.stderr != "" {
+		t.Errorf("second run changed the file or output: %v, stderr %q", err, second.stderr)
+	}
+}
+
+func TestSeedFailureWarnsAndContinues(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "notadir")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(blocker, "sites")
+	r := runWith(t, p, nil, "", "-l")
+	if r.code != 0 {
+		t.Fatalf("-l with an unwritable sites path = exit %d, stderr %q", r.code, r.stderr)
+	}
+	if strings.Count(r.stderr, "\n") != 1 || !strings.HasPrefix(r.stderr, "namehunt: could not write the starter sites file "+p+": ") || !strings.HasSuffix(r.stderr, "; using the built-in sites\n") {
+		t.Errorf("warning = %q", r.stderr)
+	}
+	if strings.Count(r.stdout, "\n") != 3 || strings.Count(r.stdout, " built-in ") != 3 {
+		t.Errorf("-l after a failed seed = %q; want the three built-ins", r.stdout)
+	}
+}
+
+func TestExistingSitesFileIsUntouched(t *testing.T) {
+	srv, _ := newSiteServer(t)
+	content := "mysite " + srv.URL + "/{}\n"
+	p := writeSites(t, content)
+	for _, args := range [][]string{{"-l"}, {"mysite", "taken"}} {
+		runWith(t, p, srv.Client(), "", args...)
+		got, err := os.ReadFile(p)
+		if err != nil || string(got) != content {
+			t.Errorf("%q changed the sites file: %q, %v", args, got, err)
+		}
+	}
+	sites, err := loadSites(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, err := resolveSite("archive", sites); err != nil || s.source != sourceBuiltIn || s.profile != "https://archive.org/details/@{}" {
+		t.Errorf("archive with a file that omits it = %+v, %v; want the built-in", s, err)
+	}
+}
+
+func TestSitesFileProfileFieldByShape(t *testing.T) {
+	good := "a https://a.test/{} https://a.test/u/{}\nb https://b.test/{} 404,410 https://b.test/u/{}\nc https://c.test/{} https://c.test/u/{} 410\n"
+	sites, err := parseSites(strings.NewReader(good), "sites")
+	want := []site{
+		{name: "a", template: "https://a.test/{}", profile: "https://a.test/u/{}", source: sourceFile},
+		{name: "b", template: "https://b.test/{}", free: []int{404, 410}, profile: "https://b.test/u/{}", source: sourceFile},
+		{name: "c", template: "https://c.test/{}", free: []int{410}, profile: "https://c.test/u/{}", source: sourceFile},
+	}
+	if err != nil || !reflect.DeepEqual(sites, want) {
+		t.Errorf("parsed = %+v, %v; want %+v", sites, err, want)
+	}
+
+	bad := map[string]string{
+		"profile without {} on line 1":     "a https://a.test/{} https://a.test/u\n",
+		"profile without scheme on line 2": "a https://a.test/{}\nb https://b.test/{} ftp://b.test/{}\n",
+		"five fields on line 1":            "a https://a.test/{} 404 https://a.test/u/{} extra\n",
+		"two profiles on line 1":           "a https://a.test/{} https://a.test/u/{} https://a.test/v/{}\n",
+		"two code lists on line 1":         "a https://a.test/{} 404 410\n",
+	}
+	for name, content := range bad {
+		wantLine := name[strings.LastIndex(name, "line "):]
+		_, err := parseSites(strings.NewReader(content), "sites")
+		if err == nil || !strings.Contains(err.Error(), wantLine) || !strings.HasPrefix(err.Error(), "sites ") {
+			t.Errorf("%s: error = %v, want it to name sites and %s", name, err, wantLine)
+		}
+	}
+
+	p := writeSites(t, "github https://github.com/{} https://github.com/users/{}\n")
+	sites, err = loadSites(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := resolveSite("github", sites); s.source != sourceFile || s.profileTemplate() != "https://github.com/users/{}" {
+		t.Errorf("github override = %+v; want the file's profile template", s)
+	}
+	if s, _ := resolveSite("lichess", sites); s.profileTemplate() != s.template {
+		t.Errorf("lichess profile = %q; want its check template", s.profileTemplate())
+	}
+}
+
+func TestFreeOutputShowsProfileURLAndSignupNote(t *testing.T) {
+	srv, _ := newSiteServer(t)
+	p := writeSites(t, "mysite "+srv.URL+"/{} https://p.test/u/{}\n")
+	r := runWith(t, p, srv.Client(), "", "mysite", "free")
+	if r.code != 0 || r.stdout != "free: free https://p.test/u/free\n" || r.stderr != signupNote+"\n" {
+		t.Errorf("single free = exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+	r = runWith(t, p, srv.Client(), "", "mysite", "taken")
+	if r.code != 1 || r.stdout != "taken: taken\n" || r.stderr != "" {
+		t.Errorf("single taken = exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+	r = runWith(t, p, srv.Client(), "", "mysite", "forbidden")
+	if r.code != 2 || r.stdout != "forbidden: unknown (HTTP 403)\n" || r.stderr != "" {
+		t.Errorf("single unknown = exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+	r = runWith(t, p, srv.Client(), "free\ntaken\nnohead\n", "mysite", "-")
+	if r.code != 0 || r.stdout != "free https://p.test/u/free\nnohead https://p.test/u/nohead\n" || r.stderr != "Checked 3: 2 free, 1 taken, 0 unknown.\n"+signupNote+"\n" {
+		t.Errorf("scan with free names = exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
+	}
+	r = runWith(t, p, srv.Client(), "taken\nforbidden\n", "mysite", "-")
+	if r.code != 2 || r.stdout != "" || strings.Contains(r.stderr, signupNote) {
+		t.Errorf("scan without free names = exit %d, stdout %q, stderr %q; want no note", r.code, r.stdout, r.stderr)
+	}
+	r = runWith(t, "", srv.Client(), "", srv.URL+"/{}", "free")
+	if r.stdout != "free: free "+srv.URL+"/free\n" {
+		t.Errorf("template argument = stdout %q; want the template as the profile URL", r.stdout)
+	}
+	if got := fill("https://p.test/u/{}", "a b"); got != "https://p.test/u/a%20b" {
+		t.Errorf("fill escaped %q, want a%%20b", got)
 	}
 }

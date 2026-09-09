@@ -16,14 +16,14 @@ Run `namehunt` with no arguments, or with `-h`, to see the help screen.
 | `-r, --require CHARS` | Keep only names containing every character in `CHARS`. |
 | `-n, --dry-run` | Print the names and send no request. |
 | `-f, --free CODES` | Status codes that mean free, comma-separated. Default `404`. |
-| `-w, --wait MS` | Pause `MS` milliseconds between requests. Default `0`. |
+| `-w, --wait MS` | Pause `MS` milliseconds between requests. Default `300`; `0` sends them back to back. |
 | `-l, --list` | List known sites and exit. |
 | `-v, --version` | Print the version and exit. |
 | `-h, --help` | Show the help screen. |
 
 `SITE` is one of:
 
-- a built-in site name: `github` or `lichess`
+- a built-in site name: `github`, `lichess`, or `archive` (archive.org)
 - a name from your sites file (see below)
 - a URL template with `{}` where the username goes, such as `https://www.reddit.com/user/{}`. The template must start with `http://` or `https://`.
 
@@ -37,6 +37,7 @@ Run `namehunt` with no arguments, or with `-h`, to see the help screen.
 
 ```bash
 namehunt github kaqe                                  # is kaqe free on GitHub?
+namehunt archive qoku                                 # is qoku free on archive.org?
 namehunt -d lichess '[qk][aeiou][qk][aeiou]'          # free 4-letter names, no repeated letters
 namehunt 'https://www.reddit.com/user/{}' kaqe        # any site, by template
 cat names.txt | namehunt -w 200 github -              # names from a file, paced 200 ms apart
@@ -58,20 +59,25 @@ namehunt -d lichess '[qk][aeiou][qk][aeiou]'
 
 ### Sites file
 
-Name your own sites in `~/.config/namehunt/sites` (or `$XDG_CONFIG_HOME/namehunt/sites` when that variable is set to an absolute path). One site per line: the name, the URL template, and optionally the comma-separated status codes that mean free. Blank lines and lines starting with `#` are skipped. A line with a built-in name replaces the built-in.
+Name your own sites in `~/.config/namehunt/sites` (or `$XDG_CONFIG_HOME/namehunt/sites` when that variable is set to an absolute path). The first run that needs the file writes it with the three built-in sites, so you can edit them or add your own. An existing file is never touched.
+
+One site per line, as `NAME TEMPLATE [CODES] [PROFILE]`: the name, the URL template namehunt checks, and optionally the comma-separated status codes that mean free and a second URL template for the page the person would own, when that differs from the checked URL. The two optional fields are told apart by shape: one that starts with `http://` or `https://` is the PROFILE template, anything else is the CODES list. Blank lines and lines starting with `#` are skipped. A line with a built-in name replaces the built-in.
 
 ```
-# name     profile URL template               codes that mean free
+# name     URL template checked               codes   profile URL, when different
 github     https://github.com/{}
 lichess    https://lichess.org/@/{}
+archive    https://archive.org/download/@{}           https://archive.org/details/@{}
 reddit     https://www.reddit.com/user/{}     404
 ```
 
-`namehunt -l` prints every known site and whether it is built in or from the file. A bad line stops the tool and names the line number.
+Internet Archive is why the profile template exists: its profile page answers 200 whether or not the account exists, while the account's download URL answers 404 until someone signs up.
+
+`namehunt -l` prints every known site, whether it is built in or from the file, and its profile template. A bad line stops the tool and names the line number.
 
 ### How "free" is decided
 
-For each name, `namehunt` sends a `HEAD` request to the profile URL with a 5 second timeout and follows redirects.
+For each name, `namehunt` sends a `HEAD` request to the site's checked URL with a 5 second timeout and follows redirects. In pattern and stdin mode it pauses between names for the `-w` default 300 ms unless `-w` says otherwise.
 
 - A status in the free list (`-f`, then the site's file entry, then `404`) means free.
 - Any other 2xx status means taken.
@@ -81,8 +87,9 @@ For each name, `namehunt` sends a `HEAD` request to the profile URL with a 5 sec
 
 Output and exit codes:
 
-- One name: one line, `NAME: free`, `NAME: taken`, or `NAME: unknown (HTTP 403)`. Exit 0 free, 1 taken, 2 unknown.
-- Pattern or stdin: free names one per line on stdout. Unknown names go to stderr with their reason, followed by `Checked N: F free, T taken, U unknown.` Exit 0 when nothing is unknown, else 2.
+- One name: one line, `NAME: free URL`, `NAME: taken`, or `NAME: unknown (HTTP 403)`, where `URL` is the profile page the name would own. Exit 0 free, 1 taken, 2 unknown.
+- Pattern or stdin: free names one per line on stdout as `NAME URL`. Unknown names go to stderr with their reason, followed by `Checked N: F free, T taken, U unknown.` Exit 0 when nothing is unknown, else 2.
+- Whenever at least one name is free, stderr ends with `Free names are a strong hint; only signing up confirms one.`
 - Bad input: one line on stderr, exit 2, no request sent.
 
-Limits: the answer comes from the status code only. A site that answers 200 for a missing profile cannot be told apart from a taken name. Pick a site whose missing-profile status differs, or set that status with `-f` or in the sites file.
+Limits: the answer comes from the status code only. A site that answers 200 for a missing profile cannot be told apart from a taken name. Pick a site whose missing-profile status differs, or set that status with `-f` or in the sites file. Even a clean 404 only shows that no profile answered; a name is confirmed yours when you finish signing up.

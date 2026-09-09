@@ -25,7 +25,7 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`repoctl`](cmd/repoctl/README.md): Control collections of local Git repositories with status, pull, build, clone, and list operations.
 - [`jy`](cmd/jy/README.md): A lightweight JSON and YAML converter utility.
 - [`mdview`](cmd/mdview/README.md): Render GitHub Flavored Markdown in a browser or write it as HTML.
-- [`namehunt`](cmd/namehunt/README.md): Find free usernames on GitHub, Lichess, or any site with a predictable profile URL, one name or a whole pattern at a time.
+- [`namehunt`](cmd/namehunt/README.md): Find free usernames on GitHub, Lichess, Internet Archive, or any site with a predictable profile URL, one name or a whole pattern at a time.
 - [`oidctok`](cmd/oidctok/README.md): Exchange a GitHub Actions OIDC token for Azure Resource Manager and Microsoft Graph tokens and hand them to later job steps.
 - [`pgen`](cmd/pgen/README.md): A simple generator of memorable passwords.
 - [`pman`](cmd/pman/main.go): Run authenticated Microsoft Graph and Azure REST API requests.

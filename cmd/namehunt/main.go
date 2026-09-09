@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/queone/gkit/internal/color"
@@ -19,7 +20,7 @@ import (
 
 const (
 	programName    = "namehunt"
-	programVersion = "1.0.0"
+	programVersion = "1.1.0"
 )
 
 const (
@@ -27,23 +28,35 @@ const (
 	initialBackoff  = 100 * time.Millisecond
 	maxAttempts     = 5
 	defaultFreeCode = http.StatusNotFound
+	defaultWait     = 300 * time.Millisecond
+	signupNote      = "Free names are a strong hint; only signing up confirms one."
 	sourceBuiltIn   = "built-in"
 	sourceFile      = "file"
 	sourceArgument  = "argument"
 )
 
-// site pairs a name with the profile-URL template used to look usernames up.
+// site pairs a name with the URL template used to look usernames up and the one a free name would own.
 type site struct {
 	name     string
 	template string
 	free     []int  // status codes meaning free; nil means the default
 	source   string // sourceBuiltIn, sourceFile, or sourceArgument
+	profile  string // profile-URL template; empty means the check template
+}
+
+// profileTemplate returns the URL template a free name would own: the profile template when set, else the check template.
+func (s site) profileTemplate() string {
+	if s.profile != "" {
+		return s.profile
+	}
+	return s.template
 }
 
 // builtinSites are always known, even without a sites file.
 var builtinSites = []site{
 	{name: "github", template: "https://github.com/{}", source: sourceBuiltIn},
 	{name: "lichess", template: "https://lichess.org/@/{}", source: sourceBuiltIn},
+	{name: "archive", template: "https://archive.org/download/@{}", profile: "https://archive.org/details/@{}", source: sourceBuiltIn},
 }
 
 // action is what a parsed command line asks the utility to do.
@@ -84,18 +97,20 @@ func usage() string {
 		{Flag: "-r, --require CHARS", Desc: "Keep only names containing every character in CHARS"},
 		{Flag: "-n, --dry-run", Desc: "Print the names and send no request"},
 		{Flag: "-f, --free CODES", Desc: "Status codes that mean free, comma-separated (default 404)"},
-		{Flag: "-w, --wait MS", Desc: "Pause MS milliseconds between requests (default 0)"},
+		{Flag: "-w, --wait MS", Desc: "Pause MS milliseconds between requests (default 300)"},
 		{Flag: "-l, --list", Desc: "List known sites and exit"},
 		{Flag: "-v, --version", Desc: "Print " + programName + " v" + programVersion + " and exit"},
 		{Flag: "-h, --help", Desc: "Show this help"},
 	}
 	footer := `SITE is a site name or a URL template with {} where the username goes.
-Built-in sites: github, lichess. More come from ~/.config/namehunt/sites,
-one per line: NAME TEMPLATE [FREE_CODES].
+Built-in sites: github, lichess, archive. More come from ~/.config/namehunt/sites,
+one per line: NAME TEMPLATE [FREE_CODES] [PROFILE_TEMPLATE]. The file is written
+with the built-ins on first run.
 CANDIDATE is one name, a pattern like [qk][aeou][qk][aeou], or - for stdin.
 
 Examples:
   namehunt github kaqe
+  namehunt archive qoku
   namehunt -d lichess '[qk][aeiou][qk][aeiou]'
   namehunt 'https://www.reddit.com/user/{}' kaqe`
 	h := color.Whi10
@@ -103,11 +118,13 @@ Examples:
 		"Find free usernames on any site with a predictable profile URL.\n"+
 		"\n"+
 		"%s\n"+
-		"  namehunt sends one HEAD request per name to a site's profile URL and\n"+
+		"  namehunt sends one HEAD request per name to a site's check URL and\n"+
 		"  reads the status: 404 means free, any 2xx means taken, anything else is\n"+
 		"  reported as unknown. Give it one name for a yes/no answer, or a pattern\n"+
-		"  like [qk][aeou][qk][aeou] to list every free name. github and lichess\n"+
-		"  are built in; name more sites in ~/.config/namehunt/sites.\n"+
+		"  like [qk][aeou][qk][aeou] to list every free name with the profile URL\n"+
+		"  it would own. Free names are a strong hint; only signing up confirms\n"+
+		"  one. github, lichess, and archive (archive.org) are built in; name more\n"+
+		"  sites in ~/.config/namehunt/sites.\n"+
 		"\n"+
 		"%s",
 		h(programName), programVersion, h("Overview"),
@@ -117,7 +134,7 @@ Examples:
 // parseArgs parses flags, which come before positionals, and the SITE and CANDIDATE positionals.
 // No arguments at all asks for the help screen.
 func parseArgs(args []string) (options, action, error) {
-	var o options
+	o := options{wait: defaultWait}
 	act := actionCheck
 	if len(args) == 0 {
 		return o, actionHelp, nil
@@ -242,7 +259,13 @@ func sitesPath() (string, error) {
 	return filepath.Join(dir, programName, "sites"), nil
 }
 
-// parseSites reads NAME TEMPLATE [CODES] lines from r, naming path in errors.
+// isURL reports whether a sites-file field is a URL rather than a code list.
+func isURL(field string) bool {
+	return strings.HasPrefix(field, "http://") || strings.HasPrefix(field, "https://")
+}
+
+// parseSites reads NAME TEMPLATE [CODES] [PROFILE] lines from r, naming path in errors.
+// The two optional fields are told apart by shape: a URL is the profile template, anything else is codes.
 func parseSites(r io.Reader, path string) ([]site, error) {
 	var sites []site
 	scanner := bufio.NewScanner(r)
@@ -254,15 +277,28 @@ func parseSites(r io.Reader, path string) ([]site, error) {
 			continue
 		}
 		fields := strings.Fields(text)
-		if len(fields) < 2 || len(fields) > 3 {
-			return nil, fmt.Errorf("%s line %d: expected NAME TEMPLATE [CODES], got %d field(s)", path, line, len(fields))
+		if len(fields) < 2 || len(fields) > 4 {
+			return nil, fmt.Errorf("%s line %d: expected NAME TEMPLATE [CODES] [PROFILE], got %d field(s)", path, line, len(fields))
 		}
 		s := site{name: fields[0], template: fields[1], source: sourceFile}
 		if err := validateTemplate(s.template); err != nil {
 			return nil, fmt.Errorf("%s line %d: %v", path, line, err)
 		}
-		if len(fields) == 3 {
-			codes, err := parseCodes(fields[2])
+		for _, field := range fields[2:] {
+			if isURL(field) {
+				if s.profile != "" {
+					return nil, fmt.Errorf("%s line %d: two profile templates", path, line)
+				}
+				if err := validateTemplate(field); err != nil {
+					return nil, fmt.Errorf("%s line %d: profile %v", path, line, err)
+				}
+				s.profile = field
+				continue
+			}
+			if s.free != nil {
+				return nil, fmt.Errorf("%s line %d: two code lists", path, line)
+			}
+			codes, err := parseCodes(field)
 			if err != nil {
 				return nil, fmt.Errorf("%s line %d: %v", path, line, err)
 			}
@@ -276,6 +312,46 @@ func parseSites(r io.Reader, path string) ([]site, error) {
 	return sites, nil
 }
 
+// seedContent renders the starter sites file: a format note and one line per built-in.
+func seedContent() string {
+	var b strings.Builder
+	b.WriteString("# namehunt sites. One site per line: NAME TEMPLATE [CODES] [PROFILE]\n")
+	b.WriteString("#   TEMPLATE  URL namehunt checks, with {} where the username goes\n")
+	b.WriteString("#   CODES     status codes that mean free, comma-separated (default 404)\n")
+	b.WriteString("#   PROFILE   URL the person would own, when it differs from TEMPLATE\n")
+	b.WriteString("# A line with a built-in name replaces that built-in.\n")
+	for _, s := range builtinSites {
+		fmt.Fprintf(&b, "%-10s %s", s.name, s.template)
+		if s.free != nil {
+			b.WriteString("  " + codesString(s.free))
+		}
+		if s.profile != "" {
+			b.WriteString("  " + s.profile)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// seedSites writes the starter sites file to path when nothing exists there. An existing file is left alone.
+func seedSites(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, os.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	_, werr := f.WriteString(seedContent())
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	return werr
+}
+
 // loadSites merges the sites file over the built-ins, sorted by name. A missing file yields the built-ins.
 func loadSites(path string) ([]site, error) {
 	byName := map[string]site{}
@@ -283,7 +359,7 @@ func loadSites(path string) ([]site, error) {
 		byName[s.name] = s
 	}
 	f, err := os.Open(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
 		return nil, err
 	}
 	if err == nil {
@@ -478,6 +554,11 @@ func newChecker(client *http.Client, template string, free []int, sleep func(tim
 	return c
 }
 
+// fill substitutes the path-escaped name into a URL template.
+func fill(template, name string) string {
+	return strings.ReplaceAll(template, "{}", url.PathEscape(name))
+}
+
 // status returns the final status code for target, sending HEAD and falling back to GET once on 405.
 func (c *checker) status(target string) (int, error) {
 	resp, err := c.client.Head(target)
@@ -499,7 +580,7 @@ func (c *checker) status(target string) (int, error) {
 
 // check looks one username up, retrying rate limits and transport errors with doubling backoff.
 func (c *checker) check(name string) result {
-	target := strings.ReplaceAll(c.template, "{}", url.PathEscape(name))
+	target := fill(c.template, name)
 	backoff := initialBackoff
 	var last string
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
@@ -547,13 +628,16 @@ func run(args []string, e env) int {
 		fmt.Fprintf(e.stdout, "%s v%s\n", programName, programVersion)
 		return 0
 	}
+	if err := seedSites(e.sitesPath); err != nil {
+		fmt.Fprintf(e.stderr, "%s: could not write the starter sites file %s: %v; using the built-in sites\n", programName, e.sitesPath, err)
+	}
 	sites, err := loadSites(e.sitesPath)
 	if err != nil {
 		return fail(e.stderr, err)
 	}
 	if act == actionList {
 		for _, s := range sites {
-			fmt.Fprintf(e.stdout, "%-12s %-44s %-10s %s\n", s.name, s.template, codesString(s.free), s.source)
+			fmt.Fprintf(e.stdout, "%-12s %-44s %-10s %-9s %s\n", s.name, s.template, codesString(s.free), s.source, s.profileTemplate())
 		}
 		return 0
 	}
@@ -583,11 +667,17 @@ func run(args []string, e env) int {
 		free = []int{defaultFreeCode}
 	}
 	c := newChecker(e.client, target.template, free, e.sleep)
+	profile := target.profileTemplate()
 	if single {
 		r := c.check(names[0])
-		fmt.Fprintf(e.stdout, "%s: %s\n", names[0], r.describe())
+		line := names[0] + ": " + r.describe()
+		if r.outcome == outcomeFree {
+			line += " " + fill(profile, names[0])
+		}
+		fmt.Fprintln(e.stdout, line)
 		switch r.outcome {
 		case outcomeFree:
+			fmt.Fprintln(e.stderr, signupNote)
 			return 0
 		case outcomeTaken:
 			return 1
@@ -604,7 +694,7 @@ func run(args []string, e env) int {
 		switch r.outcome {
 		case outcomeFree:
 			nFree++
-			fmt.Fprintln(e.stdout, n)
+			fmt.Fprintln(e.stdout, n+" "+fill(profile, n))
 		case outcomeTaken:
 			nTaken++
 		default:
@@ -613,6 +703,9 @@ func run(args []string, e env) int {
 		}
 	}
 	fmt.Fprintf(e.stderr, "Checked %d: %d free, %d taken, %d unknown.\n", len(names), nFree, nTaken, nUnknown)
+	if nFree > 0 {
+		fmt.Fprintln(e.stderr, signupNote)
+	}
 	if nUnknown > 0 {
 		return 2
 	}
