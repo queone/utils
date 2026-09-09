@@ -35,6 +35,7 @@ Go's tool chain is the ideal way to maintain a set of commonly used CLI utilitie
 - [`rnlower`](cmd/rnlower/main.go): Rename files by converting filenames to lowercase.
 - [`sms`](cmd/sms/README.md): Send SMS messages using Twilio credentials from a local config file.
 - [`swatch`](cmd/swatch/README.md): Xterm 256-color palette and ramp inspector.
+- [`tfe`](cmd/tfe/README.md): List, show, and clone Terraform Cloud workspaces and browse registry modules and organizations from the shell.
 - [`tree`](cmd/tree/README.md): A lightweight directory tree printing utility.
 - [`vconv`](cmd/vconv/README.md): Convert a video, typically WebM, to an H.264/AAC MP4 via ffmpeg.
 - [`vdrop`](cmd/vdrop/README.md): Remove a section of a video — drop START..END and join the remainder — via ffmpeg.

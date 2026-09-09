@@ -3,6 +3,7 @@
 | Version | Summary |
 |---------|---------|
 | Unreleased | |
+| 0.68.0 | AC88: add tfe v2.0.0 without utl; drop stale plan.md paragraph |
 | 0.67.1 | AC87: adopt govna v0.54.0 canon |
 | 0.67.0 | AC86: add vconv, vshrink, ishrink, oidctok; numfmt package; drop 2 scripts |
 | 0.66.0 | AC85: bashrc_user.sh 1.2.0 Lima, Colima, Docker homes under XDG |

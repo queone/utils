@@ -20,6 +20,7 @@ Document the system's major components, boundaries, runtime flow, storage model,
 - external integrations and trust boundaries
 - `repoctl`: consolidated local Git repository management through `git` and scoped GitHub operations through `gh`
 - `oidctok`: GitHub Actions job helper that fetches the job's OIDC token and exchanges it at the Microsoft identity platform for Resource Manager and Graph tokens over HTTPS with the standard library only; it keeps no local state and writes tokens only to the `GITHUB_ENV` file
+- `tfe`: Terraform Cloud client over the official `go-tfe` library; `clone` is the second live state-mutating external call in the repo after `attune`, creating a workspace and its variables; credentials come from `TF_ORG`, `TF_DOMAIN`, `TF_TOKEN` or a 0600 config file under `XDG_CONFIG_HOME`, and the token is never printed
 - `attune`: declarative reconciler comparing YAML specs against live Azure Resource Manager and Microsoft Graph state (DNS, security groups, app registrations, roles, resource groups); the repo's first utility with live, state-mutating external-integration calls
 
 ## Core Files
