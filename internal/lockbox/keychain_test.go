@@ -28,9 +28,13 @@ func TestSecurityKeyStoreBuildsExpectedArguments(t *testing.T) {
 	if !bytes.Equal(got, key) {
 		t.Fatal("key read back differs")
 	}
+	if err := ks.Delete("abc123"); err != nil {
+		t.Fatal(err)
+	}
 	want := [][]string{
 		{"security", "add-generic-password", "-a", "abc123", "-s", "macfit", "-w", hex.EncodeToString(key), "-U"},
 		{"security", "find-generic-password", "-a", "abc123", "-s", "macfit", "-w"},
+		{"security", "delete-generic-password", "-a", "abc123", "-s", "macfit"},
 	}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("security calls\n got %v\nwant %v", calls, want)
@@ -43,6 +47,9 @@ func TestSecurityKeyStoreMapsMissingItem(t *testing.T) {
 	}}
 	if _, err := ks.Get("abc"); !errors.Is(err, ErrKeyNotFound) {
 		t.Fatalf("got %v, want ErrKeyNotFound", err)
+	}
+	if err := ks.Delete("abc"); !errors.Is(err, ErrKeyNotFound) {
+		t.Fatalf("delete missing: got %v, want ErrKeyNotFound", err)
 	}
 	broken := SecurityKeyStore{Exec: func(string, ...string) ([]byte, error) { return []byte("zz\n"), nil }}
 	if _, err := broken.Get("abc"); err == nil {
@@ -66,5 +73,11 @@ func TestMemoryKeyStore(t *testing.T) {
 	got, err := m.Get("x")
 	if err != nil || !bytes.Equal(got, key) {
 		t.Fatalf("get after put: %v %v", got, err)
+	}
+	if err := m.Delete("x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Delete("x"); !errors.Is(err, ErrKeyNotFound) {
+		t.Fatalf("second delete: got %v", err)
 	}
 }

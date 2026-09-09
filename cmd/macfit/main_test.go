@@ -2,16 +2,20 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/queone/gkit/internal/color"
 	"github.com/queone/gkit/internal/lockbox"
 )
 
 // testKDF keeps passphrase derivation fast in tests.
 var testKDF = lockbox.KDF{Time: 1, Memory: 8 * 1024, Threads: 1}
+
+const yellow = "\x1b[38;5;220m"
 
 type harness struct {
 	t     *testing.T
@@ -42,25 +46,31 @@ func newHarness(t *testing.T) *harness {
 	if err := os.MkdirAll(filepath.Join(home, ".config", "git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	icloud := filepath.Join(root, "icloud")
-	if err := os.MkdirAll(icloud, 0o755); err != nil {
+	synced := filepath.Join(root, "synced")
+	if err := os.MkdirAll(synced, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	h := &harness{t: t, out: &bytes.Buffer{}, errb: &bytes.Buffer{}, root: root, home: home,
-		store: filepath.Join(icloud, "macfit.store"), keys: &lockbox.MemoryKeyStore{}}
+		store: filepath.Join(synced, "macfit.store"), keys: &lockbox.MemoryKeyStore{}}
 	h.app = &app{
 		stdout: h.out, stderr: h.errb, keys: h.keys, env: testEnv(home), host: "a", kdf: testKDF, goos: "darwin",
 		isTerminal: func() bool { return true },
 		readSecret: func(string) ([]byte, error) { return []byte("pw"), nil },
+		readLine:   func(string) (string, error) { return "", nil },
 	}
 	return h
 }
 
-// run executes macfit against the harness store and returns exit code, stdout, stderr.
+// run executes macfit against the harness store through -s.
 func (h *harness) run(args ...string) (int, string, string) {
+	return h.runRaw(append([]string{"-s", h.store}, args...)...)
+}
+
+// runRaw executes macfit with the arguments as given, no -s added.
+func (h *harness) runRaw(args ...string) (int, string, string) {
 	h.out.Reset()
 	h.errb.Reset()
-	code := h.app.run(append([]string{"-s", h.store}, args...))
+	code := h.app.run(args)
 	return code, h.out.String(), h.errb.String()
 }
 
@@ -124,22 +134,40 @@ func (h *harness) openStore() *lockbox.Store {
 	return st
 }
 
+func (h *harness) generation() uint64 {
+	h.t.Helper()
+	b, err := os.ReadFile(h.store)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	hdr, err := lockbox.ParseHeader(b)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return hdr.Generation
+}
+
+func (h *harness) pointer() string {
+	h.t.Helper()
+	b, err := os.ReadFile(h.app.pointerFile())
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
 func TestVersionAndHelp(t *testing.T) {
 	h := newHarness(t)
 	for _, arg := range []string{"--version", "-v", "v", "version"} {
-		h.out.Reset()
-		h.errb.Reset()
-		if code := h.app.run([]string{arg}); code != 0 || h.out.String() != "macfit v1.0.0\n" || h.errb.Len() != 0 {
-			t.Fatalf("%s: code %d stdout %q stderr %q", arg, code, h.out.String(), h.errb.String())
+		if code, out, errs := h.runRaw(arg); code != 0 || out != "macfit v1.1.0\n" || errs != "" {
+			t.Fatalf("%s: code %d stdout %q stderr %q", arg, code, out, errs)
 		}
 	}
-	h.out.Reset()
-	if code := h.app.run(nil); code != 0 || !strings.Contains(h.out.String(), "\nUsage\n") {
-		t.Fatalf("bare invocation: code %d out %q", code, h.out.String())
+	if code, out, _ := h.runRaw(); code != 0 || !strings.Contains(out, "\nUsage\n") {
+		t.Fatalf("bare invocation: code %d out %q", code, out)
 	}
-	h.out.Reset()
-	if code := h.app.run([]string{"help"}); code != 0 || !strings.Contains(h.out.String(), "macfit pull") {
-		t.Fatalf("help: code %d out %q", code, h.out.String())
+	if code, out, _ := h.runRaw("help"); code != 0 || !strings.Contains(out, "macfit key show") {
+		t.Fatalf("help: code %d out %q", code, out)
 	}
 	if code, _, errs := h.run("bogus"); code != 2 || !strings.Contains(errs, "unknown command") {
 		t.Fatalf("unknown command: code %d stderr %q", code, errs)
@@ -149,60 +177,207 @@ func TestVersionAndHelp(t *testing.T) {
 	}
 }
 
+func TestHelpLayoutMatchesTheOtherUtilities(t *testing.T) {
+	h := newHarness(t)
+	for _, arg := range []string{"help", "-h", "-?", "--help", "h"} {
+		code, out, _ := h.runRaw(arg)
+		if code != 0 {
+			t.Fatalf("%s: code %d", arg, code)
+		}
+		lines := strings.Split(out, "\n")
+		if lines[0] != "macfit v1.1.0" {
+			t.Fatalf("%s: first line %q", arg, lines[0])
+		}
+		if lines[1] != "Keep Mac config files in one encrypted store and restore them on any Mac." {
+			t.Fatalf("%s: second line %q", arg, lines[1])
+		}
+		last := -1
+		for _, section := range []string{"\nOverview\n", "\nUsage\n", "\nOptions\n", "\nNotes\n"} {
+			idx := strings.Index(out, section)
+			if idx < 0 || idx < last {
+				t.Fatalf("%s: section %q missing or out of order", arg, strings.TrimSpace(section))
+			}
+			last = idx
+		}
+		for _, want := range []string{"  -N, --new ", "  -h, -?, --help     Show this help message and exit", "Store path order: -s, then MACFIT_STORE"} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("%s: help lacks %q", arg, want)
+			}
+		}
+	}
+}
+
+func TestHelpHeaderAndHeadingsAreColoredLikeSkout(t *testing.T) {
+	h := newHarness(t)
+	plain := color.ClearCode(usage())
+	defer color.SetEnabled(true)()
+	_, out, _ := h.runRaw("help")
+	lines := strings.Split(out, "\n")
+	if lines[0] != color.Bold(color.Gra10("macfit"))+" v1.1.0" {
+		t.Fatalf("first line %q", lines[0])
+	}
+	if lines[1] != color.Gra5("Keep Mac config files in one encrypted store and restore them on any Mac.") {
+		t.Fatalf("second line %q", lines[1])
+	}
+	for _, name := range []string{"Overview", "Usage", "Options", "Notes"} {
+		if !strings.Contains(out, "\n"+color.Bold(color.Gra10(name))+"\n") {
+			t.Fatalf("heading %s is not bold white: %q", name, out)
+		}
+	}
+	if color.ClearCode(out) != plain {
+		t.Fatal("stripping escapes does not yield the plain help")
+	}
+	restore := color.SetEnabled(false)
+	_, out, _ = h.runRaw("help")
+	restore()
+	if strings.Contains(out, "\x1b[") || out != plain {
+		t.Fatalf("color disabled: %q", out)
+	}
+}
+
+func TestReadmeUsageBlockEqualsHelp(t *testing.T) {
+	b, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := string(b)
+	start := strings.Index(readme, "### Usage\n\n```text\n")
+	if start < 0 {
+		t.Fatal("README has no ### Usage block")
+	}
+	start += len("### Usage\n\n```text\n")
+	end := strings.Index(readme[start:], "```")
+	if end < 0 {
+		t.Fatal("README usage block is not closed")
+	}
+	if got, want := readme[start:start+end], color.ClearCode(usage()); got != want {
+		t.Fatalf("README usage block differs from help\n--- README\n%s\n--- help\n%s", got, want)
+	}
+}
+
 func TestPlatformGuard(t *testing.T) {
 	h := newHarness(t)
 	h.app.goos = "linux"
-	for _, verb := range []string{"init", "add", "rm", "ls", "push", "pull", "diff"} {
+	for _, verb := range []string{"init", "add", "rm", "ls", "push", "pull", "diff", "key"} {
 		code, _, errs := h.run(verb)
 		if code != 1 || !strings.Contains(errs, "macfit supports macOS only") {
 			t.Fatalf("%s on linux: code %d stderr %q", verb, code, errs)
 		}
 	}
-	h.out.Reset()
-	if code := h.app.run([]string{"--version"}); code != 0 {
+	if code, _, _ := h.runRaw("--version"); code != 0 {
 		t.Fatalf("--version on linux: code %d", code)
 	}
-	h.out.Reset()
-	if code := h.app.run([]string{"help"}); code != 0 {
+	if code, _, _ := h.runRaw("help"); code != 0 {
 		t.Fatalf("help on linux: code %d", code)
 	}
 }
 
-func TestInitCreatesStoreAndAnotherMacRecoversTheKey(t *testing.T) {
+func TestStoreResolutionOrder(t *testing.T) {
 	h := newHarness(t)
-	out := h.mustRun("init")
-	if !strings.Contains(out, "store created at "+h.store) {
-		t.Fatalf("init output: %q", out)
+	def := filepath.Join(h.home, ".local", "share", "macfit", "macfit.store")
+	_, out, _ := h.runRaw("key", "show")
+	if !strings.HasPrefix(out, "store: "+def+" (default)\n") {
+		t.Fatalf("default: %q", out)
 	}
-	info, err := os.Stat(h.store)
+	if err := os.MkdirAll(filepath.Dir(h.app.pointerFile()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.app.pointerFile(), []byte(filepath.Join(h.root, "pointed.store")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ = h.runRaw("key", "show")
+	if !strings.HasPrefix(out, "store: "+filepath.Join(h.root, "pointed.store")+" (pointer)\n") {
+		t.Fatalf("pointer: %q", out)
+	}
+	h.app.storeEnv = filepath.Join(h.root, "env.store")
+	_, out, _ = h.runRaw("key", "show")
+	if !strings.HasPrefix(out, "store: "+filepath.Join(h.root, "env.store")+" (env)\n") {
+		t.Fatalf("env over pointer: %q", out)
+	}
+	_, out, _ = h.run("key", "show")
+	if !strings.HasPrefix(out, "store: "+h.store+" (flag)\n") {
+		t.Fatalf("flag over env: %q", out)
+	}
+}
+
+func TestInitNewCreatesAndRefuses(t *testing.T) {
+	h := newHarness(t)
+	code, out, errs := h.runRaw("init", "-N")
+	if code != 0 || !strings.Contains(out, "store created at ") {
+		t.Fatalf("default init -N: code %d out %q err %q", code, out, errs)
+	}
+	dir := filepath.Join(h.home, ".local", "share", "macfit")
+	info, err := os.Stat(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("store mode %o", info.Mode().Perm())
+	if info.Mode().Perm() != 0o700 {
+		t.Fatalf("default folder mode %o, want 700", info.Mode().Perm())
 	}
-	if len(h.keys.Keys) != 1 {
-		t.Fatalf("keychain holds %d keys, want 1", len(h.keys.Keys))
+	if _, err := os.Stat(filepath.Join(dir, "macfit.store")); err != nil {
+		t.Fatal("default store not created")
 	}
+	if h.pointer() != "" {
+		t.Fatal("init -N at the default path must not write a pointer")
+	}
+
+	h.store = filepath.Join(h.root, "missing", "x.store")
+	if _, errs := h.mustFail(1, "init", "-N"); !strings.Contains(errs, "does not exist") {
+		t.Fatalf("missing parent: %q", errs)
+	}
+	if _, err := os.Stat(filepath.Join(h.root, "missing")); !os.IsNotExist(err) {
+		t.Fatal("init -N created the missing parent")
+	}
+
+	h.store = filepath.Join(h.root, "synced", "macfit.store")
+	out = h.mustRun("init", "-N")
+	if !strings.Contains(out, "store path remembered in "+h.app.pointerFile()) {
+		t.Fatalf("init -N -s: %q", out)
+	}
+	pinfo, err := os.Stat(h.app.pointerFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pinfo.Mode().Perm() != 0o600 || h.pointer() != h.store+"\n" {
+		t.Fatalf("pointer mode %o content %q", pinfo.Mode().Perm(), h.pointer())
+	}
+	before, _ := os.ReadFile(h.store)
+	if _, errs := h.mustFail(1, "init", "-N"); !strings.Contains(errs, "already exists") {
+		t.Fatalf("init -N over existing: %q", errs)
+	}
+	after, _ := os.ReadFile(h.store)
+	if !bytes.Equal(before, after) {
+		t.Fatal("init -N over an existing store changed it")
+	}
+}
+
+func TestInitUnlocksAndRemembers(t *testing.T) {
+	h := newHarness(t)
+	if _, errs := h.mustFail(1, "init"); !strings.Contains(errs, "init -N") {
+		t.Fatalf("init without store: %q", errs)
+	}
+	h.mustRun("init", "-N")
 	var savedID string
 	var savedKey []byte
 	for id, k := range h.keys.Keys {
 		savedID, savedKey = id, k
 	}
-	if _, errs := h.mustFail(1, "init"); !strings.Contains(errs, "already initialized") {
-		t.Fatalf("second init: %q", errs)
-	}
 
 	other := newHarness(t)
 	other.store = h.store
-	out = other.mustRun("init")
-	if !strings.Contains(out, "saved to the login keychain") {
+	out := other.mustRun("init")
+	if !strings.Contains(out, "saved to the login keychain") || !strings.Contains(out, "store path remembered") {
 		t.Fatalf("other Mac init: %q", out)
 	}
 	if got := other.keys.Keys[savedID]; !bytes.Equal(got, savedKey) {
 		t.Fatal("other Mac recovered a different key")
 	}
-	other.mustRun("ls")
+	if code, _, errs := other.runRaw("ls"); code != 0 {
+		t.Fatalf("ls through the pointer: code %d stderr %q", code, errs)
+	}
+	if out := other.mustRun("init"); !strings.Contains(out, "already unlocked") {
+		t.Fatalf("init on an unlocked store: %q", out)
+	}
 
 	wrong := newHarness(t)
 	wrong.store = h.store
@@ -210,59 +385,61 @@ func TestInitCreatesStoreAndAnotherMacRecoversTheKey(t *testing.T) {
 	if _, errs := wrong.mustFail(1, "init"); !strings.Contains(errs, "wrong passphrase") {
 		t.Fatalf("wrong passphrase: %q", errs)
 	}
-	if len(wrong.keys.Keys) != 0 {
-		t.Fatal("wrong passphrase must not save a key")
+	if len(wrong.keys.Keys) != 0 || wrong.pointer() != "" {
+		t.Fatal("wrong passphrase must save neither key nor pointer")
 	}
 	if _, errs := wrong.mustFail(1, "ls"); !strings.Contains(errs, "no key for") {
 		t.Fatalf("ls without key: %q", errs)
 	}
 }
 
+func TestRelativeStoreFlagIsMadeAbsolute(t *testing.T) {
+	h := newHarness(t)
+	if err := os.MkdirAll(filepath.Join(h.root, "rel"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(h.root)
+	if code, _, errs := h.runRaw("-s", "rel/macfit.store", "init", "-N"); code != 0 {
+		t.Fatalf("relative -s: code %d stderr %q", code, errs)
+	}
+	want, _ := filepath.EvalSymlinks(filepath.Join(h.root, "rel"))
+	got, _ := filepath.EvalSymlinks(filepath.Dir(strings.TrimSpace(h.pointer())))
+	if got != want || !filepath.IsAbs(strings.TrimSpace(h.pointer())) {
+		t.Fatalf("pointer holds %q, want a path under %q", h.pointer(), want)
+	}
+}
+
 func TestInitRefusalsChangeNothing(t *testing.T) {
 	h := newHarness(t)
 	h.app.isTerminal = func() bool { return false }
-	if _, errs := h.mustFail(1, "init"); !strings.Contains(errs, "init needs a terminal") {
+	if _, errs := h.mustFail(1, "init", "-N"); !strings.Contains(errs, "init needs a terminal") {
 		t.Fatalf("non-terminal: %q", errs)
 	}
-	if _, err := os.Stat(h.store); !os.IsNotExist(err) {
-		t.Fatal("store created without a terminal")
-	}
 	h.app.isTerminal = func() bool { return true }
-
-	missing := filepath.Join(h.root, "no-icloud", "macfit.store")
-	h.store = missing
-	if _, errs := h.mustFail(1, "init"); !strings.Contains(errs, "does not exist") {
-		t.Fatalf("missing parent: %q", errs)
-	}
-	if _, err := os.Stat(filepath.Dir(missing)); !os.IsNotExist(err) {
-		t.Fatal("init created the missing parent directory")
-	}
-	h.store = filepath.Join(h.root, "icloud", "macfit.store")
-
 	answers := [][]byte{[]byte("one"), []byte("two")}
 	h.app.readSecret = func(string) ([]byte, error) {
 		a := answers[0]
 		answers = answers[1:]
 		return a, nil
 	}
-	if _, errs := h.mustFail(1, "init"); !strings.Contains(errs, "do not match") {
+	if _, errs := h.mustFail(1, "init", "-N"); !strings.Contains(errs, "do not match") {
 		t.Fatalf("mismatch: %q", errs)
 	}
 	h.app.readSecret = func(string) ([]byte, error) { return []byte("  "), nil }
-	if _, errs := h.mustFail(1, "init"); !strings.Contains(errs, "must not be empty") {
+	if _, errs := h.mustFail(1, "init", "-N"); !strings.Contains(errs, "must not be empty") {
 		t.Fatalf("empty: %q", errs)
 	}
 	if _, err := os.Stat(h.store); !os.IsNotExist(err) {
 		t.Fatal("a refused init wrote a store")
 	}
-	if _, errs := h.mustFail(1, "ls"); !strings.Contains(errs, "run `macfit init`") {
-		t.Fatalf("ls without store: %q", errs)
+	if h.pointer() != "" {
+		t.Fatal("a refused init wrote a pointer")
 	}
 }
 
 func TestAddPushDiffPullRoundTrip(t *testing.T) {
 	h := newHarness(t)
-	h.mustRun("init")
+	h.mustRun("init", "-N")
 	rel := ".config/git/config"
 	live := h.write(rel, "[user]\n\tname = a\n", 0o600)
 	const target = "$XDG_CONFIG_HOME/git/config"
@@ -372,9 +549,40 @@ func TestAddPushDiffPullRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAddSeveralFilesInOneRun(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("init", "-N")
+	a := h.write(".bash_logout", "a\n", 0o644)
+	b := h.write(".bashrc", "b\n", 0o644)
+	c := h.write(".profile", "c\n", 0o600)
+	gen := h.generation()
+	out := h.mustRun("add", a, b, c)
+	for _, want := range []string{"added ~/.bash_logout (mode 0644)", "added ~/.bashrc (mode 0644)", "added ~/.profile (mode 0600)"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("multi add lacks %q: %q", want, out)
+		}
+	}
+	if h.generation() != gen+1 {
+		t.Fatalf("generation advanced by %d, want 1", h.generation()-gen)
+	}
+	d := h.write(".vimrc", "d\n", 0o644)
+	e := h.write(".gitignore", "e\n", 0o644)
+	gen = h.generation()
+	out, errs := h.mustFail(1, "add", d, filepath.Join(h.home, "missing"), e)
+	if !strings.Contains(out, "added ~/.vimrc") || !strings.Contains(out, "added ~/.gitignore") || !strings.Contains(errs, "missing") {
+		t.Fatalf("partial add: out %q err %q", out, errs)
+	}
+	if h.generation() != gen+1 {
+		t.Fatal("partial add must still save once")
+	}
+	if out := h.mustRun("ls"); strings.Count(out, "\n") != 6 {
+		t.Fatalf("ls after adds: %q", out)
+	}
+}
+
 func TestAddRefusesDuplicatesAndNonFiles(t *testing.T) {
 	h := newHarness(t)
-	h.mustRun("init")
+	h.mustRun("init", "-N")
 	live := h.write(".bashrc", "x\n", 0o644)
 	h.mustRun("add", live)
 	_, errs := h.mustFail(1, "add", live)
@@ -411,7 +619,7 @@ func TestAddRefusesDuplicatesAndNonFiles(t *testing.T) {
 
 func TestPullRefusesSymlink(t *testing.T) {
 	h := newHarness(t)
-	h.mustRun("init")
+	h.mustRun("init", "-N")
 	live := h.write(".bashrc", "real\n", 0o644)
 	h.mustRun("add", live)
 	other := h.write("elsewhere", "other\n", 0o644)
@@ -436,7 +644,7 @@ func TestPullRefusesSymlink(t *testing.T) {
 
 func TestHostBoundEntriesWinOnTheirHost(t *testing.T) {
 	h := newHarness(t)
-	h.mustRun("init")
+	h.mustRun("init", "-N")
 	live := h.write(".bashrc", "shared\n", 0o644)
 	h.mustRun("add", live)
 	h.write(".bashrc", "for a\n", 0o644)
@@ -481,14 +689,57 @@ func TestHostBoundEntriesWinOnTheirHost(t *testing.T) {
 
 func TestConflictCopyWarning(t *testing.T) {
 	h := newHarness(t)
-	h.mustRun("init")
-	copy := filepath.Join(filepath.Dir(h.store), "macfit 2.store")
-	if err := os.WriteFile(copy, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
+	h.mustRun("init", "-N")
+	for _, n := range []string{"macfit 2.store", "macfit (1).store"} {
+		if err := os.WriteFile(filepath.Join(filepath.Dir(h.store), n), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	_, _, errs := h.run("ls")
-	if !strings.Contains(errs, "conflict copies") || !strings.Contains(errs, "macfit 2.store") {
+	if !strings.Contains(errs, "sync conflict copies") || !strings.Contains(errs, "macfit 2.store") || !strings.Contains(errs, "macfit (1).store") {
 		t.Fatalf("warning: %q", errs)
+	}
+}
+
+func TestDiffRendersDriftInYellow(t *testing.T) {
+	h := newHarness(t)
+	h.mustRun("init", "-N")
+	same := h.write(".profile", "same\n", 0o644)
+	changed := h.write(".bashrc", "one\n", 0o644)
+	gone := h.write(".vimrc", "gone\n", 0o644)
+	h.mustRun("add", same, changed, gone)
+	h.write(".bashrc", "two\n", 0o644)
+	os.Remove(gone)
+
+	defer color.SetEnabled(true)()
+	code, out, _ := h.run("diff", "-V")
+	if code != 1 {
+		t.Fatalf("diff exit %d, want 1", code)
+	}
+	for line := range strings.SplitSeq(strings.TrimSuffix(out, "\n"), "\n") {
+		plain := color.ClearCode(line)
+		switch {
+		case strings.HasPrefix(plain, "= "):
+			if strings.Contains(line, "\x1b[") {
+				t.Fatalf("= line is colored: %q", line)
+			}
+		default:
+			if !strings.HasPrefix(line, yellow) {
+				t.Fatalf("drift line is not yellow: %q", line)
+			}
+		}
+	}
+	for _, want := range []string{"M ~/.bashrc", "? ~/.vimrc", "-one", "+two", "@@ -1,1 +1,1 @@"} {
+		if !strings.Contains(color.ClearCode(out), want) {
+			t.Fatalf("diff -V lacks %q: %q", want, out)
+		}
+	}
+
+	restore := color.SetEnabled(false)
+	code, out, _ = h.run("diff", "-V")
+	restore()
+	if code != 1 || strings.Contains(out, "\x1b[") {
+		t.Fatalf("color disabled: exit %d out %q", code, out)
 	}
 }
 
@@ -521,26 +772,27 @@ func TestParseArgs(t *testing.T) {
 	}
 }
 
-func TestStoreFlagAndEnvironment(t *testing.T) {
+func TestStoreEnvironmentAndFlagErrors(t *testing.T) {
 	h := newHarness(t)
-	h.app.storeEnv = filepath.Join(h.root, "icloud", "env.store")
-	h.out.Reset()
-	if code := h.app.run([]string{"init"}); code != 0 || !strings.Contains(h.out.String(), "env.store") {
-		t.Fatalf("MACFIT_STORE: code %d out %q err %q", code, h.out.String(), h.errb.String())
+	h.app.storeEnv = filepath.Join(h.root, "synced", "env.store")
+	if code, out, errs := h.runRaw("init", "-N"); code != 0 || !strings.Contains(out, "env.store") || strings.Contains(out, "remembered") {
+		t.Fatalf("MACFIT_STORE: code %d out %q err %q", code, out, errs)
 	}
 	h.app.storeEnv = ""
-	h.errb.Reset()
-	if code := h.app.run([]string{"ls"}); code != 1 || !strings.Contains(h.errb.String(), defaultStoreRel) {
-		t.Fatalf("default store path: code %d err %q", code, h.errb.String())
+	if code, _, errs := h.runRaw("ls"); code != 1 || !strings.Contains(errs, filepath.Join(".local", "share", "macfit", "macfit.store")) {
+		t.Fatalf("default store path: code %d err %q", code, errs)
 	}
-	if code := h.app.run([]string{"ls", "--store"}); code != 2 {
+	if code, _, _ := h.runRaw("ls", "--store"); code != 2 {
 		t.Fatalf("--store without value: code %d", code)
+	}
+	if code, _, _ := h.run("init", "-N", "extra"); code != 2 {
+		t.Fatalf("init with positional: code %d", code)
 	}
 }
 
 func TestEmptyFileRoundTrip(t *testing.T) {
 	h := newHarness(t)
-	h.mustRun("init")
+	h.mustRun("init", "-N")
 	live := h.write(".hushlogin", "", 0o644)
 	if out := h.mustRun("add", live); !strings.Contains(out, "added ~/.hushlogin") {
 		t.Fatalf("add empty: %q", out)
@@ -562,30 +814,10 @@ func TestEmptyFileRoundTrip(t *testing.T) {
 	}
 }
 
-func TestHelpLayoutMatchesTheOtherUtilities(t *testing.T) {
-	h := newHarness(t)
-	for _, arg := range []string{"help", "-h", "-?", "--help", "h"} {
-		h.out.Reset()
-		if code := h.app.run([]string{arg}); code != 0 {
-			t.Fatalf("%s: code %d", arg, code)
-		}
-		lines := strings.Split(h.out.String(), "\n")
-		if lines[0] != "macfit v1.0.0" {
-			t.Fatalf("%s: first line %q", arg, lines[0])
-		}
-		if lines[1] != "Keep Mac config files in one encrypted store and restore them on any Mac." {
-			t.Fatalf("%s: second line %q", arg, lines[1])
-		}
-		last := -1
-		for _, section := range []string{"\nOverview\n", "\nUsage\n", "\nOptions\n", "\nNotes\n"} {
-			idx := strings.Index(h.out.String(), section)
-			if idx < 0 || idx < last {
-				t.Fatalf("%s: section %q missing or out of order", arg, strings.TrimSpace(section))
-			}
-			last = idx
-		}
-		if !strings.Contains(h.out.String(), "  -h, -?, --help     Show this help message and exit") {
-			t.Fatalf("%s: help option line missing", arg)
-		}
+// errReader makes readLine fail, proving a prompt was not reached.
+func mustNotPrompt(t *testing.T) func(string) (string, error) {
+	return func(string) (string, error) {
+		t.Fatal("prompt reached unexpectedly")
+		return "", errors.New("unreachable")
 	}
 }

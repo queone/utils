@@ -254,8 +254,10 @@ func WriteAtomic(path string, data []byte, openedGen uint64) error {
 	return nil
 }
 
-// ConflictCopies lists iCloud conflict copies beside path, such as
-// "macfit 2.store" next to "macfit.store".
+// ConflictCopies lists sync conflict copies beside path: every sibling that
+// starts with the store's stem, ends with its extension, and carries any
+// suffix between them, such as "macfit 2.store", "macfit (1).store", or
+// "macfit (conflicted copy 2026-09-09).store", depending on the sync client.
 func ConflictCopies(path string) []string {
 	dir, base := filepath.Dir(path), filepath.Base(path)
 	ext := filepath.Ext(base)
@@ -267,11 +269,10 @@ func ConflictCopies(path string) []string {
 	var out []string
 	for _, e := range entries {
 		n := e.Name()
-		if n == base || !strings.HasPrefix(n, stem+" ") || !strings.HasSuffix(n, ext) {
+		if n == base || !strings.HasPrefix(n, stem) || !strings.HasSuffix(n, ext) {
 			continue
 		}
-		mid := strings.TrimSuffix(strings.TrimPrefix(n, stem+" "), ext)
-		if mid == "" || strings.Trim(mid, "0123456789") != "" {
+		if mid := n[len(stem) : len(n)-len(ext)]; mid == "" {
 			continue
 		}
 		out = append(out, filepath.Join(dir, n))

@@ -166,15 +166,27 @@ func TestWriteAtomicRenameFailureLeavesPreviousStore(t *testing.T) {
 func TestConflictCopies(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "macfit.store")
-	for _, n := range []string{"macfit.store", "macfit 2.store", "macfit 13.store", "macfit x.store", "other.store", "macfit 2.txt"} {
+	for _, n := range []string{
+		"macfit.store", "macfit 2.store", "macfit (1).store", "macfit (conflicted copy 2026-09-09).store",
+		".macfit.store.tmp-x", "other.store", "macfit.store.bak", "macfit 2.txt",
+	} {
 		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	got := ConflictCopies(path)
-	want := []string{filepath.Join(dir, "macfit 13.store"), filepath.Join(dir, "macfit 2.store")}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+	want := []string{
+		filepath.Join(dir, "macfit (1).store"),
+		filepath.Join(dir, "macfit (conflicted copy 2026-09-09).store"),
+		filepath.Join(dir, "macfit 2.store"),
+	}
+	if len(got) != len(want) {
 		t.Fatalf("conflict copies %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("conflict copies %v, want %v", got, want)
+		}
 	}
 }
 

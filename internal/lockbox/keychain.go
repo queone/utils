@@ -16,6 +16,7 @@ var ErrKeyNotFound = errors.New("key not found in keychain")
 type KeyStore interface {
 	Get(keyID string) ([]byte, error)
 	Put(keyID string, key []byte) error
+	Delete(keyID string) error
 }
 
 // Executor runs an external command and returns its combined output.
@@ -70,6 +71,19 @@ func (s SecurityKeyStore) Put(keyID string, key []byte) error {
 	return nil
 }
 
+// Delete removes the keychain item for keyID. It returns ErrKeyNotFound
+// when no item exists.
+func (s SecurityKeyStore) Delete(keyID string) error {
+	out, err := s.run("delete-generic-password", "-a", keyID, "-s", keychainService)
+	if err != nil {
+		if bytes.Contains(out, []byte("could not be found")) {
+			return ErrKeyNotFound
+		}
+		return fmt.Errorf("delete keychain item: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // MemoryKeyStore is an in-memory KeyStore for tests.
 type MemoryKeyStore struct {
 	Keys map[string][]byte
@@ -89,5 +103,14 @@ func (m *MemoryKeyStore) Put(keyID string, key []byte) error {
 		m.Keys = map[string][]byte{}
 	}
 	m.Keys[keyID] = bytes.Clone(key)
+	return nil
+}
+
+// Delete removes the key saved for keyID.
+func (m *MemoryKeyStore) Delete(keyID string) error {
+	if _, ok := m.Keys[keyID]; !ok {
+		return ErrKeyNotFound
+	}
+	delete(m.Keys, keyID)
 	return nil
 }

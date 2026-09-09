@@ -1,8 +1,9 @@
-// macfit keeps Mac config files in one encrypted store, iCloud Drive by
-// default, and restores them on any Mac. See README.md in this directory.
+// macfit keeps Mac config files in one encrypted store and restores them on
+// any Mac. See README.md in this directory.
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -16,20 +17,34 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/queone/gkit/internal/color"
 	"github.com/queone/gkit/internal/lockbox"
 	"golang.org/x/term"
 )
 
-const programVersion = "1.0.0"
+const programVersion = "1.1.0"
 
-// defaultStoreRel is the store location under the home directory when neither
-// -s nor MACFIT_STORE names one: the root of iCloud Drive.
-const defaultStoreRel = "Library/Mobile Documents/com~apple~CloudDocs/macfit.store"
+// storeSource names where the store path came from.
+type storeSource string
+
+const (
+	sourceFlag    storeSource = "flag"
+	sourceEnv     storeSource = "env"
+	sourcePointer storeSource = "pointer"
+	sourceDefault storeSource = "default"
+)
+
+// storeRef is the resolved store path and how it was chosen.
+type storeRef struct {
+	path   string
+	source storeSource
+}
 
 // app carries the process-level dependencies so tests can swap them for fakes.
 type app struct {
 	stdout     io.Writer
 	stderr     io.Writer
+	stdin      io.Reader
 	keys       lockbox.KeyStore
 	env        lockbox.Env
 	host       string
@@ -38,12 +53,14 @@ type app struct {
 	storeEnv   string
 	isTerminal func() bool
 	readSecret func(prompt string) ([]byte, error)
+	readLine   func(prompt string) (string, error)
 }
 
 func newApp() *app {
-	return &app{
+	a := &app{
 		stdout:     os.Stdout,
 		stderr:     os.Stderr,
+		stdin:      os.Stdin,
 		keys:       lockbox.SecurityKeyStore{},
 		env:        lockbox.EnvFromOS(),
 		host:       lockbox.Hostname(lockbox.DefaultExecutor, os.Hostname),
@@ -53,6 +70,8 @@ func newApp() *app {
 		isTerminal: func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
 		readSecret: terminalSecret,
 	}
+	a.readLine = a.terminalLine
+	return a
 }
 
 // terminalSecret prompts on stderr and reads one line with echo off.
@@ -61,6 +80,16 @@ func terminalSecret(prompt string) ([]byte, error) {
 	b, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Fprintln(os.Stderr)
 	return b, err
+}
+
+// terminalLine prompts on stderr and reads one visible line.
+func (a *app) terminalLine(prompt string) (string, error) {
+	fmt.Fprint(a.stderr, prompt)
+	line, err := bufio.NewReader(a.stdin).ReadString('\n')
+	if err != nil && line == "" {
+		return "", err
+	}
+	return strings.TrimSpace(line), nil
 }
 
 func main() {
@@ -72,35 +101,45 @@ func isHelpArg(a string) bool {
 	return a == "-h" || a == "-?" || a == "--help" || a == "h" || a == "help"
 }
 
+// heading renders a help heading in bold white, like the name on line one.
+func heading(s string) string { return color.Bold(color.Gra10(s)) }
+
 func usage() string {
-	return "macfit v" + programVersion + "\n" +
-		"Keep Mac config files in one encrypted store and restore them on any Mac.\n\n" +
-		"Overview\n" +
-		"  The store is a single sealed file. Keep it in iCloud Drive, the default\n" +
-		"  location, and every Mac on the account sees it; any other synced folder\n" +
-		"  works the same way. push sends live files into the store, pull restores\n" +
-		"  them from the store, and diff shows what differs. The key lives in the\n" +
-		"  login keychain, with a passphrase-wrapped copy in the store for other Macs.\n\n" +
-		"Usage\n" +
-		"  macfit init                         create the store and key, or unlock an existing store\n" +
-		"  macfit add PATH [-H HOST] [-l]      register a live file and capture it\n" +
+	return heading("macfit") + " v" + programVersion + "\n" +
+		color.Gra5("Keep Mac config files in one encrypted store and restore them on any Mac.") + "\n\n" +
+		heading("Overview") + "\n" +
+		"  The store is a single sealed file. Keep it in a synced folder and every Mac\n" +
+		"  that sees the folder can open it. push sends live files into the store,\n" +
+		"  pull restores them from the store, and diff shows what differs. The key\n" +
+		"  lives in the login keychain, with a passphrase-wrapped copy in the store\n" +
+		"  for other Macs.\n\n" +
+		heading("Usage") + "\n" +
+		"  macfit init [-N]                    unlock an existing store, or create one with -N\n" +
+		"  macfit add PATH... [-H HOST] [-l]   register live files and capture them\n" +
 		"  macfit rm TARGET [-H HOST]          forget a file and its stored versions\n" +
 		"  macfit ls                           list entries\n" +
 		"  macfit push [TARGET...]             send changed live files into the store\n" +
 		"  macfit pull [TARGET...] [-n] [-f]   restore files from the store\n" +
-		"  macfit diff [TARGET...] [-V]        show drift between the store and this Mac\n\n" +
-		"Options\n" +
-		"  -s, --store PATH   Store file (default: MACFIT_STORE, else macfit.store in iCloud Drive)\n" +
+		"  macfit diff [TARGET...] [-V]        show drift between the store and this Mac\n" +
+		"  macfit key show                     store path, key id, keychain and store state\n" +
+		"  macfit key restore                  put the key back in the keychain with the passphrase\n" +
+		"  macfit key rm [-f]                  delete the keychain item after a prompt\n" +
+		"  macfit key passphrase               change the recovery passphrase\n\n" +
+		heading("Options") + "\n" +
+		"  -s, --store PATH   Store file for this command; init -s also remembers it\n" +
+		"  -N, --new          Create a new store (init)\n" +
 		"  -H, --host NAME    Bind the entry to one Mac (add, rm)\n" +
 		"  -l, --literal      Keep the path under ~ instead of an XDG variable (add)\n" +
 		"  -n, --dry-run      Print what pull would write and write nothing\n" +
-		"  -f, --force        Let pull overwrite a live file that differs\n" +
+		"  -f, --force        Let pull overwrite a live file that differs; skip the key rm prompt\n" +
 		"  -V, --verbose      Add a unified diff to diff output\n" +
 		"  -v, --version      Print macfit v" + programVersion + " and exit\n" +
 		"  -h, -?, --help     Show this help message and exit\n\n" +
-		"Notes\n" +
+		heading("Notes") + "\n" +
+		"  Store path order: -s, then MACFIT_STORE, then the path init -s remembered in\n" +
+		"  $XDG_CONFIG_HOME/macfit/store, then $XDG_DATA_HOME/macfit/macfit.store.\n" +
 		"  A TARGET is the template ls shows ($XDG_CONFIG_HOME/git/config) or the live path.\n" +
-		"  init needs a terminal for the passphrase prompt and never creates the iCloud Drive folder.\n" +
+		"  init needs a terminal for the passphrase prompt and creates only the default folder.\n" +
 		"  Files only: no directories, globs, or symlinks. macOS defaults settings are a planned addition.\n"
 }
 
@@ -118,7 +157,7 @@ func (a *app) run(args []string) int {
 		fmt.Fprint(a.stdout, usage())
 		return 0
 	}
-	storePath, rest, err := a.splitStoreFlag(args)
+	storeFlag, rest, err := splitStoreFlag(args)
 	if err != nil {
 		a.errorf("%s; run `macfit help`", err)
 		return 2
@@ -131,31 +170,37 @@ func (a *app) run(args []string) int {
 		a.errorf("macfit supports macOS only")
 		return 1
 	}
+	ref, err := a.resolveStore(storeFlag)
+	if err != nil {
+		a.errorf("resolve store path: %s", err)
+		return 1
+	}
 	verb, vargs := rest[0], rest[1:]
 	switch verb {
 	case "init":
-		return a.cmdInit(storePath, vargs)
+		return a.cmdInit(ref, vargs)
 	case "add":
-		return a.cmdAdd(storePath, vargs)
+		return a.cmdAdd(ref, vargs)
 	case "rm":
-		return a.cmdRm(storePath, vargs)
+		return a.cmdRm(ref, vargs)
 	case "ls":
-		return a.cmdLs(storePath, vargs)
+		return a.cmdLs(ref, vargs)
 	case "push":
-		return a.cmdPush(storePath, vargs)
+		return a.cmdPush(ref, vargs)
 	case "pull":
-		return a.cmdPull(storePath, vargs)
+		return a.cmdPull(ref, vargs)
 	case "diff":
-		return a.cmdDiff(storePath, vargs)
+		return a.cmdDiff(ref, vargs)
+	case "key":
+		return a.cmdKey(ref, vargs)
 	default:
 		a.errorf("unknown command %q; run `macfit help`", verb)
 		return 2
 	}
 }
 
-// splitStoreFlag pulls -s/--store out of args wherever it appears and resolves
-// the store path from the flag, the environment, or the default.
-func (a *app) splitStoreFlag(args []string) (string, []string, error) {
+// splitStoreFlag pulls -s/--store out of args wherever it appears.
+func splitStoreFlag(args []string) (string, []string, error) {
 	var path string
 	var rest []string
 	for i := 0; i < len(args); i++ {
@@ -173,17 +218,64 @@ func (a *app) splitStoreFlag(args []string) (string, []string, error) {
 			rest = append(rest, arg)
 		}
 	}
-	if path == "" {
-		path = a.storeEnv
-	}
-	if path == "" {
-		path = filepath.Join(a.env.Home, defaultStoreRel)
-	}
-	abs, err := filepath.Abs(path)
+	return path, rest, nil
+}
+
+// pointerFile is where init -s remembers the store path on this Mac.
+func (a *app) pointerFile() string { return filepath.Join(a.env.ConfigHome, "macfit", "store") }
+
+// defaultStore is the store path when nothing else names one.
+func (a *app) defaultStore() string { return filepath.Join(a.env.DataHome, "macfit", "macfit.store") }
+
+func absPath(p string) (string, error) {
+	abs, err := filepath.Abs(p)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	return abs, rest, nil
+	return filepath.Clean(abs), nil
+}
+
+// resolveStore applies the order: -s, MACFIT_STORE, the pointer file, the default.
+func (a *app) resolveStore(flag string) (storeRef, error) {
+	if flag != "" {
+		abs, err := absPath(flag)
+		return storeRef{abs, sourceFlag}, err
+	}
+	if a.storeEnv != "" {
+		abs, err := absPath(a.storeEnv)
+		return storeRef{abs, sourceEnv}, err
+	}
+	if b, err := os.ReadFile(a.pointerFile()); err == nil {
+		if p := strings.TrimSpace(string(b)); p != "" {
+			abs, err := absPath(p)
+			return storeRef{abs, sourcePointer}, err
+		}
+	}
+	return storeRef{a.defaultStore(), sourceDefault}, nil
+}
+
+// writePointer records path so later commands find the store without -s.
+func (a *app) writePointer(path string) error {
+	if err := os.MkdirAll(filepath.Dir(a.pointerFile()), 0o700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(a.pointerFile(), []byte(path+"\n"), 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(a.pointerFile(), 0o600)
+}
+
+// rememberIfFlagged writes the pointer when the store came from -s.
+func (a *app) rememberIfFlagged(ref storeRef) int {
+	if ref.source != sourceFlag {
+		return 0
+	}
+	if err := a.writePointer(ref.path); err != nil {
+		a.errorf("remember store path: %s", err)
+		return 1
+	}
+	fmt.Fprintf(a.stdout, "store path remembered in %s\n", a.pointerFile())
+	return 0
 }
 
 type flagSpec struct {
@@ -239,18 +331,27 @@ func parseArgs(args []string, specs []flagSpec) (map[string]string, []string, er
 	return flags, pos, nil
 }
 
-// openStore loads the store at path with the key from the keychain.
-func (a *app) openStore(path string) (*lockbox.Store, error) {
+// readStoreHeader reads the store file at path and parses its header.
+func readStoreHeader(path string) ([]byte, lockbox.Header, error) {
 	file, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("no store at %s; run `macfit init`", path)
+		return nil, lockbox.Header{}, fmt.Errorf("no store at %s; run `macfit init -N` to create one, or pass -s PATH to point at an existing store", path)
 	}
 	if err != nil {
-		return nil, err
+		return nil, lockbox.Header{}, err
 	}
 	hdr, err := lockbox.ParseHeader(file)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, lockbox.Header{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return file, hdr, nil
+}
+
+// openStore loads the store with the key from the keychain.
+func (a *app) openStore(path string) (*lockbox.Store, error) {
+	_, hdr, err := readStoreHeader(path)
+	if err != nil {
+		return nil, err
 	}
 	key, err := a.keys.Get(lockbox.KeyIDString(hdr.KeyID))
 	if errors.Is(err, lockbox.ErrKeyNotFound) {
@@ -264,96 +365,116 @@ func (a *app) openStore(path string) (*lockbox.Store, error) {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	if copies := lockbox.ConflictCopies(path); len(copies) > 0 {
-		a.errorf("warning: iCloud conflict copies beside the store: %s", strings.Join(copies, ", "))
+		a.errorf("warning: sync conflict copies beside the store: %s", strings.Join(copies, ", "))
 	}
 	return st, nil
 }
 
-func (a *app) cmdInit(path string, args []string) int {
-	if len(args) > 0 {
-		a.errorf("init takes no arguments; run `macfit help`")
+func (a *app) cmdInit(ref storeRef, args []string) int {
+	flags, pos, err := parseArgs(args, []flagSpec{{"-N", "--new", false}})
+	if err != nil || len(pos) > 0 {
+		a.errorf("init: usage: macfit init [-N]")
 		return 2
 	}
-	file, err := os.ReadFile(path)
-	switch {
-	case err == nil:
-		return a.initExisting(path, file)
-	case errors.Is(err, fs.ErrNotExist):
-		return a.initNew(path)
-	default:
-		a.errorf("init: read %s: %s", path, err)
-		return 1
+	if flags["--new"] == "true" {
+		return a.initNew(ref)
 	}
+	return a.initUnlock(ref)
 }
 
-// initExisting unwraps the key of an existing store with the recovery
-// passphrase and saves it to this Mac's keychain.
-func (a *app) initExisting(path string, file []byte) int {
-	hdr, err := lockbox.ParseHeader(file)
+// initUnlock puts an existing store's key into this Mac's keychain.
+func (a *app) initUnlock(ref storeRef) int {
+	_, hdr, err := readStoreHeader(ref.path)
 	if err != nil {
-		a.errorf("init: %s: %s", path, err)
+		a.errorf("init: %s", err)
 		return 1
 	}
 	keyID := lockbox.KeyIDString(hdr.KeyID)
 	_, err = a.keys.Get(keyID)
-	if err == nil {
-		a.errorf("init: store already initialized at %s and its key is in the login keychain", path)
-		return 1
-	}
-	if !errors.Is(err, lockbox.ErrKeyNotFound) {
+	switch {
+	case err == nil:
+		fmt.Fprintf(a.stdout, "store at %s is already unlocked on this Mac\n", ref.path)
+		return a.rememberIfFlagged(ref)
+	case !errors.Is(err, lockbox.ErrKeyNotFound):
 		a.errorf("init: %s", err)
 		return 1
 	}
+	if code := a.restoreKey("init", ref.path, hdr); code != 0 {
+		return code
+	}
+	return a.rememberIfFlagged(ref)
+}
+
+// restoreKey asks for the recovery passphrase, unwraps the key, and saves it.
+func (a *app) restoreKey(verb, path string, hdr lockbox.Header) int {
 	if !a.isTerminal() {
-		a.errorf("init needs a terminal")
+		a.errorf("%s needs a terminal", verb)
 		return 1
 	}
 	pass, err := a.readSecret("Recovery passphrase for " + path + ": ")
 	if err != nil {
-		a.errorf("init: read passphrase: %s", err)
+		a.errorf("%s: read passphrase: %s", verb, err)
 		return 1
 	}
 	key, err := hdr.UnwrapKey(pass)
 	if err != nil {
-		a.errorf("init: %s", err)
+		a.errorf("%s: %s", verb, err)
 		return 1
 	}
-	if err := a.keys.Put(keyID, key); err != nil {
-		a.errorf("init: %s", err)
+	if err := a.keys.Put(lockbox.KeyIDString(hdr.KeyID), key); err != nil {
+		a.errorf("%s: %s", verb, err)
 		return 1
 	}
 	fmt.Fprintf(a.stdout, "key for %s saved to the login keychain\n", path)
 	return 0
 }
 
+// newPassphrase asks for a passphrase twice and returns it.
+func (a *app) newPassphrase(verb string) ([]byte, int) {
+	pass, err := a.readSecret("New recovery passphrase: ")
+	if err != nil {
+		a.errorf("%s: read passphrase: %s", verb, err)
+		return nil, 1
+	}
+	if len(bytes.TrimSpace(pass)) == 0 {
+		a.errorf("%s: passphrase must not be empty", verb)
+		return nil, 1
+	}
+	again, err := a.readSecret("Repeat passphrase: ")
+	if err != nil {
+		a.errorf("%s: read passphrase: %s", verb, err)
+		return nil, 1
+	}
+	if !bytes.Equal(pass, again) {
+		a.errorf("%s: passphrases do not match", verb)
+		return nil, 1
+	}
+	return pass, 0
+}
+
 // initNew creates a store, its key, and the passphrase-wrapped recovery copy.
-func (a *app) initNew(path string) int {
-	parent := filepath.Dir(path)
-	if info, err := os.Stat(parent); err != nil || !info.IsDir() {
-		a.errorf("init: directory %s does not exist; turn on iCloud Drive, or pass -s PATH to keep the store elsewhere", parent)
+func (a *app) initNew(ref storeRef) int {
+	if _, err := os.Stat(ref.path); err == nil {
+		a.errorf("init: a store already exists at %s", ref.path)
+		return 1
+	}
+	parent := filepath.Dir(ref.path)
+	if ref.source == sourceDefault {
+		if err := os.MkdirAll(parent, 0o700); err != nil {
+			a.errorf("init: %s", err)
+			return 1
+		}
+	} else if info, err := os.Stat(parent); err != nil || !info.IsDir() {
+		a.errorf("init: directory %s does not exist; create the synced folder first, or pass -s PATH to keep the store elsewhere", parent)
 		return 1
 	}
 	if !a.isTerminal() {
 		a.errorf("init needs a terminal")
 		return 1
 	}
-	pass, err := a.readSecret("New recovery passphrase: ")
-	if err != nil {
-		a.errorf("init: read passphrase: %s", err)
-		return 1
-	}
-	if len(bytes.TrimSpace(pass)) == 0 {
-		a.errorf("init: passphrase must not be empty")
-		return 1
-	}
-	again, err := a.readSecret("Repeat passphrase: ")
-	if err != nil {
-		a.errorf("init: read passphrase: %s", err)
-		return 1
-	}
-	if !bytes.Equal(pass, again) {
-		a.errorf("init: passphrases do not match")
-		return 1
+	pass, code := a.newPassphrase("init")
+	if code != 0 {
+		return code
 	}
 	key, err := lockbox.NewKey()
 	if err != nil {
@@ -370,22 +491,22 @@ func (a *app) initNew(path string) int {
 		a.errorf("init: %s", err)
 		return 1
 	}
-	st, err := lockbox.Create(path, hdr, key)
+	st, err := lockbox.Create(ref.path, hdr, key)
 	if err != nil {
 		a.errorf("init: %s", err)
 		return 1
 	}
 	defer st.Close()
 	if err := st.Save(); err != nil {
-		a.errorf("init: write %s: %s", path, err)
+		a.errorf("init: write %s: %s", ref.path, err)
 		return 1
 	}
 	if err := a.keys.Put(lockbox.KeyIDString(id), key); err != nil {
-		a.errorf("init: store written but the key was not saved: %s; run `macfit init` again and enter the passphrase", err)
+		a.errorf("init: store written but the key was not saved: %s; run `macfit init` and enter the passphrase", err)
 		return 1
 	}
-	fmt.Fprintf(a.stdout, "store created at %s\nkey saved to the login keychain\nkeep the recovery passphrase safe: another Mac needs it once\n", path)
-	return 0
+	fmt.Fprintf(a.stdout, "store created at %s\nkey saved to the login keychain\nkeep the recovery passphrase safe: another Mac needs it once\n", ref.path)
+	return a.rememberIfFlagged(ref)
 }
 
 func forHost(h string) string {
@@ -395,61 +516,71 @@ func forHost(h string) string {
 	return ", host " + h
 }
 
-func (a *app) cmdAdd(path string, args []string) int {
+func (a *app) cmdAdd(ref storeRef, args []string) int {
 	flags, pos, err := parseArgs(args, []flagSpec{{"-H", "--host", true}, {"-l", "--literal", false}})
-	if err != nil || len(pos) != 1 {
-		a.errorf("add: usage: macfit add PATH [-H HOST] [-l]")
+	if err != nil || len(pos) == 0 {
+		a.errorf("add: usage: macfit add PATH... [-H HOST] [-l]")
 		return 2
 	}
-	abs, err := filepath.Abs(pos[0])
-	if err != nil {
-		a.errorf("add: %s", err)
-		return 1
-	}
-	info, err := os.Lstat(abs)
-	if err != nil {
-		a.errorf("add: %s", err)
-		return 1
-	}
-	if !info.Mode().IsRegular() {
-		a.errorf("add: %s is not a regular file", abs)
-		return 1
-	}
-	content, err := os.ReadFile(abs)
-	if err != nil {
-		a.errorf("add: %s", err)
-		return 1
-	}
-	target := a.env.Template(abs)
-	if flags["--literal"] == "true" {
-		target = a.env.Literal(abs)
-	}
 	host := flags["--host"]
-	st, err := a.openStore(path)
+	literal := flags["--literal"] == "true"
+	st, err := a.openStore(ref.path)
 	if err != nil {
 		a.errorf("add: %s", err)
 		return 1
 	}
 	defer st.Close()
+	rc, added := 0, false
+	for _, p := range pos {
+		if err := a.addOne(st, p, host, literal); err != nil {
+			a.errorf("add: %s", err)
+			rc = 1
+			continue
+		}
+		added = true
+	}
+	if added {
+		if err := st.Save(); err != nil {
+			a.errorf("add: %s", err)
+			return 1
+		}
+	}
+	return rc
+}
+
+// addOne registers one live file and captures its content.
+func (a *app) addOne(st *lockbox.Store, p, host string, literal bool) error {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return err
+	}
+	info, err := os.Lstat(abs)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", abs)
+	}
+	content, err := os.ReadFile(abs)
+	if err != nil {
+		return err
+	}
+	target := a.env.Template(abs)
+	if literal {
+		target = a.env.Literal(abs)
+	}
 	e, err := st.AddEntry(target, info.Mode().Perm(), host)
 	if errors.Is(err, lockbox.ErrExists) {
-		a.errorf("add: %s is already registered%s; use `macfit push` to store its current content", target, forHost(host))
-		return 1
+		return fmt.Errorf("%s is already registered%s; use `macfit push` to store its current content", target, forHost(host))
 	}
 	if err != nil {
-		a.errorf("add: %s", err)
-		return 1
+		return err
 	}
 	if _, err := st.AddVersion(e.ID, content, a.host); err != nil {
-		a.errorf("add: %s", err)
-		return 1
-	}
-	if err := st.Save(); err != nil {
-		a.errorf("add: %s", err)
-		return 1
+		return err
 	}
 	fmt.Fprintf(a.stdout, "added %s (mode %04o%s)\n", target, e.Mode, forHost(host))
-	return 0
+	return nil
 }
 
 // targetKeys lists the store targets an argument may name: a template as
@@ -465,13 +596,13 @@ func (a *app) targetKeys(arg string) []string {
 	return []string{a.env.Template(abs), a.env.Literal(abs), abs}
 }
 
-func (a *app) cmdRm(path string, args []string) int {
+func (a *app) cmdRm(ref storeRef, args []string) int {
 	flags, pos, err := parseArgs(args, []flagSpec{{"-H", "--host", true}})
 	if err != nil || len(pos) != 1 {
 		a.errorf("rm: usage: macfit rm TARGET [-H HOST]")
 		return 2
 	}
-	st, err := a.openStore(path)
+	st, err := a.openStore(ref.path)
 	if err != nil {
 		a.errorf("rm: %s", err)
 		return 1
@@ -515,12 +646,12 @@ func (a *app) cmdRm(path string, args []string) int {
 	return 0
 }
 
-func (a *app) cmdLs(path string, args []string) int {
+func (a *app) cmdLs(ref storeRef, args []string) int {
 	if len(args) > 0 {
 		a.errorf("ls takes no arguments; run `macfit help`")
 		return 2
 	}
-	st, err := a.openStore(path)
+	st, err := a.openStore(ref.path)
 	if err != nil {
 		a.errorf("ls: %s", err)
 		return 1
@@ -570,13 +701,13 @@ func (a *app) selected(st *lockbox.Store, args []string) ([]lockbox.Entry, error
 	return out, nil
 }
 
-func (a *app) cmdPush(path string, args []string) int {
+func (a *app) cmdPush(ref storeRef, args []string) int {
 	_, pos, err := parseArgs(args, nil)
 	if err != nil {
 		a.errorf("push: %s; run `macfit help`", err)
 		return 2
 	}
-	st, err := a.openStore(path)
+	st, err := a.openStore(ref.path)
 	if err != nil {
 		a.errorf("push: %s", err)
 		return 1
@@ -642,14 +773,14 @@ func (a *app) cmdPush(path string, args []string) int {
 	return rc
 }
 
-func (a *app) cmdPull(path string, args []string) int {
+func (a *app) cmdPull(ref storeRef, args []string) int {
 	flags, pos, err := parseArgs(args, []flagSpec{{"-n", "--dry-run", false}, {"-f", "--force", false}})
 	if err != nil {
 		a.errorf("pull: %s; run `macfit help`", err)
 		return 2
 	}
 	dry, force := flags["--dry-run"] == "true", flags["--force"] == "true"
-	st, err := a.openStore(path)
+	st, err := a.openStore(ref.path)
 	if err != nil {
 		a.errorf("pull: %s", err)
 		return 1
@@ -723,14 +854,17 @@ func (a *app) cmdPull(path string, args []string) int {
 	return rc
 }
 
-func (a *app) cmdDiff(path string, args []string) int {
+// drift renders a diff line that reports drift in yellow.
+func drift(line string) string { return color.Yel5(line) }
+
+func (a *app) cmdDiff(ref storeRef, args []string) int {
 	flags, pos, err := parseArgs(args, []flagSpec{{"-V", "--verbose", false}})
 	if err != nil {
 		a.errorf("diff: %s; run `macfit help`", err)
 		return 2
 	}
 	verbose := flags["--verbose"] == "true"
-	st, err := a.openStore(path)
+	st, err := a.openStore(ref.path)
 	if err != nil {
 		a.errorf("diff: %s", err)
 		return 1
@@ -741,7 +875,7 @@ func (a *app) cmdDiff(path string, args []string) int {
 		a.errorf("diff: %s", err)
 		return 1
 	}
-	drift := false
+	drifted := false
 	for _, e := range sel {
 		latest, ok, err := st.Latest(e.ID)
 		if err != nil {
@@ -751,8 +885,8 @@ func (a *app) cmdDiff(path string, args []string) int {
 		live := a.env.Expand(e.Target)
 		cur, rerr := os.ReadFile(live)
 		if errors.Is(rerr, fs.ErrNotExist) {
-			fmt.Fprintf(a.stdout, "? %s\n", e.Target)
-			drift = true
+			fmt.Fprintln(a.stdout, drift("? "+e.Target))
+			drifted = true
 			continue
 		}
 		if rerr != nil {
@@ -762,8 +896,8 @@ func (a *app) cmdDiff(path string, args []string) int {
 		info, _ := os.Stat(live)
 		mode := info.Mode().Perm()
 		if !ok {
-			fmt.Fprintf(a.stdout, "M %s (nothing stored yet)\n", e.Target)
-			drift = true
+			fmt.Fprintln(a.stdout, drift("M "+e.Target+" (nothing stored yet)"))
+			drifted = true
 			continue
 		}
 		sameContent := lockbox.Digest(cur) == latest.SHA256
@@ -771,17 +905,19 @@ func (a *app) cmdDiff(path string, args []string) int {
 			fmt.Fprintf(a.stdout, "= %s\n", e.Target)
 			continue
 		}
-		drift = true
+		drifted = true
 		if mode != e.Mode {
-			fmt.Fprintf(a.stdout, "M %s (mode %04o in store, %04o live)\n", e.Target, e.Mode, mode)
+			fmt.Fprintln(a.stdout, drift(fmt.Sprintf("M %s (mode %04o in store, %04o live)", e.Target, e.Mode, mode)))
 		} else {
-			fmt.Fprintf(a.stdout, "M %s\n", e.Target)
+			fmt.Fprintln(a.stdout, drift("M "+e.Target))
 		}
 		if verbose && !sameContent {
-			fmt.Fprint(a.stdout, unifiedDiff(e.Target+" (store)", live+" (live)", latest.Content, cur))
+			for _, line := range splitLines([]byte(unifiedDiff(e.Target+" (store)", live+" (live)", latest.Content, cur))) {
+				fmt.Fprintln(a.stdout, drift(line))
+			}
 		}
 	}
-	if drift {
+	if drifted {
 		return 1
 	}
 	return 0
