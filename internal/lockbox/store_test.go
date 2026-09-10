@@ -107,6 +107,16 @@ func TestStoreVersionsDuplicatesAndCascade(t *testing.T) {
 	if !bytes.Equal(latest.Content, []byte("two")) {
 		t.Fatalf("latest content %q", latest.Content)
 	}
+	all, err := st.Versions(e.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].Generation != 1 || string(all[0].Content) != "one" || all[1].Generation != 2 || string(all[1].Content) != "two" || all[1].CapturedAt.IsZero() {
+		t.Fatalf("versions listing: %+v", all)
+	}
+	if none, err := st.Versions(9999); err != nil || len(none) != 0 {
+		t.Fatalf("versions of a missing entry: %v %v", none, err)
+	}
 	if err := st.SetMode(e.ID, 0o644); err != nil {
 		t.Fatal(err)
 	}

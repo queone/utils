@@ -22,7 +22,7 @@ import (
 	"golang.org/x/term"
 )
 
-const programVersion = "1.3.0"
+const programVersion = "1.4.0"
 
 // storeSource names where the store path came from.
 type storeSource string
@@ -122,6 +122,8 @@ func usage() string {
 		"  macfit push [TARGET...]             send changed live files into the store\n" +
 		"  macfit pull [TARGET...] [-f]        plan the restore, or write it with -f\n" +
 		"  macfit diff [TARGET...] [-V]        show drift between the store and this Mac\n" +
+		"  macfit render [-o DIR] [-a] [-f]    write the stored files into a browsable directory\n" +
+		"  macfit cat TARGET [-H HOST]         print one stored file\n" +
 		"  macfit key show                     store path, key id, keychain and store state\n" +
 		"  macfit key restore                  put the key back in the keychain with the passphrase\n" +
 		"  macfit key rm [-f]                  delete the keychain item after a prompt\n" +
@@ -134,6 +136,8 @@ func usage() string {
 		"  -n, --dry-run      Print the pull plan; the default, kept for scripts\n" +
 		"  -f, --force        Write the pull plan, overwriting live files that differ; skip the key rm prompt\n" +
 		"  -V, --verbose      Add a unified diff to diff output\n" +
+		"  -o, --out DIR      Render into DIR instead of a fresh private temp directory (render)\n" +
+		"  -a, --all          Render every stored version too, under versions/ (render)\n" +
 		"  -v, --version      Print macfit v" + programVersion + " and exit\n" +
 		"  -h, -?, --help     Show this help message and exit\n\n" +
 		heading("Notes") + "\n" +
@@ -141,6 +145,7 @@ func usage() string {
 		"  $XDG_CONFIG_HOME/macfit/store, then $XDG_DATA_HOME/macfit/macfit.store.\n" +
 		"  A TARGET is the template ls shows ($XDG_CONFIG_HOME/git/config) or the live path.\n" +
 		"  init needs a terminal for the passphrase prompt and creates only the default folder.\n" +
+		"  render writes plaintext copies of the store; delete the directory when done.\n" +
 		"  Files only: no directories, globs, or symlinks. macOS defaults settings are a planned addition.\n"
 }
 
@@ -196,6 +201,10 @@ func (a *app) run(args []string) int {
 		return a.cmdDiff(ref, vargs)
 	case "key":
 		return a.cmdKey(ref, vargs)
+	case "render":
+		return a.cmdRender(ref, vargs)
+	case "cat":
+		return a.cmdCat(ref, vargs)
 	default:
 		a.errorf("unknown command %q; run `macfit help`", verb)
 		return 2
@@ -616,8 +625,28 @@ func (a *app) cmdRm(ref storeRef, args []string) int {
 		a.errorf("rm: %s", err)
 		return 1
 	}
-	keys := a.targetKeys(pos[0])
 	host, explicit := flags["--host"]
+	pick := a.pickEntry(all, pos[0], host, explicit)
+	if pick == nil {
+		a.errorf("rm: %s is not registered%s", pos[0], forHost(host))
+		return 1
+	}
+	if err := st.RemoveEntry(pick.ID); err != nil {
+		a.errorf("rm: %s", err)
+		return 1
+	}
+	if err := st.Save(); err != nil {
+		a.errorf("rm: %s", err)
+		return 1
+	}
+	fmt.Fprintf(a.stdout, "removed %s%s\n", pick.Target, forHost(pick.Host))
+	return 0
+}
+
+// pickEntry selects the entry an argument names: the one bound to host when
+// explicit, else this Mac's bound entry, else the unbound entry.
+func (a *app) pickEntry(all []lockbox.Entry, arg, host string, explicit bool) *lockbox.Entry {
+	keys := a.targetKeys(arg)
 	var pick *lockbox.Entry
 	for i := range all {
 		e := &all[i]
@@ -633,20 +662,7 @@ func (a *app) cmdRm(ref storeRef, args []string) int {
 			pick = e
 		}
 	}
-	if pick == nil {
-		a.errorf("rm: %s is not registered%s", pos[0], forHost(host))
-		return 1
-	}
-	if err := st.RemoveEntry(pick.ID); err != nil {
-		a.errorf("rm: %s", err)
-		return 1
-	}
-	if err := st.Save(); err != nil {
-		a.errorf("rm: %s", err)
-		return 1
-	}
-	fmt.Fprintf(a.stdout, "removed %s%s\n", pick.Target, forHost(pick.Host))
-	return 0
+	return pick
 }
 
 func (a *app) cmdLs(ref storeRef, args []string) int {
@@ -1044,7 +1060,11 @@ func (a *app) cmdSt(ref storeRef, args []string) int {
 			opens = "no (" + perr.Error() + ")"
 			break
 		}
-		grey("store file", fmt.Sprintf("present, %d bytes, generation %d", len(file), hdr.Generation))
+		modified := "unknown"
+		if info, serr := os.Stat(ref.path); serr == nil {
+			modified = info.ModTime().Local().Format(time.DateTime)
+		}
+		grey("store file", fmt.Sprintf("present, %d bytes, generation %d, modified %s", len(file), hdr.Generation, modified))
 		keyID := lockbox.KeyIDString(hdr.KeyID)
 		grey("key id", keyID)
 		key, kerr := a.keys.Get(keyID)

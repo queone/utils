@@ -12,6 +12,8 @@ macfit pull                                   # plan the restore: what would be 
 macfit pull -f ~/.bashrc                      # write one file, or all of them with no target
 macfit init -s ~/data/etc/macfit.store        # another Mac: unlock with the passphrase, remember the path
 macfit st                                     # one screen: store, key, host, entries, conflicts, drift
+macfit render                                 # browse the stored files: a private temp directory, path printed
+macfit cat ~/.bashrc | diff - ~/.bashrc       # one stored file on stdout
 ```
 
 `push` sends live files up into the store. `pull` brings the store down onto the Mac. The store is the remote, as in git.
@@ -46,8 +48,10 @@ If the passphrase or the key ever leaks, create a new store with `init -N -s NEW
 - `macfit diff [TARGET...] [-V]` prints `=` same, `M` differs, `?` live file missing, one line per entry, and exits 1 when anything drifted. `-V` adds a unified diff block, set off by blank lines.
 - Colors on a terminal, plain when piped: grey for `=` and `unchanged`, yellow for `M`, `differs`, `would overwrite`, and `missing`, orange for `?`, green for `would write`, `restored`, `added`, and `updated`, red for `symlink`. Inside a diff block the headers are dark grey, unchanged lines grey, and removed and added lines light yellow.
 - `macfit ls` lists every entry with its mode, host, and last capture time. `macfit rm TARGET [-H HOST]` removes one.
-- `macfit st` prints one status screen: the store path and where it came from, the remembered path, the store file's size and generation, the key id and whether the keychain key opens the store, this Mac's hostname as `-H` sees it, entry counts, sync conflict copies, and a drift summary. Exit 1 when the store does not open. On a terminal the values are dark grey, `store opens` is green or red, conflict copies are yellow, and non-zero `M` and `?` drift counts are yellow and red.
+- `macfit st` prints one status screen: the store path and where it came from, the remembered path, the store file's size, generation, and modification time (to see whether the other Mac's push has arrived), the key id and whether the keychain key opens the store, this Mac's hostname as `-H` sees it, entry counts, sync conflict copies, and a drift summary. Exit 1 when the store does not open. On a terminal the values are dark grey, `store opens` is green or red, conflict copies are yellow, and non-zero `M` and `?` drift counts are yellow and red.
 - `push` and `diff` refuse a live path that has become a symlink, as `pull` does, so a link is never read into the store or compared as if it were the file.
+- `macfit render [-o DIR] [-a] [-f]` writes the latest stored copy of every entry into a directory tree shaped like the targets: `~/.bashrc` lands at `any/HOME/.bashrc`, `$XDG_CONFIG_HOME/git/config` at `any/XDG_CONFIG_HOME/git/config`, and an entry bound to `np11` under `np11/`. Files keep their stored mode, directories are 0700, and `MANIFEST.txt` at the top lists every file with its target, host, mode, generation, capture time, and digest. By default the tree goes into a fresh private temp directory whose path is printed; `-o DIR` chooses a place and refuses a non-empty one unless `-f`; `-a` adds every stored version under `versions/`. The copies are plaintext, so delete the directory when done.
+- `macfit cat TARGET [-H HOST]` prints one entry's latest stored content to stdout, byte for byte, selecting the entry the way `rm` does.
 
 A TARGET is either the template as `ls` shows it (`$XDG_CONFIG_HOME/git/config`) or the live path.
 
@@ -61,7 +65,7 @@ A TARGET is either the template as `ls` shows it (`$XDG_CONFIG_HOME/git/config`)
 ### Usage
 
 ```text
-macfit v1.3.0
+macfit v1.4.0
 Keep Mac config files in one encrypted store and restore them on any Mac.
 
 Overview
@@ -80,6 +84,8 @@ Usage
   macfit push [TARGET...]             send changed live files into the store
   macfit pull [TARGET...] [-f]        plan the restore, or write it with -f
   macfit diff [TARGET...] [-V]        show drift between the store and this Mac
+  macfit render [-o DIR] [-a] [-f]    write the stored files into a browsable directory
+  macfit cat TARGET [-H HOST]         print one stored file
   macfit key show                     store path, key id, keychain and store state
   macfit key restore                  put the key back in the keychain with the passphrase
   macfit key rm [-f]                  delete the keychain item after a prompt
@@ -93,7 +99,9 @@ Options
   -n, --dry-run      Print the pull plan; the default, kept for scripts
   -f, --force        Write the pull plan, overwriting live files that differ; skip the key rm prompt
   -V, --verbose      Add a unified diff to diff output
-  -v, --version      Print macfit v1.3.0 and exit
+  -o, --out DIR      Render into DIR instead of a fresh private temp directory (render)
+  -a, --all          Render every stored version too, under versions/ (render)
+  -v, --version      Print macfit v1.4.0 and exit
   -h, -?, --help     Show this help message and exit
 
 Notes
@@ -101,5 +109,6 @@ Notes
   $XDG_CONFIG_HOME/macfit/store, then $XDG_DATA_HOME/macfit/macfit.store.
   A TARGET is the template ls shows ($XDG_CONFIG_HOME/git/config) or the live path.
   init needs a terminal for the passphrase prompt and creates only the default folder.
+  render writes plaintext copies of the store; delete the directory when done.
   Files only: no directories, globs, or symlinks. macOS defaults settings are a planned addition.
 ```

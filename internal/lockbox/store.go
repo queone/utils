@@ -269,6 +269,28 @@ func (s *Store) Latest(entryID int64) (v Version, ok bool, err error) {
 	return v, true, nil
 }
 
+// Versions lists every stored version of an entry, oldest first.
+func (s *Store) Versions(entryID int64) ([]Version, error) {
+	rows, err := s.conn.QueryContext(bg,
+		"select id, generation, sha256, content, captured_at, captured_on from versions where entry_id = ? order by generation",
+		entryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Version
+	for rows.Next() {
+		var v Version
+		var at string
+		if err := rows.Scan(&v.ID, &v.Generation, &v.SHA256, &v.Content, &at, &v.CapturedOn); err != nil {
+			return nil, err
+		}
+		v.CapturedAt, _ = time.Parse(time.RFC3339, at)
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 // VersionCount returns how many versions an entry holds.
 func (s *Store) VersionCount(entryID int64) (int, error) {
 	var n int
